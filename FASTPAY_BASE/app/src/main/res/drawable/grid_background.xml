@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- Simple transparent background - grid pattern removed to fix inflation error -->
+    <!-- Vector drawables cannot be used as bitmap sources in layer-list -->
+    <solid android:color="@android:color/transparent" />
+</shape>

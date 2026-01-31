@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0D000000" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    
+    <!-- Main border -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <corners android:radius="12dp" />
+            <stroke
+                android:width="2dp"
+                android:color="#00ff88" />
+        </shape>
+    </item>
+    
+    <!-- Corner accent - Top Left -->
+    <item android:left="0dp" android:top="0dp" android:width="20dp" android:height="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke
+                android:width="2dp"
+                android:color="#00ff88" />
+            <corners android:topLeftRadius="12dp" />
+        </shape>
+    </item>
+    
+    <!-- Corner accent - Top Right -->
+    <item android:right="0dp" android:top="0dp" android:width="20dp" android:height="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke
+                android:width="2dp"
+                android:color="#00ff88" />
+            <corners android:topRightRadius="12dp" />
+        </shape>
+    </item>
+    
+    <!-- Corner accent - Bottom Left -->
+    <item android:left="0dp" android:bottom="0dp" android:width="20dp" android:height="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke
+                android:width="2dp"
+                android:color="#00ff88" />
+            <corners android:bottomLeftRadius="12dp" />
+        </shape>
+    </item>
+    
+    <!-- Corner accent - Bottom Right -->
+    <item android:right="0dp" android:bottom="0dp" android:width="20dp" android:height="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke
+                android:width="2dp"
+                android:color="#00ff88" />
+            <corners android:bottomRightRadius="12dp" />
+        </shape>
+    </item>
+    
+</layer-list>

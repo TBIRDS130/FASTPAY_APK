@@ -1,0 +1,13 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Pre-commit / Python (when using pre-commit)
+.venv/
+__pycache__/
+*.pyc
+
+# Editor / IDE (root-level)
+*.swp
+*.swo
+*~

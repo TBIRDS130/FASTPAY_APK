@@ -1,0 +1,13 @@
+---
+description: FASTPAY_APK is the project root; versions live in subfolders (FASTPAY_BASE, etc.)
+alwaysApply: true
+---
+
+# FASTPAY_APK project root
+
+- **Root:** `FASTPAY_APK` is the repo root. Paths, scripts, and docs assume this directory as the working root.
+- **Versions:** Each FastPay app variant is a subfolder:
+  - `FASTPAY_BASE` – base app (current release candidate)
+  - Future versions (e.g. branded builds) go as sibling folders.
+- **Build:** To build a version, run from repo root: `.\scripts\build-version.ps1` or `cd FASTPAY_BASE && .\gradlew assembleRelease`.
+- **Style:** Use `.editorconfig` at repo root for Kotlin/XML/JSON consistency across all version folders.

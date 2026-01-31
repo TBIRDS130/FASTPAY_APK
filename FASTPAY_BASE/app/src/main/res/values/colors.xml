@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    
+    <!-- FastPay Theme Colors - Glassmorphism -->
+    <!-- Updated for Ocean Deep theme: white card backgrounds for clear visibility -->
+    <color name="glass_card_bg">#FFFFFF</color>
+    <color name="glass_divider">#40FFFFFF</color>
+    <color name="glass_hint">#80FFFFFF</color>
+    <color name="glass_overlay">#80000000</color>
+    <color name="glass_transparent">#00000000</color>
+    
+    <!-- FastPay Theme Colors - UI Elements -->
+    <color name="button_bg_white">#FFFFFF</color>
+    <color name="button_text_dark">#000000</color>
+    <color name="text_theme_dark">#000000</color>
+    <color name="text_theme_dark_hint">#80000000</color>
+    <color name="text_theme_dark_divider">#4D000000</color>
+    <color name="theme_hint_neon">#8000ff88</color>
+    <color name="white_hint">#80FFFFFF</color>
+    <color name="text_white_full">#FFFFFF</color>
+    <color name="icon_success_green">#4CAF50</color>
+    <color name="instruction_card_bg_light_green">#E6F7E9</color>
+    
+    <!-- Status Colors -->
+    <color name="status_pending">#FFA500</color> <!-- Orange for PENDING -->
+    <color name="status_active">#4CAF50</color> <!-- Green for ACTIVE/SUCCESS -->
+    <color name="status_error">#F44336</color> <!-- Red for ERROR/FAILED/REJECTED -->
+    <color name="status_waiting">#2196F3</color> <!-- Blue for WAITING -->
+    <color name="status_default">#00ff88</color> <!-- Default theme color -->
+    
+    <!-- ⚡ CENTRAL THEME CONFIGURATION ⚡ -->
+    <!-- CHANGE ONLY theme_primary TO SWITCH ENTIRE THEME -->
+    <!-- Theme: Tech Futuristic (Theme 9) -->
+    <color name="theme_primary">#00ff88</color>
+    <color name="theme_primary_light">#00ff88</color>
+    <color name="theme_primary_dark">#00cc6a</color>
+    <color name="theme_accent">#00ff88</color>
+    
+    <!-- Auto-generated theme colors (calculated from theme_primary) -->
+    <color name="theme_gradient_start">#0a0a0a</color>
+    <color name="theme_gradient_end">#1a1a1a</color>
+    <color name="theme_border">#4D00ff88</color>
+    <color name="theme_border_light">#8000ff88</color>
+    <color name="theme_border_focused">#B300ff88</color>
+    <color name="theme_glow_10">#1000ff88</color>
+    <color name="theme_glow_15">#1500ff88</color>
+    <color name="theme_glow_20">#2000ff88</color>
+    <color name="theme_glow_30">#3000ff88</color>
+    <color name="theme_glow_40">#4000ff88</color>
+    <color name="theme_glow_50">#5000ff88</color>
+    <color name="theme_button_glow">#9000ff88</color>
+    <color name="theme_text">#00ff88</color>
+    <color name="theme_text_light">#00cc6a</color>
+    
+    <!-- Samsung Messages Style Colors -->
+    <color name="primary_blue">#0E7DFF</color>
+    <color name="text_primary">#000000</color>
+    <color name="text_secondary">#757575</color>
+    <color name="background_white">#FFFFFF</color>
+    <color name="background_gray">#F2F2F2</color>
+    <color name="divider_color">#E0E0E0</color>
+    <color name="unread_badge">#0E7DFF</color>
+    <color name="sent_message_bg">#0E7DFF</color>
+    <color name="received_message_bg">#E8E8E8</color>
+    <color name="sent_message_text">#FFFFFF</color>
+    <color name="received_message_text">#000000</color>
+</resources>

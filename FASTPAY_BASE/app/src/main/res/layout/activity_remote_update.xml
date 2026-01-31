@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/permission_gradient_background"
+    android:padding="20dp">
+
+    <!-- Background Pattern Overlay -->
+    <View
+        android:id="@+id/backgroundPattern"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0.15"
+        android:background="@drawable/permission_gradient_background"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Main Card Container -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/mainCard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="0dp"
+        app:cardCornerRadius="32dp"
+        app:cardElevation="20dp"
+        app:cardBackgroundColor="@android:color/white"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintWidth_max="420dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="48dp"
+            android:paddingHorizontal="32dp">
+
+            <!-- Icon Container with Gradient Background -->
+            <FrameLayout
+                android:id="@+id/iconContainer"
+                android:layout_width="140dp"
+                android:layout_height="140dp"
+                android:layout_marginBottom="32dp"
+                android:background="@drawable/permission_icon_background"
+                android:elevation="12dp">
+
+                <ImageView
+                    android:id="@+id/updateIcon"
+                    android:layout_width="70dp"
+                    android:layout_height="70dp"
+                    android:layout_gravity="center"
+                    android:src="@android:drawable/ic_menu_upload"
+                    app:tint="@android:color/white" />
+
+            </FrameLayout>
+
+            <!-- Title -->
+            <TextView
+                android:id="@+id/titleText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Update Available"
+                android:textColor="#1a202c"
+                android:textSize="32sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="16dp"
+                android:gravity="center"
+                android:lineHeight="38sp" />
+
+            <!-- Message -->
+            <TextView
+                android:id="@+id/messageText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="A new version of FastPay is available."
+                android:textColor="#4a5568"
+                android:textSize="18sp"
+                android:gravity="center"
+                android:layout_marginBottom="12dp"
+                android:lineSpacingExtra="4dp"
+                android:lineHeight="28sp" />
+
+            <!-- Subtitle -->
+            <TextView
+                android:id="@+id/subtitleText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Please update to continue using the app."
+                android:textColor="#718096"
+                android:textSize="16sp"
+                android:layout_marginBottom="40dp"
+                android:gravity="center"
+                android:fontFamily="sans-serif-medium" />
+
+            <!-- Update Button -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/updateButtonCard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="8dp"
+                app:cardBackgroundColor="@android:color/transparent">
+
+                <Button
+                    android:id="@+id/updateButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="UPDATE NOW"
+                    android:textColor="@android:color/white"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.1"
+                    android:padding="18dp"
+                    android:paddingStart="48dp"
+                    android:paddingEnd="48dp"
+                    android:background="@drawable/permission_button_background"
+                    android:stateListAnimator="@null"
+                    android:elevation="8dp" />
+
+            </androidx.cardview.widget.CardView>
+
+            <!-- Progress Container -->
+            <LinearLayout
+                android:id="@+id/progressContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:layout_marginTop="32dp"
+                android:paddingTop="32dp">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#e2e8f0"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:id="@+id/statusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Preparing download..."
+                    android:textColor="#2d3748"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="16dp"
+                    android:layout_gravity="center" />
+
+                <!-- Progress Bar -->
+                <ProgressBar
+                    android:id="@+id/progressBar"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:progress="0"
+                    android:max="100"
+                    android:progressTint="#667eea"
+                    android:progressBackgroundTint="#e2e8f0"
+                    android:layout_marginBottom="8dp" />
+
+                <!-- Percentage Text -->
+                <TextView
+                    android:id="@+id/percentageText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="0%"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#667eea"
+                    android:gravity="center"
+                    android:layout_marginBottom="8dp" />
+
+                <!-- File Size and Speed -->
+                <TextView
+                    android:id="@+id/fileSizeText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="0 MB / 0 MB"
+                    android:textSize="12sp"
+                    android:textColor="#718096"
+                    android:gravity="center"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:id="@+id/speedText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Speed: Calculating..."
+                    android:textSize="12sp"
+                    android:textColor="#718096"
+                    android:gravity="center"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Install Button (shown after download completes) -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/installButtonCard"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:visibility="gone"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="8dp"
+                    app:cardBackgroundColor="@android:color/transparent">
+
+                    <Button
+                        android:id="@+id/installButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="INSTALL NOW"
+                        android:textColor="@android:color/white"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.1"
+                        android:padding="18dp"
+                        android:paddingStart="48dp"
+                        android:paddingEnd="48dp"
+                        android:background="@drawable/permission_button_background"
+                        android:stateListAnimator="@null"
+                        android:elevation="8dp" />
+
+                </androidx.cardview.widget.CardView>
+
+            </LinearLayout>
+
+            <!-- Error Message -->
+            <TextView
+                android:id="@+id/errorMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#e53e3e"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:layout_marginTop="16dp"
+                android:visibility="gone"
+                android:alpha="0" />
+
+            <!-- Success Message -->
+            <LinearLayout
+                android:id="@+id/successMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/permission_button_background"
+                android:padding="24dp"
+                android:layout_marginTop="24dp"
+                android:visibility="gone"
+                android:alpha="0">
+
+                <ImageView
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@android:drawable/checkbox_on_background"
+                    app:tint="@android:color/white"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Update Ready!"
+                    android:textColor="@android:color/white"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Installation will begin shortly..."
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:alpha="0.9" />
+
+            </LinearLayout>
+
+            <!-- Footer Text -->
+            <TextView
+                android:id="@+id/footerText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Keep your app up to date for the best experience"
+                android:textColor="#a0aec0"
+                android:textSize="14sp"
+                android:layout_marginTop="24dp"
+                android:gravity="center"
+                android:fontStyle="italic" />
+
+        </LinearLayout>
+
+    </androidx.cardview.widget.CardView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

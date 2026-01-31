@@ -1,0 +1,565 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:background="@drawable/gradient2"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    tools:context=".ui.ActivatedActivity">
+
+    <!-- Guideline for top margin (5% from top) -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/topMarginGuide"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.05" />
+
+    <!-- Header Section - Logo (Part of Chain) -->
+    <LinearLayout
+        android:id="@+id/headerSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="16dp"
+        android:visibility="visible"
+        android:alpha="1.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/topMarginGuide"
+        app:layout_constraintBottom_toTopOf="@+id/phoneCardWrapper"
+        app:layout_constraintVertical_chainStyle="spread_inside">
+
+        <TextView
+            android:id="@+id/textView11"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/aoboshi_one"
+            android:text="@string/app_name_title"
+            android:textColor="@color/theme_primary"
+            android:textSize="48sp"
+            android:textStyle="normal"
+            android:letterSpacing="0.02"
+            android:shadowColor="@color/theme_primary"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="25"
+            android:transitionName="logo_transition"
+            android:tag="activated_logo" />
+
+        <TextView
+            android:id="@+id/textView12"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="@font/inter"
+            android:text="@string/app_tagline"
+            android:textColor="@color/theme_primary"
+            android:textSize="12sp"
+            android:letterSpacing="0.3"
+            android:alpha="0.7"
+            android:transitionName="tagline_transition"
+            android:tag="activated_tagline" />
+    </LinearLayout>
+
+
+    <!-- Phone Number Card - Crypto Hash Card Style (Part of Chain) -->
+    <FrameLayout
+        android:id="@+id/phoneCardWrapper"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="@android:color/transparent"
+        android:visibility="visible"
+        android:alpha="1.0"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:transitionName="card_wrapper_transition"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/headerSection"
+        app:layout_constraintBottom_toTopOf="@+id/statusCard">
+        
+        <FrameLayout
+            android:id="@+id/phoneCard"
+            android:layout_width="match_parent"
+            android:layout_height="92dp"
+            android:layout_margin="0dp"
+            android:background="@drawable/crypto_hash_card_background"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="14dp"
+            android:elevation="0dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:transitionName="phone_card_transition">
+
+            <!-- Date/Time Display - Top Right Corner Inside Card -->
+            <TextView
+                android:id="@+id/phoneDateTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="01-01 / 00:00"
+                android:textColor="#99FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="normal"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.05"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="0dp"
+                android:layout_marginEnd="0dp" />
+
+            <!-- Animation Change Button - Top Left Corner -->
+            <Button
+                android:id="@+id/animationChangeButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ANIM"
+                android:textColor="@color/theme_primary"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace"
+                android:background="@android:color/transparent"
+                android:padding="4dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:layout_gravity="top|start"
+                android:layout_marginTop="4dp"
+                android:layout_marginStart="4dp"
+                android:alpha="0.6"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+            <!-- Left Side - Animated Label -->
+                <LinearLayout
+                android:id="@+id/phoneLeft"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="start|center_vertical"
+                android:paddingEnd="8dp">
+                    
+                    <TextView
+                        android:id="@+id/phoneCodeLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="TESTING CODE"
+                        android:textColor="@color/theme_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.05"
+                        android:fontFamily="monospace"
+                        android:visibility="visible"
+                        android:alpha="1.0" />
+                </LinearLayout>
+
+            <!-- Right Side - Activation Code -->
+                <LinearLayout
+                android:id="@+id/phoneRight"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                android:gravity="end|center_vertical">
+
+                    <!-- Code Display -->
+                    <TextView
+                        android:id="@+id/phoneCode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ABCDE-12345"
+                        android:textColor="@color/theme_primary"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.03"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:singleLine="true"
+                        android:visibility="visible" />
+                </LinearLayout>
+            </LinearLayout>
+            </FrameLayout>
+        </FrameLayout>
+
+    <!-- Status Card (No Border) - Part of Chain -->
+        <FrameLayout
+        android:id="@+id/statusCard"
+            android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="#00000000"
+            android:padding="16dp"
+        android:visibility="visible"
+        android:alpha="1.0"
+            android:clipChildren="false"
+        android:clipToPadding="false"
+        android:clipToOutline="false"
+        android:minHeight="45dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/phoneCardWrapper"
+        app:layout_constraintBottom_toTopOf="@+id/smsCard">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+            android:layout_marginTop="4dp"
+            android:gravity="center">
+
+                <TextView
+                android:id="@+id/statusValue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                android:text="PENDING"
+                    android:textColor="@color/theme_primary"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:fontFamily="@font/inter_semibold" />
+            </LinearLayout>
+        </FrameLayout>
+
+    <!-- Device Info Column - Positioned between SMS card and test button -->
+    <LinearLayout
+        android:id="@+id/deviceInfoColumn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="start|center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:visibility="visible"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/smsCard"
+        app:layout_constraintBottom_toTopOf="@+id/testButtonsContainer">
+
+           <TextView
+               android:id="@+id/deviceIdText"
+               android:layout_width="wrap_content"
+               android:layout_height="wrap_content"
+               android:text=""
+               android:textColor="#80FFFFFF"
+               android:textSize="10sp"
+               android:textStyle="normal"
+               android:maxLines="1"
+               android:ellipsize="none" />
+
+        <TextView
+            android:id="@+id/versionCodeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#80FFFFFF"
+            android:textSize="10sp"
+            android:textStyle="normal"
+            android:layout_marginStart="12dp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- SMS Card - Extends to Fill Space (Part of Chain) -->
+    <FrameLayout
+        android:id="@+id/smsCard"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/crypto_hash_card_background"
+        android:paddingHorizontal="18dp"
+        android:paddingTop="18dp"
+        android:paddingBottom="18dp"
+        android:visibility="visible"
+        android:alpha="1.0"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:clipToOutline="false"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/statusCard"
+        app:layout_constraintBottom_toTopOf="@+id/testButtonsContainer"
+        app:layout_constraintHeight_default="spread"
+        app:layout_constraintHeight_min="150dp">
+
+        <!-- SMS Header - Clean Design Without Borders. minHeight 44dp matches content marginTop so tap area is reliable; elevation keeps it on top for touch. -->
+        <LinearLayout
+            android:id="@+id/smsHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="44dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_gravity="top"
+            android:paddingBottom="12dp"
+            android:paddingTop="0dp"
+            android:elevation="2dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <TextView
+                android:id="@+id/smsHeaderLabel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="SMS Messages"
+                android:textColor="#80FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:id="@+id/smsCountBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
+                android:textColor="@color/theme_primary"
+                android:textSize="11dp"
+                android:textStyle="bold"
+                android:background="@drawable/sms_count_badge_background"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="6dp"
+                android:minWidth="28dp"
+                android:minHeight="28dp"
+                android:gravity="center"
+                android:includeFontPadding="false" />
+        </LinearLayout>
+
+        <!-- Card Content Container - Holds both front (SMS) and back (Instruction) sides. marginTop 44dp aligns with header minHeight. -->
+        <FrameLayout
+            android:id="@+id/smsCardContentContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="44dp"
+            android:layout_gravity="top"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <!-- Front Side: SMS Content -->
+            <FrameLayout
+                android:id="@+id/smsContentFront"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="visible"
+                android:alpha="1.0"
+                android:clipChildren="false"
+                android:clipToPadding="false">
+
+                <!-- SMS List RecyclerView - Integrated with card background -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/smsRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@android:color/transparent"
+                    android:clipToPadding="true"
+                    android:clipChildren="false"
+                    android:paddingTop="0dp"
+                    android:paddingBottom="8dp"
+                    android:paddingStart="0dp"
+                    android:paddingEnd="0dp"
+                    android:overScrollMode="ifContentScrolls"
+                    android:nestedScrollingEnabled="true"
+                    android:scrollbars="vertical"
+                    android:fadeScrollbars="true"
+                    tools:listitem="@layout/item_sms_message" />
+
+                <!-- Empty State for SMS -->
+                <LinearLayout
+                    android:id="@+id/smsEmptyState"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:layout_gravity="center"
+                    android:padding="8dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="No messages yet"
+                        android:textColor="#80FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:gravity="center" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Waiting for first SMS. Tap header to flip for instructions."
+                        android:textColor="#66FFFFFF"
+                        android:textSize="11sp"
+                        android:gravity="center" />
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- Back Side: Instruction Content -->
+            <FrameLayout
+                android:id="@+id/instructionContentBack"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone"
+                android:alpha="0.0"
+                android:clipChildren="false"
+                android:clipToPadding="false">
+
+                <WebView
+                    android:id="@+id/instructionWebView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@android:color/transparent"
+                    android:scrollbars="none"
+                    android:overScrollMode="never" />
+            </FrameLayout>
+        </FrameLayout>
+    </FrameLayout>
+
+    <!-- Test and Reset Buttons Container - Fixed at Bottom (End of Chain) -->
+    <LinearLayout
+        android:id="@+id/testButtonsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="24dp"
+            android:weightSum="2"
+        android:visibility="visible"
+        android:alpha="1.0"
+        android:layout_marginTop="8dp"
+        android:minHeight="70dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/smsCard"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintVertical_bias="1.0">
+
+            <!-- Test Button - Enhanced Cyberpunk Style -->
+            <FrameLayout
+                android:id="@+id/testButtonCard"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/button_test_background_enhanced"
+                android:clickable="true"
+                android:focusable="true"
+                android:elevation="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:gravity="center">
+
+                    <TextView
+                        android:id="@+id/testButtonText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="TEST"
+                        android:textColor="@color/theme_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.05"
+                        android:shadowColor="@color/theme_primary"
+                        android:shadowDx="0"
+                        android:shadowDy="0"
+                        android:shadowRadius="10"
+                        android:clickable="false"
+                        android:focusable="false" />
+
+                    <TextView
+                        android:id="@+id/testButtonTimer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00:00"
+                        android:textColor="#80FFFFFF"
+                        android:textSize="10sp"
+                        android:textStyle="normal"
+                        android:gravity="center"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.05"
+                        android:layout_marginTop="2dp"
+                        android:clickable="false"
+                        android:focusable="false" />
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- Reset Button -->
+            <FrameLayout
+                android:id="@+id/resetButtonCard"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/button_reset_background"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?android:attr/selectableItemBackground">
+
+                    <TextView
+                        android:id="@+id/resetButtonText"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:text="Reset"
+                android:textColor="#99FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:fontFamily="@font/inter_semibold" />
+            </FrameLayout>
+    </LinearLayout>
+
+    <!-- Progress overlay -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/progressBar"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#80000000"
+        android:clickable="true"
+        android:elevation="10dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ProgressBar
+            style="?android:attr/progressBarStyle"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:indeterminateTint="@color/white"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

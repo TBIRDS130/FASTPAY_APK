@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Background with slight glow -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#20000000" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+    
+    <!-- Border with neon glow effect -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <corners android:radius="8dp" />
+            <stroke
+                android:width="1.5dp"
+                android:color="#00ff88" />
+        </shape>
+    </item>
+    
+    <!-- Top highlight for 3D effect -->
+    <item android:left="0dp" android:top="0dp" android:right="0dp" android:height="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#40ff88" />
+            <corners android:topLeftRadius="8dp" android:topRightRadius="8dp" />
+        </shape>
+    </item>
+    
+</layer-list>

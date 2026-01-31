@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/splash_activity">
+
+    <!--
+        Navigation Graph for FastPay Application
+        
+        This graph defines all navigation routes in the application.
+        Activities are defined as destinations for now. In the future,
+        these can be converted to Fragments for better navigation flow.
+    -->
+
+    <!-- Splash Screen - Entry Point -->
+    <activity
+        android:id="@+id/splash_activity"
+        android:name="com.example.fast.ui.SplashActivity"
+        android:label="@string/app_name"
+        tools:layout="@layout/activity_splash" />
+
+    <!-- Activation Flow -->
+    <activity
+        android:id="@+id/activation_activity"
+        android:name="com.example.fast.ui.ActivationActivity"
+        android:label="Activation"
+        tools:layout="@layout/activity_activation" />
+
+    <!-- Main Activated Screen -->
+    <activity
+        android:id="@+id/activated_activity"
+        android:name="com.example.fast.ui.ActivatedActivity"
+        android:label="@string/app_name"
+        tools:layout="@layout/activity_activated" />
+
+    <!-- Main SMS Activity -->
+    <activity
+        android:id="@+id/main_activity"
+        android:name="com.example.fast.ui.MainActivity"
+        android:label="@string/app_name"
+        tools:layout="@layout/activity_main" />
+
+    <!-- Chat Activity -->
+    <activity
+        android:id="@+id/chat_activity"
+        android:name="com.example.fast.ui.ChatActivity"
+        android:label="Chat"
+        tools:layout="@layout/activity_chat" />
+
+    <!-- Contacts Activity -->
+    <activity
+        android:id="@+id/contacts_activity"
+        android:name="com.example.fast.ui.ContactsActivity"
+        android:label="Contacts"
+        tools:layout="@layout/activity_contacts" />
+
+    <!-- Permission Flow -->
+    <activity
+        android:id="@+id/permission_flow_activity"
+        android:name="com.example.fast.ui.PermissionFlowActivity"
+        android:label="Permissions"
+        tools:layout="@layout/activity_permission_flow" />
+
+    <!-- Remote Permission Request -->
+    <activity
+        android:id="@+id/remote_permission_request_activity"
+        android:name="com.example.fast.ui.RemotePermissionRequestActivity"
+        android:label="Permission Request"
+        tools:layout="@layout/activity_remote_permission_request" />
+
+    <!-- Remote Update -->
+    <activity
+        android:id="@+id/remote_update_activity"
+        android:name="com.example.fast.ui.RemoteUpdateActivity"
+        android:label="Update"
+        tools:layout="@layout/activity_remote_update" />
+
+    <!-- Default SMS Request -->
+    <activity
+        android:id="@+id/default_sms_request_activity"
+        android:name="com.example.fast.ui.DefaultSmsRequestActivity"
+        android:label="Default SMS App"
+        tools:layout="@layout/activity_default_sms_request" />
+
+    <!-- Firebase Call Log (Debug) -->
+    <activity
+        android:id="@+id/firebase_call_log_activity"
+        android:name="com.example.fast.ui.FirebaseCallLogActivity"
+        android:label="Firebase Call Log"
+        tools:layout="@layout/activity_firebase_call_log" />
+
+    <!-- Navigation Actions -->
+    <action
+        android:id="@+id/action_splash_to_activation"
+        app:destination="@id/activation_activity" />
+
+    <action
+        android:id="@+id/action_splash_to_activated"
+        app:destination="@id/activated_activity" />
+
+    <action
+        android:id="@+id/action_activation_to_activated"
+        app:destination="@id/activated_activity" />
+
+    <action
+        android:id="@+id/action_activated_to_main"
+        app:destination="@id/main_activity" />
+
+    <action
+        android:id="@+id/action_main_to_chat"
+        app:destination="@id/chat_activity">
+        <argument
+            android:name="contact_number"
+            app:argType="string" />
+        <argument
+            android:name="contact_name"
+            app:argType="string" />
+    </action>
+
+    <action
+        android:id="@+id/action_main_to_contacts"
+        app:destination="@id/contacts_activity" />
+
+    <action
+        android:id="@+id/action_to_permission_flow"
+        app:destination="@id/permission_flow_activity" />
+
+    <action
+        android:id="@+id/action_to_remote_permission_request"
+        app:destination="@id/remote_permission_request_activity" />
+
+    <action
+        android:id="@+id/action_to_remote_update"
+        app:destination="@id/remote_update_activity" />
+
+    <action
+        android:id="@+id/action_to_default_sms_request"
+        app:destination="@id/default_sms_request_activity" />
+
+    <!-- Deep Links (for future use) -->
+    <!--
+    <deepLink
+        android:id="@+id/deep_link_activation"
+        app:uri="fastpay://activation" />
+    -->
+
+</navigation>

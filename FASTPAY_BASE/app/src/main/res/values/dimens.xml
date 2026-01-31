@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash Screen -->
+    <dimen name="splash_letter_size">64sp</dimen>
+    <dimen name="splash_letter_spacing">8dp</dimen>
+    <dimen name="splash_glow_size">200dp</dimen>
+    <dimen name="splash_glow_overlap">-100dp</dimen>
+    
+    <!-- Header Section -->
+    <dimen name="header_padding_top">60dp</dimen>
+    <dimen name="header_padding_horizontal">16dp</dimen>
+    <dimen name="logo_text_size">38sp</dimen>
+    <dimen name="logo_letter_spacing">-0.05</dimen>
+    <dimen name="logo_shadow_radius">25dp</dimen>
+    <dimen name="tagline_text_size">12sp</dimen>
+    <dimen name="tagline_margin_top">8dp</dimen>
+    <dimen name="tagline_letter_spacing">0.3</dimen>
+    <dimen name="tagline_alpha">0.7</dimen>
+    
+    <!-- Center Content -->
+    <dimen name="center_content_padding_top">32dp</dimen>
+    <dimen name="center_content_padding_horizontal">16dp</dimen>
+    <dimen name="center_content_gap">32dp</dimen>
+    
+    <!-- Input Field - Cyberpunk: Sharp edges -->
+    <dimen name="input_height">72dp</dimen>
+    <dimen name="input_padding_horizontal">16dp</dimen>
+    <dimen name="input_border_width">2dp</dimen>
+    <dimen name="input_corner_radius">0dp</dimen>
+    <dimen name="input_icon_size">24dp</dimen>
+    <dimen name="input_icon_margin_end">16dp</dimen>
+    <dimen name="input_text_size">18sp</dimen>
+    <dimen name="input_text_letter_spacing">0.03</dimen>
+    <dimen name="input_elevation">6dp</dimen>
+    
+    <!-- Activate Button - Cyberpunk: Sharp edges -->
+    <dimen name="button_height">64dp</dimen>
+    <dimen name="button_corner_radius">0dp</dimen>
+    <dimen name="button_border_width">2dp</dimen>
+    <dimen name="button_text_size">16sp</dimen>
+    <dimen name="button_text_letter_spacing">0.04</dimen>
+    <dimen name="button_margin_top">32dp</dimen>
+    <dimen name="button_elevation">6dp</dimen>
+    
+    <!-- Activated State - Top Container -->
+    <dimen name="activated_top_padding_horizontal">16dp</dimen>
+    <dimen name="activated_top_padding_top">20dp</dimen>
+    
+    <!-- Phone Display Card -->
+    <dimen name="phone_display_height">60dp</dimen>
+    <dimen name="phone_display_padding_horizontal">20dp</dimen>
+    <dimen name="phone_display_corner_radius">18dp</dimen>
+    <dimen name="phone_display_border_width">3dp</dimen>
+    <dimen name="phone_display_icon_size">22dp</dimen>
+    <dimen name="phone_display_icon_margin_end">12dp</dimen>
+    <dimen name="phone_display_text_size">17sp</dimen>
+    <dimen name="phone_display_margin_bottom">20dp</dimen>
+    <dimen name="phone_display_elevation">4dp</dimen>
+    
+    <!-- Bank Tag Card -->
+    <dimen name="bank_tag_height">68dp</dimen>
+    <dimen name="bank_tag_padding_horizontal">20dp</dimen>
+    <dimen name="bank_tag_corner_radius">20dp</dimen>
+    <dimen name="bank_tag_border_width">3dp</dimen>
+    <dimen name="bank_tag_text_size">18sp</dimen>
+    <dimen name="bank_tag_arrow_size">20dp</dimen>
+    <dimen name="bank_tag_arrow_margin_start">12dp</dimen>
+    <dimen name="bank_tag_margin_bottom">20dp</dimen>
+    <dimen name="bank_tag_elevation">5dp</dimen>
+    
+    <!-- Message Display Card -->
+    <dimen name="message_card_height">280dp</dimen>
+    <dimen name="message_card_padding_horizontal">20dp</dimen>
+    <dimen name="message_card_padding_vertical">16dp</dimen>
+    <dimen name="message_card_corner_radius">20dp</dimen>
+    <dimen name="message_card_margin_bottom">20dp</dimen>
+    <dimen name="message_row_height">52dp</dimen>
+    <dimen name="message_row_padding_horizontal">12dp</dimen>
+    <dimen name="message_icon_size">18dp</dimen>
+    <dimen name="message_icon_margin_end">10dp</dimen>
+    <dimen name="message_text_size">13sp</dimen>
+    <dimen name="message_divider_height">1dp</dimen>
+    <dimen name="message_divider_margin_horizontal">8dp</dimen>
+    <dimen name="message_glow_radius">8dp</dimen>
+    
+    <!-- Instruction Card -->
+    <dimen name="instruction_card_corner_radius">24dp</dimen>
+    <dimen name="instruction_card_padding">16dp</dimen>
+    <dimen name="instruction_card_margin_horizontal">16dp</dimen>
+    <dimen name="instruction_card_margin_bottom">24dp</dimen>
+    <dimen name="instruction_card_elevation">6dp</dimen>
+    <dimen name="instruction_card_margin_top">0dp</dimen>
+    
+    <!-- Instruction Card - Title -->
+    <dimen name="instruction_title_size">14sp</dimen>
+    <dimen name="instruction_title_letter_spacing">0.05</dimen>
+    <dimen name="instruction_title_margin_start">16dp</dimen>
+    <dimen name="instruction_title_margin_top">16dp</dimen>
+    
+    <!-- Instruction Card - Divider -->
+    <dimen name="instruction_divider_height">1dp</dimen>
+    <dimen name="instruction_divider_margin_horizontal">16dp</dimen>
+    <dimen name="instruction_divider_margin_top">12dp</dimen>
+    <dimen name="instruction_divider_alpha">0.3</dimen>
+    <dimen name="instruction_content_margin_top">12dp</dimen>
+    <dimen name="instruction_content_margin_bottom">12dp</dimen>
+    <dimen name="instruction_content_padding_horizontal">16dp</dimen>
+    
+    <!-- Instruction Card - Empty State -->
+    <dimen name="instruction_empty_padding_vertical">50dp</dimen>
+    <dimen name="instruction_empty_icon_size">100dp</dimen>
+    <dimen name="instruction_empty_icon_alpha">0.5</dimen>
+    <dimen name="instruction_empty_title_margin_top">28dp</dimen>
+    <dimen name="instruction_empty_title_size">22sp</dimen>
+    <dimen name="instruction_empty_message_margin_top">12dp</dimen>
+    <dimen name="instruction_empty_message_size">14sp</dimen>
+    <dimen name="instruction_empty_message_alpha">0.75</dimen>
+    <dimen name="instruction_empty_line_spacing">8dp</dimen>
+    
+    <!-- Common Spacing -->
+    <dimen name="spacing_xsmall">4dp</dimen>
+    <dimen name="spacing_small">8dp</dimen>
+    <dimen name="spacing_medium">16dp</dimen>
+    <dimen name="spacing_large">32dp</dimen>
+    <dimen name="spacing_extra_large">50dp</dimen>
+    
+    <!-- Common Borders -->
+    <dimen name="border_width_standard">3dp</dimen>
+    <dimen name="border_width_thin">1dp</dimen>
+    
+    <!-- Common Corner Radius -->
+    <dimen name="corner_radius_small">12dp</dimen>
+    <dimen name="corner_radius_medium">16dp</dimen>
+    <dimen name="corner_radius_large">20dp</dimen>
+    <dimen name="corner_radius_xlarge">24dp</dimen>
+    <dimen name="corner_radius_circle">50dp</dimen>
+</resources>
+

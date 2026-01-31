@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Base dark background (matching crypto hash card) -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0D1a1a1a" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    
+    <!-- Highlighted border color overlay (brighter for blink effect) -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#1500ff88" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    
+    <!-- Enhanced shimmer gradient layer for highlight -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="135"
+                android:startColor="#00000000"
+                android:centerColor="#4000ff88"
+                android:endColor="#00000000" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    
+    <!-- Highlighted border stroke (brighter and thicker) -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <corners android:radius="12dp" />
+            <stroke
+                android:width="2dp"
+                android:color="#6600ff88" />
+        </shape>
+    </item>
+</layer-list>

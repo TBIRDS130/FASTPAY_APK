@@ -1,0 +1,662 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:background="@drawable/gradient"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    tools:context=".ui.PermissionFlowActivity">
+
+    <!-- Logo View - Initially Hidden, Shown During Collapse Animation -->
+    <TextView
+        android:id="@+id/logoTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name_title"
+        android:textColor="@color/theme_primary"
+        android:textSize="48sp"
+        android:textStyle="normal"
+        android:fontFamily="@font/aoboshi_one"
+        android:letterSpacing="0.02"
+        android:shadowColor="@color/theme_primary"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="25"
+        android:visibility="invisible"
+        android:alpha="0"
+        android:scaleX="0.5"
+        android:scaleY="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Header Section -->
+    <LinearLayout
+        android:id="@+id/headerSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="32dp"
+        android:paddingBottom="24dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/aoboshi_one"
+            android:text="Setup Permissions"
+            android:textColor="@color/theme_primary"
+            android:textSize="36sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/subtitleText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="@font/inter"
+            android:text="Let's grant permissions to get started"
+            android:textColor="@color/theme_primary"
+            android:textSize="14sp"
+            android:alpha="0.8" />
+
+        <!-- Progress Indicator -->
+        <TextView
+            android:id="@+id/progressText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:fontFamily="@font/inter_semibold"
+            android:text="0 / 7 permissions granted"
+            android:textColor="@color/theme_primary"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <!-- Permission List -->
+    <ScrollView
+        android:id="@+id/scrollView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        app:layout_constraintBottom_toTopOf="@+id/actionButtonsLayout"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/headerSection">
+
+        <LinearLayout
+            android:id="@+id/permissionsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="24dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="24dp">
+
+            <!-- Runtime Permissions Section -->
+            <TextView
+                android:id="@+id/runtimeSectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/inter_semibold"
+                android:text="Runtime Permissions"
+                android:textColor="@color/theme_primary"
+                android:textSize="18sp"
+                android:layout_marginBottom="12dp" />
+
+            <!-- Permission cards will be added programmatically here -->
+            <!-- RECEIVE_SMS -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/permissionCardReceiveSms"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="#0D00ff88"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/permissionIconReceiveSms"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:text="📱"
+                        android:textSize="24sp"
+                        android:gravity="center" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="16dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/permissionNameReceiveSms"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/inter_semibold"
+                            android:text="Receive SMS"
+                            android:textColor="@color/white"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/permissionDescReceiveSms"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="@font/inter"
+                            android:text="Auto-detect payment SMS"
+                            android:textColor="@color/white"
+                            android:textSize="12sp"
+                            android:alpha="0.8" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/permissionStatusReceiveSms"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⏳"
+                        android:textSize="24sp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- READ_SMS -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/permissionCardReadSms"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="#0D00ff88"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/permissionIconReadSms"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:text="📖"
+                        android:textSize="24sp"
+                        android:gravity="center" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="16dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/permissionNameReadSms"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/inter_semibold"
+                            android:text="Read SMS"
+                            android:textColor="@color/white"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/permissionDescReadSms"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="@font/inter"
+                            android:text="Verify payment confirmations"
+                            android:textColor="@color/white"
+                            android:textSize="12sp"
+                            android:alpha="0.8" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/permissionStatusReadSms"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⏳"
+                        android:textSize="24sp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- READ_CONTACTS -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/permissionCardReadContacts"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="#0D00ff88"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/permissionIconReadContacts"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:text="👥"
+                        android:textSize="24sp"
+                        android:gravity="center" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="16dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/permissionNameReadContacts"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/inter_semibold"
+                            android:text="Access Contacts"
+                            android:textColor="@color/white"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/permissionDescReadContacts"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="@font/inter"
+                            android:text="Easy contact selection"
+                            android:textColor="@color/white"
+                            android:textSize="12sp"
+                            android:alpha="0.8" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/permissionStatusReadContacts"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⏳"
+                        android:textSize="24sp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- SEND_SMS -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/permissionCardSendSms"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="#0D00ff88"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/permissionIconSendSms"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:text="✉️"
+                        android:textSize="24sp"
+                        android:gravity="center" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="16dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/permissionNameSendSms"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/inter_semibold"
+                            android:text="Send SMS"
+                            android:textColor="@color/white"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/permissionDescSendSms"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="@font/inter"
+                            android:text="Send payment requests"
+                            android:textColor="@color/white"
+                            android:textSize="12sp"
+                            android:alpha="0.8" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/permissionStatusSendSms"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⏳"
+                        android:textSize="24sp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- READ_PHONE_STATE -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/permissionCardReadPhoneState"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:cardBackgroundColor="#0D00ff88"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/permissionIconReadPhoneState"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:text="📞"
+                        android:textSize="24sp"
+                        android:gravity="center" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="16dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/permissionNameReadPhoneState"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/inter_semibold"
+                            android:text="Phone State"
+                            android:textColor="@color/white"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/permissionDescReadPhoneState"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="@font/inter"
+                            android:text="Device identification"
+                            android:textColor="@color/white"
+                            android:textSize="12sp"
+                            android:alpha="0.8" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/permissionStatusReadPhoneState"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⏳"
+                        android:textSize="24sp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Special Permissions Section -->
+            <TextView
+                android:id="@+id/specialSectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/inter_semibold"
+                android:text="Special Permissions"
+                android:textColor="@color/theme_primary"
+                android:textSize="18sp"
+                android:layout_marginBottom="12dp" />
+
+            <!-- Notification Listener -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/permissionCardNotificationListener"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="#0D00ff88"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/permissionIconNotificationListener"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:text="🔔"
+                        android:textSize="24sp"
+                        android:gravity="center" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="16dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/permissionNameNotificationListener"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/inter_semibold"
+                            android:text="Notification Access"
+                            android:textColor="@color/white"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/permissionDescNotificationListener"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="@font/inter"
+                            android:text="Read bank payment notifications"
+                            android:textColor="@color/white"
+                            android:textSize="12sp"
+                            android:alpha="0.8" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/permissionStatusNotificationListener"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⏳"
+                        android:textSize="24sp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Battery Optimization -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/permissionCardBatteryOptimization"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:cardBackgroundColor="#0D00ff88"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/permissionIconBatteryOptimization"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:text="🔋"
+                        android:textSize="24sp"
+                        android:gravity="center" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="16dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/permissionNameBatteryOptimization"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/inter_semibold"
+                            android:text="Battery Optimization"
+                            android:textColor="@color/white"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/permissionDescBatteryOptimization"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="@font/inter"
+                            android:text="Keep app running in background"
+                            android:textColor="@color/white"
+                            android:textSize="12sp"
+                            android:alpha="0.8" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/permissionStatusBatteryOptimization"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⏳"
+                        android:textSize="24sp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:id="@+id/actionButtonsLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Grant Runtime Permissions Button -->
+        <FrameLayout
+            android:id="@+id/grantRuntimePermissionsButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/button_neon_cyber"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:fontFamily="@font/inter_semibold"
+                android:text="Grant All Runtime Permissions"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                android:letterSpacing="0.05" />
+        </FrameLayout>
+
+        <!-- Notification Listener Button -->
+        <FrameLayout
+            android:id="@+id/enableNotificationListenerButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/outline_dash"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:fontFamily="@font/inter_semibold"
+                android:text="⚙️ Enable Notification Access"
+                android:textColor="#1976D2"
+                android:textSize="16sp"
+                android:letterSpacing="0.05" />
+        </FrameLayout>
+
+        <!-- Battery Optimization Button -->
+        <FrameLayout
+            android:id="@+id/enableBatteryOptimizationButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/outline_dash"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:fontFamily="@font/inter_semibold"
+                android:text="⚙️ Enable Battery Optimization"
+                android:textColor="#1976D2"
+                android:textSize="16sp"
+                android:letterSpacing="0.05" />
+        </FrameLayout>
+
+
+        <!-- Continue Button -->
+        <FrameLayout
+            android:id="@+id/continueButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="@drawable/button_neon_cyber"
+            android:clickable="true"
+            android:focusable="true"
+            android:alpha="0.5">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:fontFamily="@font/inter_semibold"
+                android:text="Continue to App"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                android:letterSpacing="0.05" />
+        </FrameLayout>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+

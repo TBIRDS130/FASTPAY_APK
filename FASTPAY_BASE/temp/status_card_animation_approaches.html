@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Status Card Typing Approaches</title>
+  <style>
+    :root {
+      --bg: #0e0f12;
+      --panel: #151821;
+      --accent: #54f0a6;
+      --muted: #8ea0b8;
+      --line: rgba(84, 240, 166, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: "Consolas", "Menlo", monospace;
+      background: var(--bg);
+      color: var(--accent);
+    }
+
+    h1 {
+      font-size: 18px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 0 0 16px 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      min-height: 160px;
+      position: relative;
+    }
+
+    .title {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .status-line,
+    .step-line {
+      font-size: 12px;
+      margin: 6px 0;
+      white-space: pre;
+      min-height: 16px;
+    }
+
+    .indicator {
+      display: inline-flex;
+      align-items: center;
+      color: var(--muted);
+      margin-left: 6px;
+    }
+
+    .arrow {
+      display: inline-block;
+      opacity: 0;
+      transform: translateX(10px);
+      animation: arrowIn 220ms ease-out forwards, arrowPulse 900ms ease-in-out infinite;
+      width: 1em;
+      height: 1em;
+      vertical-align: -0.1em;
+    }
+
+    .linePulse {
+      animation: linePulse 600ms ease-in-out 1;
+    }
+
+    @keyframes arrowIn {
+      0% { opacity: 0; transform: translateX(10px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes arrowPulse {
+      0% { opacity: 0.7; }
+      50% { opacity: 1; }
+      100% { opacity: 0.7; }
+    }
+
+    @keyframes linePulse {
+      0% { text-shadow: 0 0 0 rgba(84, 240, 166, 0.0); }
+      50% { text-shadow: 0 0 8px rgba(84, 240, 166, 0.7); }
+      100% { text-shadow: 0 0 0 rgba(84, 240, 166, 0.0); }
+    }
+
+    .dim {
+      color: var(--muted);
+      opacity: 0.5;
+    }
+
+    .controls {
+      margin: 12px 0 0;
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--accent);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Status Card Typing Approaches</h1>
+
+    <div class="controls" style="margin-bottom: 12px;">
+      <button id="playAll">Play All</button>
+      <button id="resetAll">Reset All</button>
+    </div>
+
+    <div class="grid">
+    <div class="card" data-approach="blank">
+      <div class="title">Approach A: Blank → Typing</div>
+      <div class="status-line" data-role="status"></div>
+      <div class="step-line" data-role="step1"></div>
+      <div class="step-line" data-role="step2"></div>
+      <div class="step-line" data-role="step3"></div>
+      <div class="step-line" data-role="step4"></div>
+      <div class="step-line" data-role="result"></div>
+    </div>
+
+    <div class="card" data-approach="dim">
+      <div class="title">Approach B: Dim Placeholder → Typing</div>
+      <div class="status-line dim" data-role="status">Creating secure tunnel with company database</div>
+      <div class="step-line dim" data-role="step1">• IP Connection Established</div>
+      <div class="step-line dim" data-role="step2">• Request Sent</div>
+      <div class="step-line dim" data-role="step3">• Response Decrypted</div>
+      <div class="step-line dim" data-role="step4">• Authorization Check (Approved / Denied)</div>
+      <div class="step-line" data-role="result"></div>
+    </div>
+
+    <div class="card" data-approach="scripted">
+      <div class="title">Approach C: Scripted Sequence</div>
+      <div class="status-line" data-role="status"></div>
+      <div class="step-line" data-role="step1"></div>
+      <div class="step-line" data-role="step2"></div>
+      <div class="step-line" data-role="step3"></div>
+      <div class="step-line" data-role="step4"></div>
+      <div class="step-line" data-role="result"></div>
+    </div>
+
+    <div class="card" data-approach="unauthorized">
+      <div class="title">Approach D: Blank → Typing (Unauthorized in Red)</div>
+      <div class="status-line" data-role="status"></div>
+      <div class="step-line" data-role="step1"></div>
+      <div class="step-line" data-role="step2"></div>
+      <div class="step-line" data-role="step3"></div>
+      <div class="step-line" data-role="step4"></div>
+      <div class="step-line" data-role="result"></div>
+    </div>
+  </div>
+
+  <script>
+    const lines = [
+      { role: "status", text: "Creating secure tunnel with company database" },
+      { role: "step1", text: "• IP Connection Established" },
+      { role: "step2", text: "• Request Sent" },
+      { role: "step3", text: "• Response Decrypted" },
+      { role: "step4", text: "• Authorization Check (Approved / Denied)" }
+    ];
+
+    function typeLines(container, totalMs, afterLine = null) {
+      const elements = {};
+      lines.forEach(line => elements[line.role] = container.querySelector(`[data-role="${line.role}"]`));
+      const result = container.querySelector(`[data-role="result"]`);
+      result.textContent = "";
+
+      const totalChars = lines.reduce((sum, line) => sum + line.text.length, 0);
+      const perChar = Math.max(20, Math.floor(totalMs / Math.max(1, totalChars)));
+
+      let lineIndex = 0;
+      let charIndex = 0;
+      let timer = null;
+
+      lines.forEach(line => { elements[line.role].textContent = ""; });
+
+      const step = () => {
+        if (lineIndex >= lines.length) {
+          if (afterLine) afterLine(result);
+          return;
+        }
+        const line = lines[lineIndex];
+        charIndex++;
+        elements[line.role].textContent = line.text.slice(0, charIndex);
+        if (charIndex >= line.text.length) {
+          elements[line.role].classList.add("linePulse");
+          elements[line.role].innerHTML = `${line.text}<span class="indicator"><img class="arrow" src="file:///C:/Users/samsm/.cursor/projects/c-Users-samsm-OneDrive-Desktop-fastpat31010042/assets/c__Users_samsm_AppData_Roaming_Cursor_User_workspaceStorage_b6b204a36a1f5b35831730a244f74c98_images_image-83cc979e-0352-4eaf-bd74-3d6588f4d3a6.png" alt="ok"/></span>`;
+          lineIndex++;
+          charIndex = 0;
+          setTimeout(step, 180);
+          return;
+        }
+        timer = setTimeout(step, perChar);
+      };
+      step();
+      return () => clearTimeout(timer);
+    }
+
+    function typeResult(resultEl, text, durationMs = 800) {
+      const perChar = Math.max(20, Math.floor(durationMs / text.length));
+      let i = 0;
+      const run = () => {
+        i++;
+        resultEl.textContent = text.slice(0, i);
+        if (i < text.length) setTimeout(run, perChar);
+      };
+      run();
+    }
+
+    function resetCard(card) {
+      card.querySelectorAll("[data-role]").forEach(el => el.textContent = "");
+      card.querySelector('[data-role="result"]').style.color = "";
+      if (card.dataset.approach === "dim") {
+        card.querySelector('[data-role="status"]').textContent = "Creating secure tunnel with company database";
+        card.querySelector('[data-role="step1"]').textContent = "• IP Connection Established";
+        card.querySelector('[data-role="step2"]').textContent = "• Request Sent";
+        card.querySelector('[data-role="step3"]').textContent = "• Response Decrypted";
+        card.querySelector('[data-role="step4"]').textContent = "• Authorization Check (Approved / Denied)";
+      }
+    }
+
+    function playCard(card) {
+      const approach = card.dataset.approach;
+      card.style.color = "";
+      if (approach === "dim") {
+        card.querySelectorAll(".dim").forEach(el => el.textContent = "");
+      }
+      const finalText = approach === "unauthorized" ? "• UNAUTHORIZED" : "• AUTHORIZED";
+      typeLines(card, 4000, (resultEl) => {
+        if (approach === "unauthorized") {
+          resultEl.style.color = "#FF5B5B";
+        } else {
+          resultEl.style.color = "";
+        }
+        typeResult(resultEl, finalText);
+        if (approach === "unauthorized") {
+          setTimeout(() => {
+            card.style.color = "#FF5B5B";
+          }, 900);
+        }
+      });
+    }
+
+    const cards = Array.from(document.querySelectorAll(".card"));
+    document.getElementById("playAll").addEventListener("click", () => {
+      cards.forEach(playCard);
+    });
+
+    document.getElementById("resetAll").addEventListener("click", () => {
+      cards.forEach(resetCard);
+    });
+  </script>
+</body>
+</html>

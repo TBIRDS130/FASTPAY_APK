@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">FastPay</string>
+    
+    <!-- FastPay Branding - Centralized -->
+    <string name="app_name_title">FASTPAY</string>
+    <string name="app_tagline">The Real Gaming Platform</string>
+    
+    <!-- Status Card -->
+    <string name="status_label">STATUS</string>
+    
+    <!-- Message Display Card -->
+    <string name="message_connected">We are connected!</string>
+    
+    <!-- Google Sign-In Configuration -->
+    <!-- Web Client ID from Google Cloud Console -->
+    <!-- Format: YOUR_WEB_CLIENT_ID.apps.googleusercontent.com -->
+    <string name="default_web_client_id">1076857319587-72e0aihs4ibjqjn5od525a8v3enn2q2e.apps.googleusercontent.com</string>
+</resources>
