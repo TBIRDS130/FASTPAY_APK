@@ -7,7 +7,7 @@
 
     <!--
         Navigation Graph for FastPay Application
-        
+
         This graph defines all navigation routes in the application.
         Activities are defined as destinations for now. In the future,
         these can be converted to Fragments for better navigation flow.

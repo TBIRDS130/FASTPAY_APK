@@ -22,10 +22,10 @@ import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * NotificationBatchProcessor
- * 
+ *
  * Optimizes notification processing by batching notifications together before uploading to Firebase.
  * This prevents Firebase overload when receiving many notifications.
- * 
+ *
  * Features:
  * - Batches notifications: Uploads every 5 minutes OR when 100 notifications collected (default mode)
  * - Real-time mode: Uploads each notification immediately (temporary mode)
@@ -36,11 +36,11 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * - Persistent storage: Queued notifications saved to JSON file (survives app restarts)
  * - Priority processing: Newest notifications processed first (timestamp descending)
  * - Batch processing: Processes 100 notifications at a time, one batch at a time
- * 
+ *
  * Sync Modes:
  * - BATCH (default): Collects notifications in queue, uploads when: 100 collected OR 5 minutes elapsed
  * - REALTIME: Uploads each notification immediately to Firebase
- * 
+ *
  * Batch Strategy:
  * - Collects notifications in queue
  * - Uploads when: 100 notifications collected OR 5 minutes elapsed (whichever comes first)
@@ -48,38 +48,38 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * - Notifications persisted to JSON file for offline recovery
  */
 object NotificationBatchProcessor {
-    
+
     private const val TAG = "NotificationBatchProcessor"
     private const val BATCH_SIZE = 100 // Upload when 100 notifications collected
     private const val BATCH_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes max wait
     private const val MAX_CACHE_SIZE = 1000 // Keep last 1000 notification hashes in memory
     private const val STORAGE_FILE_NAME = "queued_notifications.json" // JSON file for persistent storage
-    
+
     enum class SyncMode {
         BATCH,      // Default: Batch upload mode
         REALTIME    // Real-time: Upload immediately
     }
-    
+
     private var syncMode: SyncMode = SyncMode.BATCH // Default to batch mode
     private var realtimeEndTime: Long? = null // When to auto-switch back to batch mode
     private var realtimeTimer: Runnable? = null // Timer for auto-switch
-    
+
     private val notificationQueue = ConcurrentLinkedQueue<QueuedNotification>()
     private val handler = Handler(Looper.getMainLooper())
     private var batchTimer: Runnable? = null
     private val processingLock = Any()
     private var isProcessing = false
     private var isInitialized = false // Track if initialized from storage
-    
+
     // Gson instance for JSON parsing
     private val gson: Gson = GsonBuilder()
         .setPrettyPrinting()
         .create()
-    
+
     // Deduplication: Track recently uploaded notifications by hash
     // Key: notification hash (title + text + package + timestamp), Value: upload timestamp
     private val uploadedNotificationsCache = ConcurrentHashMap<String, Long>()
-    
+
     data class QueuedNotification(
         val packageName: String,
         val title: String,
@@ -88,7 +88,7 @@ object NotificationBatchProcessor {
         val notificationHash: String, // Hash for deduplication
         val extra: Map<String, Any?> = emptyMap()
     )
-    
+
     /**
      * Data class for JSON file structure
      */
@@ -96,7 +96,7 @@ object NotificationBatchProcessor {
         val notifications: List<QueuedNotification>,
         val lastUpdated: Long
     )
-    
+
     /**
      * Create unique notification hash for deduplication
      * Format: MD5(package + title + text + timestamp rounded to seconds)
@@ -105,7 +105,7 @@ object NotificationBatchProcessor {
         // Round timestamp to seconds for better duplicate detection
         val timestampSeconds = (timestamp / 1000) * 1000
         val input = "${packageName}|${title}|${text}|${timestampSeconds}"
-        
+
         try {
             val md = MessageDigest.getInstance("MD5")
             val hashBytes = md.digest(input.toByteArray())
@@ -115,7 +115,7 @@ object NotificationBatchProcessor {
             return "${packageName}_${title.hashCode()}_${text.hashCode()}_$timestampSeconds"
         }
     }
-    
+
     /**
      * Load queued notifications from JSON file
      * Called on app startup to recover notifications from previous session
@@ -126,7 +126,7 @@ object NotificationBatchProcessor {
                 Log.d(TAG, "Already initialized from storage, skipping")
                 return
             }
-            
+
             try {
                 val jsonString = context.readInternalFile(STORAGE_FILE_NAME)
                 if (jsonString.isBlank()) {
@@ -134,22 +134,22 @@ object NotificationBatchProcessor {
                     isInitialized = true
                     return
                 }
-                
+
                 val storage: NotificationStorage = gson.fromJson(jsonString, NotificationStorage::class.java)
-                
+
                 // Sort notifications by timestamp descending (newest first) for priority processing
                 val sortedNotifications = storage.notifications.sortedByDescending { it.timestamp }
-                
+
                 // Add all stored notifications to queue (newest first)
                 sortedNotifications.forEach { notification ->
                     notificationQueue.offer(notification)
                     // Add to cache to prevent re-queuing
                     uploadedNotificationsCache[notification.notificationHash] = 0L
                 }
-                
+
                 isInitialized = true
                 Log.d(TAG, "✅ Loaded ${sortedNotifications.size} notifications from storage (sorted: newest first, last updated: ${java.util.Date(storage.lastUpdated)})")
-                
+
                 // Schedule batch processing if queue is not empty
                 if (notificationQueue.isNotEmpty() && !isProcessing && batchTimer == null) {
                     scheduleBatchProcessing(context)
@@ -160,7 +160,7 @@ object NotificationBatchProcessor {
             }
         }
     }
-    
+
     /**
      * Save queued notifications to JSON file
      * Persists notifications to disk for offline recovery
@@ -170,30 +170,30 @@ object NotificationBatchProcessor {
         Thread {
             try {
                 val notificationsList = mutableListOf<QueuedNotification>()
-                
+
                 // Copy all notifications from queue
                 notificationQueue.forEach { notification ->
                     notificationsList.add(notification)
                 }
-                
+
                 // Sort by timestamp descending (newest first) for priority processing on next load
                 notificationsList.sortByDescending { it.timestamp }
-                
+
                 val storage = NotificationStorage(
                     notifications = notificationsList,
                     lastUpdated = System.currentTimeMillis()
                 )
-                
+
                 val jsonString = gson.toJson(storage)
                 context.writeInternalFile(STORAGE_FILE_NAME, jsonString)
-                
+
                 Log.d(TAG, "💾 Saved ${notificationsList.size} notifications to storage (sorted: newest first)")
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving notifications to storage", e)
             }
         }.start()
     }
-    
+
     /**
      * Clear storage file
      * Called after successful upload of all notifications
@@ -208,10 +208,10 @@ object NotificationBatchProcessor {
             }
         }.start()
     }
-    
+
     /**
      * Add notification to batch queue with in-memory deduplication check
-     * 
+     *
      * @param context Application context
      * @param packageName Package name of the app that sent notification
      * @param title Notification title
@@ -228,13 +228,13 @@ object NotificationBatchProcessor {
     ) {
         // Create notification hash for deduplication
         val notificationHash = createNotificationHash(packageName, title, text, timestamp)
-        
+
         // Check in-memory cache for duplicates (fast check within same app instance)
         if (uploadedNotificationsCache.containsKey(notificationHash)) {
             Log.d(TAG, "Duplicate notification detected in cache (hash: ${notificationHash.take(8)}...), skipping")
             return
         }
-        
+
         // Check sync mode
         synchronized(processingLock) {
             if (syncMode == SyncMode.REALTIME) {
@@ -243,7 +243,7 @@ object NotificationBatchProcessor {
                 return
             }
         }
-        
+
         // Batch mode: Add to queue
         val notification = QueuedNotification(
             packageName = packageName,
@@ -253,14 +253,14 @@ object NotificationBatchProcessor {
             notificationHash = notificationHash,
             extra = extra
         )
-        
+
         // Add to queue
         notificationQueue.offer(notification)
         Log.d(TAG, "Notification queued: $packageName - ${title.take(30)}... (queue size: ${notificationQueue.size})")
-        
+
         // Save to persistent storage
         saveToStorage(context)
-        
+
         // Check if we're currently processing a batch
         synchronized(processingLock) {
             if (isProcessing) {
@@ -269,12 +269,12 @@ object NotificationBatchProcessor {
                 Log.d(TAG, "Upload in progress - new notification will be prioritized in next batch (newest first)")
                 return
             }
-            
+
             // Schedule batch processing if not already scheduled
             if (batchTimer == null) {
                 scheduleBatchProcessing(context)
             }
-            
+
             // Check if batch size reached (100 notifications)
             if (notificationQueue.size >= BATCH_SIZE) {
                 Log.d(TAG, "Batch size reached ($BATCH_SIZE), triggering immediate batch upload (newest first)")
@@ -282,7 +282,7 @@ object NotificationBatchProcessor {
             }
         }
     }
-    
+
     /**
      * Upload notification immediately to Django (real-time mode)
      */
@@ -301,7 +301,7 @@ object NotificationBatchProcessor {
                     context.contentResolver,
                     Settings.Secure.ANDROID_ID
                 )
-                
+
                 val notificationData = mapOf(
                     "package_name" to packageName,
                     "title" to title,
@@ -309,10 +309,10 @@ object NotificationBatchProcessor {
                     "timestamp" to timestamp,
                     "extra" to extra
                 )
-                
+
                 DjangoApiHelper.syncNotifications(deviceId, listOf(notificationData))
                 Log.d(TAG, "✅ Real-time: Uploaded notification immediately to Django: $packageName - ${title.take(30)}...")
-                
+
                 // Mark in cache
                 uploadedNotificationsCache[notificationHash] = System.currentTimeMillis()
                 cleanupCache()
@@ -333,11 +333,11 @@ object NotificationBatchProcessor {
             }
         }
     }
-    
+
     /**
      * Switch to real-time sync mode for specified duration
      * After duration expires, automatically switches back to batch mode
-     * 
+     *
      * @param context Application context
      * @param minutes Duration in minutes to stay in real-time mode
      */
@@ -346,14 +346,14 @@ object NotificationBatchProcessor {
             syncMode = SyncMode.REALTIME
             val durationMs = minutes * 60 * 1000L
             realtimeEndTime = System.currentTimeMillis() + durationMs
-            
+
             Log.d(TAG, "Switched to REAL-TIME mode for $minutes minutes")
-            
+
             // Cancel existing timer if any
             realtimeTimer?.let {
                 handler.removeCallbacks(it)
             }
-            
+
             // Schedule auto-switch back to batch mode
             realtimeTimer = Runnable {
                 synchronized(processingLock) {
@@ -363,9 +363,9 @@ object NotificationBatchProcessor {
                     }
                 }
             }
-            
+
             handler.postDelayed(realtimeTimer!!, durationMs)
-            
+
             // Process any queued notifications immediately
             if (notificationQueue.isNotEmpty()) {
                 Log.d(TAG, "Processing ${notificationQueue.size} queued notifications in real-time mode")
@@ -373,7 +373,7 @@ object NotificationBatchProcessor {
             }
         }
     }
-    
+
     /**
      * Switch back to batch mode (default)
      */
@@ -381,22 +381,22 @@ object NotificationBatchProcessor {
         synchronized(processingLock) {
             syncMode = SyncMode.BATCH
             realtimeEndTime = null
-            
+
             // Cancel real-time timer
             realtimeTimer?.let {
                 handler.removeCallbacks(it)
                 realtimeTimer = null
             }
-            
+
             Log.d(TAG, "Switched to BATCH mode (default)")
-            
+
             // Schedule batch processing for any queued notifications
             if (notificationQueue.isNotEmpty() && !isProcessing && batchTimer == null) {
                 scheduleBatchProcessing(context)
             }
         }
     }
-    
+
     /**
      * Process all queued notifications in real-time mode
      * Processes newest notifications first for priority
@@ -410,12 +410,12 @@ object NotificationBatchProcessor {
                     notificationsToProcess.add(notification)
                 }
             }
-            
+
             // Sort by timestamp descending (newest first) for priority processing
             notificationsToProcess.sortByDescending { it.timestamp }
-            
+
             Log.d(TAG, "🔄 Processing ${notificationsToProcess.size} notifications in real-time mode (newest first priority)")
-            
+
             notificationsToProcess.forEach { notification ->
                 uploadNotificationImmediately(
                     context,
@@ -428,14 +428,14 @@ object NotificationBatchProcessor {
             }
         }.start()
     }
-    
+
     /**
      * Get current sync mode
      */
     fun getSyncMode(): SyncMode {
         return syncMode
     }
-    
+
     /**
      * Check if real-time mode is active and should auto-switch
      */
@@ -448,7 +448,7 @@ object NotificationBatchProcessor {
             }
         }
     }
-    
+
     /**
      * Schedule batch processing with timeout (5 minutes)
      */
@@ -462,11 +462,11 @@ object NotificationBatchProcessor {
                 batchTimer = null
             }
         }
-        
+
         handler.postDelayed(batchTimer!!, BATCH_TIMEOUT_MS)
         Log.d(TAG, "Scheduled batch processing in ${BATCH_TIMEOUT_MS / 1000} seconds")
     }
-    
+
     /**
      * Process batch of notifications and upload to Firebase
      */
@@ -476,21 +476,21 @@ object NotificationBatchProcessor {
                 Log.d(TAG, "Batch processing already in progress, skipping")
                 return
             }
-            
+
             if (notificationQueue.isEmpty()) {
                 Log.d(TAG, "Notification queue is empty, nothing to process")
                 return
             }
-            
+
             isProcessing = true
         }
-        
+
         // Cancel batch timer
         batchTimer?.let {
             handler.removeCallbacks(it)
             batchTimer = null
         }
-        
+
         // Process in background thread
         Thread {
             try {
@@ -502,7 +502,7 @@ object NotificationBatchProcessor {
                         allNotifications.add(notification)
                     }
                 }
-                
+
                 if (allNotifications.isEmpty()) {
                     Log.d(TAG, "No notifications to process")
                     synchronized(processingLock) {
@@ -510,30 +510,30 @@ object NotificationBatchProcessor {
                     }
                     return@Thread
                 }
-                
+
                 // Sort by timestamp descending (newest first) for priority processing
                 allNotifications.sortByDescending { it.timestamp }
-                
+
                 // Take the first 100 notifications (newest ones)
                 val notificationsToProcess = allNotifications.take(BATCH_SIZE)
-                
+
                 // Put remaining notifications back in queue (will be processed in next batch)
                 allNotifications.drop(BATCH_SIZE).forEach { notification ->
                     notificationQueue.offer(notification)
                 }
-                
+
                 Log.d(TAG, "🔄 Processing batch of ${notificationsToProcess.size} notifications (newest first priority)")
                 if (allNotifications.size > BATCH_SIZE) {
                     Log.d(TAG, "📦 ${allNotifications.size - BATCH_SIZE} notifications remaining for next batch")
                 }
-                
+
                 // Get device ID
                 val deviceId = Settings.Secure.getString(
                     context.contentResolver,
                     Settings.Secure.ANDROID_ID
                 )
                 val notificationsBasePath = AppConfig.getFirebaseNotificationPath(deviceId)
-                
+
                 // Create list for Django (include extra fields)
                 val notificationsList = notificationsToProcess.mapNotNull { notification ->
                     if (uploadedNotificationsCache.containsKey(notification.notificationHash)) {
@@ -548,29 +548,29 @@ object NotificationBatchProcessor {
                         "extra" to notification.extra
                     )
                 }
-                
+
                 // Upload batch to Django
                 if (notificationsList.isNotEmpty()) {
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             DjangoApiHelper.syncNotifications(deviceId, notificationsList)
                             Log.d(TAG, "✅ Successfully uploaded batch of ${notificationsList.size} notifications to Django")
-                            
+
                             // Mark all uploaded notifications in cache to prevent duplicates within same instance
                             notificationsToProcess.forEach { notification ->
                                 uploadedNotificationsCache[notification.notificationHash] = System.currentTimeMillis()
                             }
-                            
+
                             // Cleanup old cache entries
                             cleanupCache()
-                            
+
                             // Update persistent storage (remove uploaded notifications)
                             if (notificationQueue.isEmpty()) {
                                 clearStorage(context)
                             } else {
                                 saveToStorage(context)
                             }
-                            
+
                             // Schedule next batch if queue is not empty
                             synchronized(processingLock) {
                                 isProcessing = false
@@ -580,15 +580,15 @@ object NotificationBatchProcessor {
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "❌ Failed to upload notification batch to Django, re-queuing", e)
-                            
+
                             // Re-queue notifications on failure
                             notificationsToProcess.forEach { notification ->
                                 notificationQueue.offer(notification)
                             }
-                            
+
                             // Update persistent storage (re-queue failed notifications)
                             saveToStorage(context)
-                            
+
                             // Retry after delay
                             synchronized(processingLock) {
                                 isProcessing = false
@@ -616,7 +616,7 @@ object NotificationBatchProcessor {
             }
         }.start()
     }
-    
+
     /**
      * Cleanup old cache entries to prevent memory leak
      */
@@ -626,17 +626,17 @@ object NotificationBatchProcessor {
             val entriesToRemove = uploadedNotificationsCache.entries
                 .filter { (currentTime - it.value) > (10 * 60 * 1000L) } // Remove entries older than 10 minutes
                 .map { it.key }
-            
+
             entriesToRemove.forEach { hash ->
                 uploadedNotificationsCache.remove(hash)
             }
-            
+
             if (entriesToRemove.isNotEmpty()) {
                 Log.d(TAG, "Cleaned up ${entriesToRemove.size} old cache entries")
             }
         }
     }
-    
+
     /**
      * Force process any pending notifications immediately
      * Useful for testing or when app is closing

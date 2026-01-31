@@ -13,7 +13,7 @@ import javax.inject.Singleton
 
 /**
  * Hilt module for providing Firebase dependencies
- * 
+ *
  * Provides singleton instances of:
  * - DatabaseReference (Firebase Realtime Database)
  * - StorageReference (Firebase Storage)
@@ -21,13 +21,13 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object FirebaseModule {
-    
+
     @Provides
     @Singleton
     fun provideFirebaseDatabase(): DatabaseReference {
         return Firebase.database.reference
     }
-    
+
     @Provides
     @Singleton
     fun provideFirebaseStorage(): StorageReference {

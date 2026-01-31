@@ -8,10 +8,10 @@ import com.example.fast.util.Logger
 
 /**
  * Helper for Firebase operations using Result pattern
- * 
+ *
  * This provides a modern, type-safe way to handle Firebase operations
  * with explicit error handling using the Result sealed class.
- * 
+ *
  * Example usage:
  * ```
  * val result = FirebaseResultHelper.writeData("path/to/data", data)
@@ -27,10 +27,10 @@ import com.example.fast.util.Logger
  * ```
  */
 object FirebaseResultHelper {
-    
+
     /**
      * Write data to Firebase using Result pattern
-     * 
+     *
      * @param path Firebase path
      * @param data Data to write
      * @return Result<Unit> - Success if write succeeded, Error otherwise
@@ -51,10 +51,10 @@ object FirebaseResultHelper {
             )
         }
     }
-    
+
     /**
      * Read data from Firebase using Result pattern
-     * 
+     *
      * @param path Firebase path
      * @return Result<T> - Success with data if read succeeded, Error otherwise
      */
@@ -66,7 +66,7 @@ object FirebaseResultHelper {
             val database = FirebaseDatabase.getInstance()
             val reference = database.getReference(path)
             val snapshot = reference.get().await()
-            val data = snapshot.getValue(dataClass) 
+            val data = snapshot.getValue(dataClass)
                 ?: throw IllegalStateException("Data not found at path: $path")
             Result.success(data)
         } catch (e: Exception) {
@@ -76,10 +76,10 @@ object FirebaseResultHelper {
             )
         }
     }
-    
+
     /**
      * Update data in Firebase using Result pattern
-     * 
+     *
      * @param path Firebase path
      * @param updates Map of updates to apply
      * @return Result<Unit> - Success if update succeeded, Error otherwise
@@ -100,10 +100,10 @@ object FirebaseResultHelper {
             )
         }
     }
-    
+
     /**
      * Delete data from Firebase using Result pattern
-     * 
+     *
      * @param path Firebase path
      * @return Result<Unit> - Success if delete succeeded, Error otherwise
      */

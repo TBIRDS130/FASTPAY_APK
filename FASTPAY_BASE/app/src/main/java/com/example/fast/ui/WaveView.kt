@@ -38,16 +38,16 @@ class WaveView @JvmOverloads constructor(
     private var waveAnimator: android.animation.ValueAnimator? = null
     private val themeColor = ContextCompat.getColor(context, R.color.theme_primary)
     private var gridBrightnessMultiplier = 1f // 1.0 = normal, higher = brighter
-    
+
     /**
      * Callback interface for brightness updates
      */
     interface BrightnessUpdateListener {
         fun onBrightnessUpdate(multiplier: Float)
     }
-    
+
     private var brightnessListener: BrightnessUpdateListener? = null
-    
+
     /**
      * Set listener for brightness updates
      */
@@ -81,7 +81,7 @@ class WaveView @JvmOverloads constructor(
             interpolator = android.view.animation.AccelerateDecelerateInterpolator()
             addUpdateListener { animation ->
                 waveProgress = animation.animatedValue as Float
-                
+
                 // Calculate grid brightness based on wave progress
                 // Peak brightness at 25% (0.25), fade back to normal at 50% (0.5)
                 gridBrightnessMultiplier = when {
@@ -98,10 +98,10 @@ class WaveView @JvmOverloads constructor(
                         1f
                     }
                 }
-                
+
                 // Notify listener of brightness change
                 brightnessListener?.onBrightnessUpdate(gridBrightnessMultiplier)
-                
+
                 invalidate()
             }
             addListener(object : android.animation.AnimatorListenerAdapter() {
@@ -168,7 +168,7 @@ class WaveView @JvmOverloads constructor(
         // Left wave (expanding leftward from center)
         val leftStartX = (centerX - currentDistance).coerceAtLeast(0f)
         val leftEndX = centerX
-        
+
         if (leftEndX > leftStartX && waveAlpha > 0f) {
             val leftGradient = LinearGradient(
                 leftEndX, 0f,
@@ -185,11 +185,11 @@ class WaveView @JvmOverloads constructor(
             lightPaint.shader = leftGradient
             canvas.drawRect(leftStartX, 0f, leftEndX, height, lightPaint)
         }
-        
+
         // Right wave (expanding rightward from center)
         val rightStartX = centerX
         val rightEndX = (centerX + currentDistance).coerceAtMost(width)
-        
+
         if (rightEndX > rightStartX && waveAlpha > 0f) {
             val rightGradient = LinearGradient(
                 rightStartX, 0f,

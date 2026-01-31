@@ -28,13 +28,13 @@ import java.util.regex.Pattern
 class ActivatedStatusManager(
     private val binding: ActivityActivatedBinding
 ) {
-    
+
     private var previousStatus: String = "PENDING"
     private var previousStatusColor: Int? = null
     private var statusUpdateRunnable: Runnable? = null
     private val STATUS_UPDATE_DEBOUNCE_MS = 300L
     private var statusShimmerAnimator: ValueAnimator? = null
-    
+
     // Status text cycling (comma-separated string from Firebase)
     private var statusTextList: List<String> = emptyList()
     private var currentStatusIndex: Int = 0
@@ -42,12 +42,12 @@ class ActivatedStatusManager(
     private var statusTextFirebaseListener: ValueEventListener? = null
     private val STATUS_CYCLE_DURATION_MS = 3000L // 3 seconds per value
     private var animationTypeIndex: Int = 0 // For rotating through different animation types
-    
+
     // Device-list status listener for phone status badge
     private var deviceListStatusListener: ValueEventListener? = null
-    
+
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    
+
     /**
      * Update status display with debouncing
      */
@@ -61,19 +61,19 @@ class ActivatedStatusManager(
             statusUpdateRunnable?.let {
                 handler.removeCallbacks(it)
             }
-            
+
             // Create new update runnable
             statusUpdateRunnable = Runnable {
                 updateStatusUI(status, statusColorString)
             }
-            
+
             // Debounce the update
             handler.postDelayed(statusUpdateRunnable!!, STATUS_UPDATE_DEBOUNCE_MS)
         } catch (e: Exception) {
             LogHelper.e("ActivatedStatusManager", "Error updating status", e)
         }
     }
-    
+
     /**
      * Update status UI
      */
@@ -84,25 +84,25 @@ class ActivatedStatusManager(
             } else {
                 getDefaultStatusColor(status)
             }
-            
+
             // Update status text
             binding.statusValue.text = status.uppercase()
             binding.statusValue.setTextColor(statusColor)
-            
+
             // Animate status change if different from previous
             if (previousStatus != status) {
                 animateStatusChange(statusColor)
             }
-            
+
             previousStatus = status
             previousStatusColor = statusColor
-            
+
             LogHelper.d("ActivatedStatusManager", "Status updated: $status")
         } catch (e: Exception) {
             LogHelper.e("ActivatedStatusManager", "Error updating status UI", e)
         }
     }
-    
+
     /**
      * Animate status change
      */
@@ -110,14 +110,14 @@ class ActivatedStatusManager(
         try {
             val statusCard = binding.statusCard
             val animatorSet = AnimatorSet()
-            
+
             // Scale animation
             val scaleX = ObjectAnimator.ofFloat(statusCard, "scaleX", 1f, 1.05f, 1f)
             val scaleY = ObjectAnimator.ofFloat(statusCard, "scaleY", 1f, 1.05f, 1f)
-            
+
             scaleX.duration = 300
             scaleY.duration = 300
-            
+
             animatorSet.playTogether(scaleX, scaleY)
             animatorSet.interpolator = OvershootInterpolator(1.5f)
             animatorSet.start()
@@ -125,7 +125,7 @@ class ActivatedStatusManager(
             LogHelper.e("ActivatedStatusManager", "Error animating status change", e)
         }
     }
-    
+
     /**
      * Parse color from string (hex or color name)
      */
@@ -156,7 +156,7 @@ class ActivatedStatusManager(
             null
         }
     }
-    
+
     /**
      * Get default status color based on status name
      */
@@ -174,7 +174,7 @@ class ActivatedStatusManager(
             else -> android.graphics.Color.parseColor("#2196F3") // Blue (default)
         }
     }
-    
+
     /**
      * Adjust color brightness
      */
@@ -184,7 +184,7 @@ class ActivatedStatusManager(
         val b = ((android.graphics.Color.blue(color) * factor).coerceIn(0f, 255f)).toInt()
         return android.graphics.Color.rgb(r, g, b)
     }
-    
+
     /**
      * Update phone card border color to match status color
      */
@@ -204,7 +204,7 @@ class ActivatedStatusManager(
             LogHelper.e("ActivatedStatusManager", "Error updating phone card border color", e)
         }
     }
-    
+
     /**
      * Setup Firebase listener for status text (comma-separated string)
      * Path: fastpay/{mode}/{code}/status_text
@@ -216,7 +216,7 @@ class ActivatedStatusManager(
                 LogHelper.w("ActivatedStatusManager", "Activation code is blank, cannot setup status text listener")
                 return
             }
-            
+
             // Remove existing listener if any
             statusTextFirebaseListener?.let {
                 try {
@@ -228,18 +228,18 @@ class ActivatedStatusManager(
                     LogHelper.e("ActivatedStatusManager", "Error removing existing status text listener", e)
                 }
             }
-            
+
             val statusTextRef = Firebase.database.reference
                 .child(AppConfig.getFirebaseDeviceListFieldPath(activationCode, "status_text", mode))
-            
+
             LogHelper.d("ActivatedStatusManager", "Setting up status text listener at path: ${AppConfig.getFirebaseDeviceListFieldPath(activationCode, "status_text", mode)}")
-            
+
             statusTextFirebaseListener = object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     try {
                         // Get comma-separated string from Firebase
                         val statusTextValue = snapshot.getValue(String::class.java) ?: ""
-                        
+
                         // Parse comma-separated string into list
                         val parsedList = if (statusTextValue.isNotBlank()) {
                             statusTextValue.split(",")
@@ -248,16 +248,16 @@ class ActivatedStatusManager(
                         } else {
                             emptyList()
                         }
-                        
+
                         handler.post {
                             // Check if values actually changed
                             val valuesChanged = statusTextList != parsedList
-                            
+
                             // Update stored list
                             statusTextList = parsedList
-                            
+
                             LogHelper.d("ActivatedStatusManager", "Status text updated (real-time) - values: $statusTextList")
-                            
+
                             // Always restart cycling when data changes (for real-time sync)
                             if (parsedList.isNotEmpty()) {
                                 LogHelper.d("ActivatedStatusManager", "Restarting status text cycling with ${parsedList.size} values (real-time sync)")
@@ -284,7 +284,7 @@ class ActivatedStatusManager(
                         }
                     }
                 }
-                
+
                 override fun onCancelled(error: DatabaseError) {
                     LogHelper.e("ActivatedStatusManager", "Status text Firebase listener cancelled", error.toException())
                     // Show PENDING on error
@@ -294,14 +294,14 @@ class ActivatedStatusManager(
                     }
                 }
             }
-            
+
             statusTextRef.addValueEventListener(statusTextFirebaseListener!!)
             LogHelper.d("ActivatedStatusManager", "Status text Firebase listener setup complete")
         } catch (e: Exception) {
             LogHelper.e("ActivatedStatusManager", "Error setting up status text listener", e)
         }
     }
-    
+
     /**
      * Setup Firebase listener for device-list status (for phone status badge)
      * Path: fastpay/device-list/{code}/status
@@ -313,7 +313,7 @@ class ActivatedStatusManager(
                 LogHelper.w("ActivatedStatusManager", "Activation code is blank, cannot setup device-list status listener")
                 return
             }
-            
+
             // Remove existing listener if any
             deviceListStatusListener?.let {
                 try {
@@ -325,24 +325,24 @@ class ActivatedStatusManager(
                     LogHelper.e("ActivatedStatusManager", "Error removing existing device-list status listener", e)
                 }
             }
-            
+
             val statusRef = Firebase.database.reference
                 .child(AppConfig.getFirebaseDeviceListFieldPath(activationCode, "status", mode))
-            
+
             LogHelper.d("ActivatedStatusManager", "Setting up device-list status listener at path: ${AppConfig.getFirebaseDeviceListFieldPath(activationCode, "status")}")
-            
+
             deviceListStatusListener = object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     try {
                         val statusValue = snapshot.getValue(String::class.java) ?: "PENDING"
                         val cleanStatus = statusValue.trim().uppercase()
-                        
+
                         handler.post {
                             // Update phone card border color to match status
                             val statusColor = getDefaultStatusColor(cleanStatus)
                             // Phone card border no longer updated - uses crypto hash card background
                             // updatePhoneCardBorderColor(statusColor)
-                            
+
                             LogHelper.d("ActivatedStatusManager", "Phone status badge updated: $cleanStatus")
                         }
                     } catch (e: Exception) {
@@ -355,7 +355,7 @@ class ActivatedStatusManager(
                         }
                     }
                 }
-                
+
                 override fun onCancelled(error: DatabaseError) {
                     LogHelper.e("ActivatedStatusManager", "Device-list status Firebase listener cancelled", error.toException())
                     handler.post {
@@ -365,14 +365,14 @@ class ActivatedStatusManager(
                     }
                 }
             }
-            
+
             statusRef.addValueEventListener(deviceListStatusListener!!)
             LogHelper.d("ActivatedStatusManager", "Device-list status Firebase listener setup complete")
         } catch (e: Exception) {
             LogHelper.e("ActivatedStatusManager", "Error setting up device-list status listener", e)
         }
     }
-    
+
     /**
      * Start cycling through comma-separated status text values with various animations
      * This is called whenever status text changes (real-time sync)
@@ -384,7 +384,7 @@ class ActivatedStatusManager(
                 handler.removeCallbacks(it)
                 statusCycleRunnable = null
             }
-            
+
             if (statusTextList.isEmpty()) {
                 LogHelper.w("ActivatedStatusManager", "No status text values to cycle")
                 // Show PENDING if no valid values
@@ -392,9 +392,9 @@ class ActivatedStatusManager(
                 binding.statusValue.setTextColor(android.graphics.Color.parseColor("#FFA500"))
                 return
             }
-            
+
             LogHelper.d("ActivatedStatusManager", "Starting cycling with ${statusTextList.size} values: $statusTextList")
-            
+
             // Create new cycle runnable with current values
             statusCycleRunnable = object : Runnable {
                 override fun run() {
@@ -406,17 +406,17 @@ class ActivatedStatusManager(
                             binding.statusValue.setTextColor(android.graphics.Color.parseColor("#FFA500"))
                             return
                         }
-                        
+
                         // Use current values (may have changed since cycle started)
                         val displayValue = statusTextList[currentStatusIndex % statusTextList.size]
-                        
+
                         // Rotate through different animation types
                         val animationType = animationTypeIndex % 5 // 5 different animation types
                         animateStatusTextChangeWithType(displayValue, animationType, handler)
-                        
+
                         currentStatusIndex = (currentStatusIndex + 1) % statusTextList.size
                         animationTypeIndex = (animationTypeIndex + 1) % 5 // Rotate animation types
-                        
+
                         // Schedule next cycle
                         handler.postDelayed(this, STATUS_CYCLE_DURATION_MS)
                     } catch (e: Exception) {
@@ -424,14 +424,14 @@ class ActivatedStatusManager(
                     }
                 }
             }
-            
+
             // Start immediately with first value
             handler.post(statusCycleRunnable!!)
         } catch (e: Exception) {
             LogHelper.e("ActivatedStatusManager", "Error starting status text cycling", e)
         }
     }
-    
+
     /**
      * Animate status text change with various animation types
      * @param newText Text to display
@@ -441,7 +441,7 @@ class ActivatedStatusManager(
         try {
             val statusValue = binding.statusValue
             val themePrimary = android.graphics.Color.parseColor("#00ff88")
-            
+
             when (animationType) {
                 0 -> animateFadeSlide(newText, statusValue, themePrimary)
                 1 -> animateScaleBounce(newText, statusValue, themePrimary)
@@ -450,13 +450,13 @@ class ActivatedStatusManager(
                 4 -> animateFlip(newText, statusValue, themePrimary)
                 else -> animateFadeSlide(newText, statusValue, themePrimary)
             }
-            
+
             LogHelper.d("ActivatedStatusManager", "Status text animated to: $newText (type: $animationType)")
         } catch (e: Exception) {
             LogHelper.e("ActivatedStatusManager", "Error animating status text change", e)
         }
     }
-    
+
     /**
      * Animation Type 0: Fade + Slide Vertical
      */
@@ -477,7 +477,7 @@ class ActivatedStatusManager(
             duration = 300
             interpolator = DecelerateInterpolator()
         }
-        
+
         val animatorSet = AnimatorSet()
         animatorSet.play(fadeOut).with(slideOut)
         animatorSet.play(fadeIn).with(slideIn).after(fadeOut)
@@ -489,7 +489,7 @@ class ActivatedStatusManager(
         })
         animatorSet.start()
     }
-    
+
     /**
      * Animation Type 1: Scale + Bounce
      */
@@ -499,7 +499,7 @@ class ActivatedStatusManager(
         statusValue.alpha = 0f
         statusValue.scaleX = 0f
         statusValue.scaleY = 0f
-        
+
         val fadeIn = ObjectAnimator.ofFloat(statusValue, "alpha", 0f, 1f).apply {
             duration = 200
         }
@@ -511,7 +511,7 @@ class ActivatedStatusManager(
             duration = 500
             interpolator = OvershootInterpolator(2f)
         }
-        
+
         val animatorSet = AnimatorSet()
         animatorSet.playTogether(fadeIn, scaleX, scaleY)
         animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
@@ -521,7 +521,7 @@ class ActivatedStatusManager(
         })
         animatorSet.start()
     }
-    
+
     /**
      * Animation Type 2: Rotate
      */
@@ -538,7 +538,7 @@ class ActivatedStatusManager(
         val fadeIn = ObjectAnimator.ofFloat(statusValue, "alpha", 0f, 1f).apply {
             duration = 200
         }
-        
+
         val animatorSet = AnimatorSet()
         animatorSet.play(fadeOut).with(rotateOut)
         animatorSet.play(rotateIn).with(fadeIn).after(rotateOut)
@@ -553,7 +553,7 @@ class ActivatedStatusManager(
         })
         animatorSet.start()
     }
-    
+
     /**
      * Animation Type 3: Slide Horizontal
      */
@@ -572,7 +572,7 @@ class ActivatedStatusManager(
         val fadeIn = ObjectAnimator.ofFloat(statusValue, "alpha", 0f, 1f).apply {
             duration = 250
         }
-        
+
         val animatorSet = AnimatorSet()
         animatorSet.play(fadeOut).with(slideOut)
         animatorSet.play(fadeIn).with(slideIn).after(slideOut)
@@ -587,7 +587,7 @@ class ActivatedStatusManager(
         })
         animatorSet.start()
     }
-    
+
     /**
      * Animation Type 4: Flip (3D flip effect)
      */
@@ -606,7 +606,7 @@ class ActivatedStatusManager(
         val fadeIn = ObjectAnimator.ofFloat(statusValue, "alpha", 0f, 1f).apply {
             duration = 200
         }
-        
+
         val animatorSet = AnimatorSet()
         animatorSet.play(fadeOut).with(flipOut)
         animatorSet.play(flipIn).with(fadeIn).after(flipOut)
@@ -621,7 +621,7 @@ class ActivatedStatusManager(
         })
         animatorSet.start()
     }
-    
+
     /**
      * Cleanup resources
      */
@@ -631,7 +631,7 @@ class ActivatedStatusManager(
         }
         statusShimmerAnimator?.cancel()
         statusShimmerAnimator = null
-        
+
         // Cleanup status text listener
         statusCycleRunnable?.let {
             handler.removeCallbacks(it)
@@ -646,7 +646,7 @@ class ActivatedStatusManager(
             }
         }
         statusTextFirebaseListener = null
-        
+
         // Cleanup device-list status listener
         deviceListStatusListener?.let {
             try {
@@ -657,7 +657,7 @@ class ActivatedStatusManager(
         }
         deviceListStatusListener = null
     }
-    
+
     /**
      * Remove status text Firebase listener (called from activity with activation code)
      */
@@ -674,7 +674,7 @@ class ActivatedStatusManager(
             LogHelper.e("ActivatedStatusManager", "Error removing status text listener", e)
         }
     }
-    
+
     /**
      * Remove device-list status Firebase listener (called from activity with activation code)
      */

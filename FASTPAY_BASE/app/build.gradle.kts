@@ -98,7 +98,7 @@ android {
             }
         }
     }
-    
+
     buildTypes {
         release {
             isMinifyEnabled = true  // ✅ Enable ProGuard/R8
@@ -136,17 +136,17 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    
+
     // ViewPager2 for swipeable cards
     implementation("androidx.viewpager2:viewpager2:1.0.0")
-    
+
     // Firebase BoM - manages all Firebase library versions
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database)
     implementation(libs.androidx.cardview)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.crashlytics)
-    
+
     // Testing dependencies
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
@@ -157,25 +157,25 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.prexocore)
-    
+
     // CircleImageView for contact avatars
     implementation("de.hdodenhof:circleimageview:3.1.0")
     implementation("com.airbnb.android:lottie:6.6.6")
     implementation("com.github.bumptech.glide:glide:4.16.0")
-    
+
     // Gson for JSON serialization (for DataCache)
     implementation("com.google.code.gson:gson:2.10.1")
-    
+
     // Kotlin Coroutines (for NavigationPreloader)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    
+
     // Hilt Dependency Injection
     implementation("com.google.dagger:hilt-android:2.57.2")
     kapt("com.google.dagger:hilt-compiler:2.57.2")
-    
+
     // Timber for logging
     implementation(libs.timber)
-    
+
     // Navigation Component
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
@@ -214,13 +214,13 @@ jacoco {
 
 tasks.register("jacocoTestReport", JacocoReport::class) {
     dependsOn("testDebugUnitTest")
-    
+
     reports {
         xml.required.set(true)
         html.required.set(true)
         csv.required.set(false)
     }
-    
+
     val fileFilter = listOf(
         "**/R.class",
         "**/R$*.class",
@@ -231,12 +231,12 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
         "**/di/**",
         "**/hilt/**"
     )
-    
+
     val debugTree = fileTree(layout.buildDirectory.dir("intermediates/javac/debug")) {
         exclude(fileFilter)
     }
     val mainSrc = "${project.projectDir}/src/main/java"
-    
+
     sourceDirectories.setFrom(files(mainSrc))
     classDirectories.setFrom(files(debugTree))
     executionData.setFrom(fileTree(layout.buildDirectory) {
@@ -246,7 +246,7 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
 
 tasks.register("jacocoTestCoverageVerification", JacocoCoverageVerification::class) {
     dependsOn("jacocoTestReport")
-    
+
     violationRules {
         rule {
             limit {
@@ -254,7 +254,7 @@ tasks.register("jacocoTestCoverageVerification", JacocoCoverageVerification::cla
             }
         }
     }
-    
+
     val fileFilter = listOf(
         "**/R.class",
         "**/R$*.class",
@@ -265,11 +265,11 @@ tasks.register("jacocoTestCoverageVerification", JacocoCoverageVerification::cla
         "**/di/**",
         "**/hilt/**"
     )
-    
+
     val debugTree = fileTree(layout.buildDirectory.dir("intermediates/javac/debug")) {
         exclude(fileFilter)
     }
-    
+
     classDirectories.setFrom(files(debugTree))
     executionData.setFrom(fileTree(layout.buildDirectory) {
         include("jacoco/testDebugUnitTest.exec")

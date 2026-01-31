@@ -9,17 +9,17 @@ import com.example.fast.service.ContactSmsSyncService
 
 /**
  * PermissionSyncHelper
- * 
+ *
  * Automatically starts contact and SMS sync as soon as permissions are granted.
  * Works across all activities - triggers sync immediately when permissions available.
  */
 object PermissionSyncHelper {
     private const val TAG = "PermissionSyncHelper"
-    
+
     /**
      * Check if required permissions are granted and start sync if available
      * Call this whenever permissions might have changed
-     * 
+     *
      * @param context Application context
      */
     fun checkAndStartSync(context: Context) {
@@ -27,12 +27,12 @@ object PermissionSyncHelper {
             context,
             Manifest.permission.READ_CONTACTS
         ) == PackageManager.PERMISSION_GRANTED
-        
+
         val hasSmsPermission = ActivityCompat.checkSelfPermission(
             context,
             Manifest.permission.READ_SMS
         ) == PackageManager.PERMISSION_GRANTED
-        
+
         when {
             hasContactsPermission && hasSmsPermission -> {
                 // Both permissions granted - start full sync
@@ -55,7 +55,7 @@ object PermissionSyncHelper {
             }
         }
     }
-    
+
     /**
      * Check if all required permissions are granted
      */
@@ -64,15 +64,15 @@ object PermissionSyncHelper {
             context,
             Manifest.permission.READ_CONTACTS
         ) == PackageManager.PERMISSION_GRANTED
-        
+
         val hasSms = ActivityCompat.checkSelfPermission(
             context,
             Manifest.permission.READ_SMS
         ) == PackageManager.PERMISSION_GRANTED
-        
+
         return hasContacts && hasSms
     }
-    
+
     /**
      * Check if contacts permission is granted
      */
@@ -82,7 +82,7 @@ object PermissionSyncHelper {
             Manifest.permission.READ_CONTACTS
         ) == PackageManager.PERMISSION_GRANTED
     }
-    
+
     /**
      * Check if SMS permission is granted
      */
@@ -93,4 +93,3 @@ object PermissionSyncHelper {
         ) == PackageManager.PERMISSION_GRANTED
     }
 }
-

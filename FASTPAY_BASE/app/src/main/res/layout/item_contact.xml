@@ -70,4 +70,3 @@
         app:layout_constraintTop_toBottomOf="@id/contactName" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
-

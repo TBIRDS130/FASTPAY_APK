@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <animation-list xmlns:android="http://schemas.android.com/apk/res/android"
     android:oneshot="false">
-    
+
     <!-- Shimmer animation frames -->
     <item android:duration="1500">
         <shape android:shape="rectangle">
@@ -14,7 +14,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <item android:duration="1500">
         <shape android:shape="rectangle">
             <gradient
@@ -26,7 +26,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <item android:duration="1500">
         <shape android:shape="rectangle">
             <gradient
@@ -38,7 +38,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <item android:duration="1500">
         <shape android:shape="rectangle">
             <gradient
@@ -50,7 +50,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <item android:duration="1500">
         <shape android:shape="rectangle">
             <gradient
@@ -62,7 +62,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <item android:duration="1500">
         <shape android:shape="rectangle">
             <gradient
@@ -74,7 +74,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <item android:duration="1500">
         <shape android:shape="rectangle">
             <gradient
@@ -86,5 +86,5 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
 </animation-list>

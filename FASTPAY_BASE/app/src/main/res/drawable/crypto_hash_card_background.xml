@@ -7,7 +7,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Shimmer gradient layer - More transparent -->
     <item>
         <shape android:shape="rectangle">
@@ -20,7 +20,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Single border stroke -->
     <item>
         <shape android:shape="rectangle">

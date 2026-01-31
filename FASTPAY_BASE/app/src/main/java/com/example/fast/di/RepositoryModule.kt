@@ -16,7 +16,7 @@ import javax.inject.Singleton
 
 /**
  * Hilt module for providing repositories
- * 
+ *
  * Binds repository implementations to their interfaces.
  * This allows ViewModels and other components to depend on
  * interfaces rather than concrete implementations.
@@ -24,7 +24,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
-    
+
     /**
      * Bind FirebaseRepository implementation
      */
@@ -33,7 +33,7 @@ abstract class RepositoryModule {
     abstract fun bindFirebaseRepository(
         firebaseRepositoryImpl: FirebaseRepositoryImpl
     ): FirebaseRepository
-    
+
     /**
      * Bind SmsRepository implementation
      */
@@ -42,7 +42,7 @@ abstract class RepositoryModule {
     abstract fun bindSmsRepository(
         smsRepositoryImpl: SmsRepositoryImpl
     ): SmsRepository
-    
+
     /**
      * Bind ContactRepository implementation
      */
@@ -51,7 +51,7 @@ abstract class RepositoryModule {
     abstract fun bindContactRepository(
         contactRepositoryImpl: ContactRepositoryImpl
     ): ContactRepository
-    
+
     /**
      * Bind DeviceRepository implementation
      */

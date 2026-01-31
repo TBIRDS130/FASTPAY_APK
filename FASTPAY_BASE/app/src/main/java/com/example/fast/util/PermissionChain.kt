@@ -9,7 +9,7 @@ import androidx.core.app.ActivityCompat
 
 /**
  * PermissionChain - Robust permission request chain manager
- * 
+ *
  * Handles sequential permission requests with proper state management,
  * error handling, and crash prevention.
  */
@@ -23,25 +23,25 @@ class PermissionChain(
         private const val MAX_RETRY_ATTEMPTS = 3
         private const val ACTIVITY_CHECK_DELAY_MS = 500L
     }
-    
+
     private val handler = Handler(Looper.getMainLooper())
-    
+
     // Chain state
     private var isActive = false
     private var currentIndex = 0
     private var missingPermissions = emptyList<String>()
     private var retryCount = 0
     private var isPaused = false
-    
+
     // Callbacks
     private var onAllGranted: (() -> Unit)? = null
     private var onPermissionDenied: ((permission: String) -> Unit)? = null
     private var onChainError: ((error: String) -> Unit)? = null
     private var onChainComplete: (() -> Unit)? = null // Called when chain finishes processing all permissions (even if not all granted)
-    
+
     // Pending runnables for cleanup
     private val pendingRunnables = mutableListOf<Runnable>()
-    
+
     /**
      * Start the permission chain with specific permissions
      */
@@ -56,18 +56,18 @@ class PermissionChain(
             Log.w(TAG, "Chain already active, ignoring start request")
             return
         }
-        
+
         if (!isActivityValid()) {
             Log.e(TAG, "Cannot start chain - activity invalid")
             onChainError?.invoke("Activity is invalid")
             return
         }
-        
+
         this.onAllGranted = onAllGranted
         this.onPermissionDenied = onPermissionDenied
         this.onChainError = onChainError
         this.onChainComplete = onChainComplete
-        
+
         // Get missing permissions - use provided list or default to all missing
         val allMissing = if (permissionsToRequest != null) {
             permissionsToRequest.filter { permission ->
@@ -76,11 +76,11 @@ class PermissionChain(
         } else {
             PermissionManager.getMissingRuntimePermissions(activity)
         }
-        
+
         missingPermissions = allMissing.filter { permission ->
             !PermissionManager.isPermanentlyDenied(activity, permission)
         }
-        
+
         if (missingPermissions.isEmpty()) {
             if (allMissing.isEmpty()) {
                 Log.d(TAG, "All permissions already granted")
@@ -93,16 +93,16 @@ class PermissionChain(
             }
             return
         }
-        
+
         Log.d(TAG, "Starting permission chain with ${missingPermissions.size} requestable permissions (${allMissing.size - missingPermissions.size} permanently denied): $missingPermissions")
         isActive = true
         currentIndex = 0
         retryCount = 0
-        
+
         // Start chain after a small delay to ensure activity is ready
         requestNextPermission(0)
     }
-    
+
     /**
      * Handle permission result from onRequestPermissionsResult
      */
@@ -115,24 +115,24 @@ class PermissionChain(
         if (requestCode != this.requestCode || !isActive) {
             return false
         }
-        
+
         if (!isActivityValid()) {
             Log.e(TAG, "Activity invalid when handling permission result")
             stop()
             return false
         }
-        
+
         if (permissions.isEmpty() || grantResults.isEmpty()) {
             Log.e(TAG, "Invalid permission result arrays")
             handleError("Invalid permission result")
             return false
         }
-        
+
         val permission = permissions[0]
         val granted = grantResults[0] == PackageManager.PERMISSION_GRANTED
-        
+
         Log.d(TAG, "Permission result: $permission = ${if (granted) "GRANTED" else "DENIED"}")
-        
+
         if (granted) {
             // Permission granted - move to next
             retryCount = 0 // Reset retry count on success
@@ -141,22 +141,22 @@ class PermissionChain(
         } else {
             // Permission denied
             onPermissionDenied?.invoke(permission)
-            
+
             // Check if permanently denied
             val isPermanentlyDenied = PermissionManager.isPermanentlyDenied(activity, permission)
             if (isPermanentlyDenied) {
                 Log.w(TAG, "Permission permanently denied: $permission - will skip in future cycles")
             }
-            
+
             // Continue chain anyway (don't block on denied permissions)
             // If permanently denied, it will be skipped in the next cycle via requestNextPermission check
             currentIndex++
             requestNextPermission(REQUEST_DELAY_MS)
         }
-        
+
         return true
     }
-    
+
     /**
      * Request next permission in chain
      */
@@ -164,24 +164,24 @@ class PermissionChain(
         if (!isActive || isPaused) {
             return
         }
-        
+
         // Cancel any pending requests
         cancelPendingRequests()
-        
+
         val requestRunnable = Runnable {
             if (!isActive || !isActivityValid()) {
                 Log.w(TAG, "Cannot request permission - chain inactive or activity invalid")
                 stop()
                 return@Runnable
             }
-            
+
             // Re-check missing permissions (they might have changed)
             // Filter out permanently denied permissions to avoid getting stuck
             val allMissing = PermissionManager.getMissingRuntimePermissions(activity)
             val currentMissing = allMissing.filter { permission ->
                 !PermissionManager.isPermanentlyDenied(activity, permission)
             }
-            
+
             if (currentMissing.isEmpty()) {
                 // All requestable permissions either granted or permanently denied
                 if (allMissing.isEmpty()) {
@@ -197,19 +197,19 @@ class PermissionChain(
                 }
                 return@Runnable
             }
-            
+
             // Check if we've processed all requestable permissions
             // Reset index if we've gone past the filtered list
             if (currentIndex >= currentMissing.size) {
                 currentIndex = 0 // Reset to start of filtered list
             }
-            
+
             // Get next permission to request
             val permission = currentMissing[currentIndex]
-            
+
             // Double-check if this permission is still not permanently denied (might have changed)
             val isPermanentlyDenied = PermissionManager.isPermanentlyDenied(activity, permission)
-            
+
             if (isPermanentlyDenied) {
                 // Permission is permanently denied - skip it and move to next
                 Log.w(TAG, "Permission permanently denied (skipping): $permission")
@@ -219,9 +219,9 @@ class PermissionChain(
                 requestNextPermission(REQUEST_DELAY_MS)
                 return@Runnable
             }
-            
+
             Log.d(TAG, "Requesting permission ${currentIndex + 1}/${currentMissing.size}: $permission")
-            
+
             try {
                 ActivityCompat.requestPermissions(activity, arrayOf(permission), requestCode)
                 // Don't increment index here - wait for result in handlePermissionResult
@@ -230,11 +230,11 @@ class PermissionChain(
                 handleError("Failed to request permission: ${e.message}")
             }
         }
-        
+
         pendingRunnables.add(requestRunnable)
         handler.postDelayed(requestRunnable, delayMs)
     }
-    
+
     /**
      * Pause the chain (useful when activity is paused)
      */
@@ -244,7 +244,7 @@ class PermissionChain(
             isPaused = true
         }
     }
-    
+
     /**
      * Resume the chain (useful when activity is resumed)
      */
@@ -263,7 +263,7 @@ class PermissionChain(
             }
         }
     }
-    
+
     /**
      * Stop the chain
      */
@@ -275,12 +275,12 @@ class PermissionChain(
             cancelPendingRequests()
         }
     }
-    
+
     /**
      * Check if chain is active
      */
     fun isChainActive(): Boolean = isActive
-    
+
     /**
      * Cancel all pending requests
      */
@@ -288,7 +288,7 @@ class PermissionChain(
         pendingRunnables.forEach { handler.removeCallbacks(it) }
         pendingRunnables.clear()
     }
-    
+
     /**
      * Check if activity is valid for operations
      */
@@ -299,7 +299,7 @@ class PermissionChain(
             false
         }
     }
-    
+
     /**
      * Handle chain error
      */
@@ -308,7 +308,7 @@ class PermissionChain(
         stop()
         onChainError?.invoke(error)
     }
-    
+
     /**
      * Cleanup - call when activity is being destroyed
      */

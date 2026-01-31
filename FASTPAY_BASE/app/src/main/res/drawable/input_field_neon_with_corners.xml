@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    
+
     <!-- Background -->
     <item>
         <shape android:shape="rectangle">
@@ -8,7 +8,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Main border -->
     <item>
         <shape android:shape="rectangle">
@@ -19,7 +19,7 @@
                 android:color="#00ff88" />
         </shape>
     </item>
-    
+
     <!-- Corner accent - Top Left -->
     <item android:left="0dp" android:top="0dp" android:width="20dp" android:height="20dp">
         <shape android:shape="rectangle">
@@ -30,7 +30,7 @@
             <corners android:topLeftRadius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Corner accent - Top Right -->
     <item android:right="0dp" android:top="0dp" android:width="20dp" android:height="20dp">
         <shape android:shape="rectangle">
@@ -41,7 +41,7 @@
             <corners android:topRightRadius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Corner accent - Bottom Left -->
     <item android:left="0dp" android:bottom="0dp" android:width="20dp" android:height="20dp">
         <shape android:shape="rectangle">
@@ -52,7 +52,7 @@
             <corners android:bottomLeftRadius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Corner accent - Bottom Right -->
     <item android:right="0dp" android:bottom="0dp" android:width="20dp" android:height="20dp">
         <shape android:shape="rectangle">
@@ -63,5 +63,5 @@
             <corners android:bottomRightRadius="12dp" />
         </shape>
     </item>
-    
+
 </layer-list>

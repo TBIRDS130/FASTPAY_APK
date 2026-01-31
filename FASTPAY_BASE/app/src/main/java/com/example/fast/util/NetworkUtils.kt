@@ -8,18 +8,18 @@ import androidx.core.content.ContextCompat
 
 /**
  * NetworkUtils
- * 
+ *
  * Utility class for checking network connectivity status
- * 
+ *
  * Features:
  * - Check if device has active network connection
  * - Check if device has internet connectivity
  * - Determine network type (WiFi, Mobile, etc.)
  */
 object NetworkUtils {
-    
+
     private const val TAG = "NetworkUtils"
-    
+
     /**
      * Check if device has active network connection
      * This checks if device is connected to a network (WiFi, Mobile, etc.)
@@ -31,11 +31,11 @@ object NetworkUtils {
                 context,
                 ConnectivityManager::class.java
             ) ?: return false
-            
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val network = connectivityManager.activeNetwork ?: return false
                 val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-                
+
                 capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
                 capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
                 capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
@@ -50,7 +50,7 @@ object NetworkUtils {
             false
         }
     }
-    
+
     /**
      * Check if device has internet connectivity
      * This checks if device is connected AND has internet access
@@ -61,11 +61,11 @@ object NetworkUtils {
                 context,
                 ConnectivityManager::class.java
             ) ?: return false
-            
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val network = connectivityManager.activeNetwork ?: return false
                 val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-                
+
                 capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             } else {
@@ -78,7 +78,7 @@ object NetworkUtils {
             false
         }
     }
-    
+
     /**
      * Get network type as string
      * Returns: "WIFI", "MOBILE", "ETHERNET", "VPN", or "UNKNOWN"
@@ -89,11 +89,11 @@ object NetworkUtils {
                 context,
                 ConnectivityManager::class.java
             ) ?: return "UNKNOWN"
-            
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val network = connectivityManager.activeNetwork ?: return "UNKNOWN"
                 val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "UNKNOWN"
-                
+
                 when {
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WIFI"
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "MOBILE"

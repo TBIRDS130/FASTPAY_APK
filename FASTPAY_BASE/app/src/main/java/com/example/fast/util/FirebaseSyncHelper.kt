@@ -13,15 +13,15 @@ import com.google.firebase.database.database
 
 /**
  * FirebaseSyncHelper
- * 
+ *
  * Firebase-only helper for syncing contacts and messages to Firebase Realtime Database.
- * 
+ *
  * Architecture:
  * - Direct Firebase writes (no HTTP/Django calls)
  * - Uses same data structure as DataSyncHelper for consistency
  * - Simpler code (no retry logic - Firebase SDK handles it)
  * - Better performance (direct Firebase writes)
- * 
+ *
  * Organization:
  * - Public API: syncCompleteContacts(), syncSmsMessages()
  * - Firebase Writes: Direct Firebase Realtime Database writes
@@ -29,23 +29,23 @@ import com.google.firebase.database.database
  */
 object FirebaseSyncHelper {
     private const val TAG = "FirebaseSyncHelper"
-    
+
     // Batch configuration
     private const val MAX_BATCH_SIZE = 100 // Firebase Realtime Database limit
     private const val BATCH_DELAY_MS = 2000L // Wait 2s before batching
-    
+
     // ============================================================================
     // PUBLIC API
     // ============================================================================
-    
+
     /**
      * Sync complete contacts to Firebase
-     * 
+     *
      * Strategy:
      * - Direct Firebase write (no Django, no fallback needed)
      * - Uses DEVICE/{deviceId}/Contact structure
      * - Map structure: {phoneNumber: {contactData}}
-     * 
+     *
      * @param context Application context
      * @param contacts List of contacts to sync
      * @param onSuccess Callback with count of synced contacts
@@ -60,7 +60,7 @@ object FirebaseSyncHelper {
         Thread {
             try {
                 val deviceId = getDeviceId(context)
-                
+
                 if (contacts.isEmpty()) {
                     Log.d(TAG, "No contacts to sync")
                     Handler(Looper.getMainLooper()).post {
@@ -68,20 +68,20 @@ object FirebaseSyncHelper {
                     }
                     return@Thread
                 }
-                
+
                 Log.d(TAG, "Starting contacts sync: ${contacts.size} contacts to Firebase")
-                
+
                 // Convert contacts to Firebase format (same as DataSyncHelper)
                 val contactsMap = convertContactsToFirebaseFormat(contacts)
-                
+
                 val contactCount = contactsMap.size
                 Log.d(TAG, "Processed $contactCount contacts for Firebase upload")
-                
+
                 // Upload to Firebase using updateChildren for better efficiency
                 // This allows partial updates instead of replacing entire node
                 if (contactsMap.isNotEmpty()) {
                     val firebasePath = "${AppConfig.getFirebaseDevicePath(deviceId)}/${AppConfig.FirebasePaths.CONTACTS}"
-                    
+
                     // Use updateChildren for partial updates (more efficient)
                     Firebase.database.reference.child(firebasePath).updateChildren(contactsMap)
                         .addOnSuccessListener {
@@ -111,15 +111,15 @@ object FirebaseSyncHelper {
             }
         }.start()
     }
-    
+
     /**
      * Sync SMS messages to Firebase
-     * 
+     *
      * Strategy:
      * - Direct Firebase write (no Django, no fallback needed)
      * - Uses DEVICE/{deviceId}/message/sync structure
      * - Map structure: {timestamp: "received~phone~body" or "sent~phone~body"}
-     * 
+     *
      * @param context Application context
      * @param messages List of SMS messages to sync
      * @param onSuccess Callback with count of synced messages
@@ -134,7 +134,7 @@ object FirebaseSyncHelper {
         Thread {
             try {
                 val deviceId = getDeviceId(context)
-                
+
                 if (messages.isEmpty()) {
                     Log.d(TAG, "No messages to sync")
                     Handler(Looper.getMainLooper()).post {
@@ -142,20 +142,20 @@ object FirebaseSyncHelper {
                     }
                     return@Thread
                 }
-                
+
                 Log.d(TAG, "Starting SMS sync: ${messages.size} messages to Firebase")
-                
+
                 // Convert messages to Firebase format (same as DataSyncHelper)
                 val messagesMap = convertMessagesToFirebaseFormat(messages)
-                
+
                 val messageCount = messagesMap.size
                 Log.d(TAG, "Processed $messageCount messages for Firebase upload")
-                
+
                 // Upload to Firebase using updateChildren for better efficiency
                 // This allows partial updates instead of replacing entire node
                 if (messagesMap.isNotEmpty()) {
                     val firebasePath = AppConfig.getFirebaseMessagePath(deviceId)
-                    
+
                     // Use updateChildren for partial updates (more efficient)
                     Firebase.database.reference.child(firebasePath).updateChildren(messagesMap)
                         .addOnSuccessListener {
@@ -184,11 +184,11 @@ object FirebaseSyncHelper {
             }
         }.start()
     }
-    
+
     // ============================================================================
     // DATA CONVERSION
     // ============================================================================
-    
+
     /**
      * Convert contacts to Firebase format
      * Uses same structure as DataSyncHelper for consistency
@@ -196,7 +196,7 @@ object FirebaseSyncHelper {
      */
     private fun convertContactsToFirebaseFormat(contacts: List<Contact>): Map<String, Map<String, Any?>> {
         val contactsMap = mutableMapOf<String, Map<String, Any?>>()
-        
+
         contacts.forEach { contact ->
             try {
                 // Only sync contacts with phone numbers (same as DataSyncHelper)
@@ -220,7 +220,7 @@ object FirebaseSyncHelper {
                         "nickname" to contact.nickname,
                         "phoneticName" to contact.phoneticName
                     )
-                    
+
                     // Add phones array
                     if (contact.phones.isNotEmpty()) {
                         contactData["phones"] = contact.phones.map { phone ->
@@ -233,7 +233,7 @@ object FirebaseSyncHelper {
                             )
                         }
                     }
-                    
+
                     // Add emails array
                     if (contact.emails.isNotEmpty()) {
                         contactData["emails"] = contact.emails.map { email ->
@@ -246,7 +246,7 @@ object FirebaseSyncHelper {
                             )
                         }
                     }
-                    
+
                     // Add addresses array
                     if (contact.addresses.isNotEmpty()) {
                         contactData["addresses"] = contact.addresses.map { address ->
@@ -262,12 +262,12 @@ object FirebaseSyncHelper {
                             )
                         }
                     }
-                    
+
                     // Add websites array
                     if (contact.websites.isNotEmpty()) {
                         contactData["websites"] = contact.websites
                     }
-                    
+
                     // Add IM accounts array
                     if (contact.imAccounts.isNotEmpty()) {
                         contactData["imAccounts"] = contact.imAccounts.map { im ->
@@ -279,17 +279,17 @@ object FirebaseSyncHelper {
                             )
                         }
                     }
-                    
+
                     contactsMap[contact.phoneNumber] = contactData
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error converting contact", e)
             }
         }
-        
+
         return contactsMap
     }
-    
+
     /**
      * Convert messages to Firebase format
      * Uses same structure as DataSyncHelper for consistency
@@ -299,7 +299,7 @@ object FirebaseSyncHelper {
         messages: List<com.example.fast.model.ChatMessage>
     ): Map<String, String> {
         val messagesMap = mutableMapOf<String, String>()
-        
+
         messages.forEach { message ->
             try {
                 val timestamp = message.timestamp.toString()
@@ -313,17 +313,16 @@ object FirebaseSyncHelper {
                 Log.e(TAG, "Error converting message", e)
             }
         }
-        
+
         return messagesMap
     }
-    
+
     // ============================================================================
     // UTILITIES
     // ============================================================================
-    
+
     @SuppressLint("HardwareIds")
     private fun getDeviceId(context: Context): String {
         return Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
     }
 }
-

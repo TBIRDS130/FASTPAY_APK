@@ -11,13 +11,13 @@ import org.junit.runner.Description
 
 /**
  * Test utilities for FastPay unit tests
- * 
+ *
  * Provides common test helpers and setup for consistent testing across the codebase.
  */
 
 /**
  * Test rule for managing coroutine dispatchers in tests
- * 
+ *
  * Usage:
  * ```
  * @get:Rule
@@ -28,12 +28,12 @@ import org.junit.runner.Description
 class MainDispatcherRule(
     private val testDispatcher: TestDispatcher = StandardTestDispatcher()
 ) : TestWatcher() {
-    
+
     override fun starting(description: Description) {
         super.starting(description)
         Dispatchers.setMain(testDispatcher)
     }
-    
+
     override fun finished(description: Description) {
         super.finished(description)
         Dispatchers.resetMain()

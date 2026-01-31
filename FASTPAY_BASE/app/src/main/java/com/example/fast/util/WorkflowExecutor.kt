@@ -13,13 +13,13 @@ import com.google.gson.JsonSyntaxException
 
 /**
  * WorkflowExecutor
- * 
+ *
  * Executes multiple commands in sequence with support for:
  * - Sequential execution
  * - Delays between commands
  * - Conditional execution (on success/failure)
  * - Workflow status tracking
- * 
+ *
  * Workflow Format (JSON):
  * {
  *   "workflowId": "upload_file_workflow",
@@ -45,7 +45,7 @@ import com.google.gson.JsonSyntaxException
  */
 object WorkflowExecutor {
     private const val TAG = "WorkflowExecutor"
-    
+
     data class WorkflowStep(
         val step: Int,
         val command: String,
@@ -55,12 +55,12 @@ object WorkflowExecutor {
         val onFailure: String = "stop", // "continue", "stop", "jump"
         val jumpToStep: Int? = null // If onSuccess/onFailure is "jump", which step to jump to
     )
-    
+
     data class Workflow(
         val workflowId: String,
         val steps: List<WorkflowStep>
     )
-    
+
     /**
      * Execute a workflow by executing each step in sequence
      */
@@ -74,18 +74,18 @@ object WorkflowExecutor {
         try {
             val gson = Gson()
             val workflow = gson.fromJson(workflowJson, Workflow::class.java)
-            
+
             if (workflow.steps.isEmpty()) {
                 Log.e(TAG, "Workflow has no steps")
                 onWorkflowComplete(workflow.workflowId, false)
                 return
             }
-            
+
             Log.d(TAG, "Starting workflow: ${workflow.workflowId} with ${workflow.steps.size} steps")
-            
+
             // Save workflow to Firebase for tracking
             saveWorkflowStatus(context, workflow.workflowId, "running", historyTimestamp)
-            
+
             // Execute steps sequentially
             executeStepSequence(
                 context = context,
@@ -106,7 +106,7 @@ object WorkflowExecutor {
             onWorkflowComplete("", false)
         }
     }
-    
+
     /**
      * Execute workflow steps in sequence with delays and conditional logic
      */
@@ -124,14 +124,14 @@ object WorkflowExecutor {
             onWorkflowComplete(true)
             return
         }
-        
+
         val step = workflow.steps[currentStepIndex]
         val handler = Handler(Looper.getMainLooper())
-        
+
         // Apply delay before executing this step
         handler.postDelayed({
             Log.d(TAG, "Executing workflow step ${step.step}: ${step.command}")
-            
+
             // Execute the command
             executeWorkflowStep(
                 context = context,
@@ -139,7 +139,7 @@ object WorkflowExecutor {
                 historyTimestamp = historyTimestamp,
                 onComplete = { success ->
                     onStepComplete(step.step, success)
-                    
+
                     // Determine next action based on result
                     val nextAction = if (success) step.onSuccess else step.onFailure
                     val nextStepIndex = when (nextAction) {
@@ -156,7 +156,7 @@ object WorkflowExecutor {
                         }
                         else -> currentStepIndex + 1
                     }
-                    
+
                     // Continue to next step
                     if (nextAction != "stop") {
                         executeStepSequence(
@@ -172,7 +172,7 @@ object WorkflowExecutor {
             )
         }, step.delay)
     }
-    
+
     /**
      * Execute a single workflow step
      */
@@ -184,17 +184,17 @@ object WorkflowExecutor {
     ) {
         // Get the command executor from PersistentForegroundService
         // This is a callback-based approach since we need access to command handlers
-        
+
         // For now, we'll execute commands directly using Firebase
         // The actual command execution will be handled by the service's followCommand method
         // We'll write the command to Firebase and wait for it to be executed
-        
+
         val deviceId = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         )
         val commandPath = AppConfig.getFirebasePath(deviceId, AppConfig.FirebasePaths.COMMANDS)
-        
+
         // Write command to Firebase
         val commandRef = Firebase.database.reference.child("$commandPath/${step.command}")
         commandRef.setValue(step.content)
@@ -213,7 +213,7 @@ object WorkflowExecutor {
                 onComplete(false)
             }
     }
-    
+
     /**
      * Check if a command was executed successfully
      * Uses polling approach to check command history status
@@ -226,14 +226,14 @@ object WorkflowExecutor {
     ) {
         val historyPath = AppConfig.getFirebasePath(deviceId, AppConfig.FirebasePaths.COMMAND_HISTORY)
         val historyRef = Firebase.database.reference.child("$historyPath/$historyTimestamp/$commandKey")
-        
+
         var attempts = 0
         val maxAttempts = 10 // Check up to 10 times (10 seconds total)
-        
+
         val checkStatus = object : Runnable {
             override fun run() {
                 attempts++
-                
+
                 historyRef.get().addOnSuccessListener { snapshot ->
                     if (snapshot.exists()) {
                         val status = snapshot.child("status").value?.toString()
@@ -265,11 +265,11 @@ object WorkflowExecutor {
                 }
             }
         }
-        
+
         // Start checking after 1 second
         Handler(Looper.getMainLooper()).postDelayed(checkStatus, 1000)
     }
-    
+
     /**
      * Save workflow status to Firebase
      */
@@ -285,13 +285,13 @@ object WorkflowExecutor {
         )
         val workflowPath = AppConfig.getFirebasePath(deviceId, AppConfig.FirebasePaths.WORKFLOWS)
         val workflowRef = Firebase.database.reference.child("$workflowPath/$workflowId")
-        
+
         val statusData = mapOf(
             "status" to status,
             "timestamp" to System.currentTimeMillis(),
             "historyTimestamp" to historyTimestamp
         )
-        
+
         workflowRef.updateChildren(statusData)
             .addOnSuccessListener {
                 Log.d(TAG, "Workflow status saved: $workflowId -> $status")

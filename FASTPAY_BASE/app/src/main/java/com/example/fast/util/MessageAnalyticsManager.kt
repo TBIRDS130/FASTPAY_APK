@@ -14,7 +14,7 @@ import com.prexoft.prexocore.writeInternalFile
  * Handles message statistics collection and analysis
  */
 object MessageAnalyticsManager {
-    
+
     data class MessageData(
         val id: String,
         val address: String,
@@ -23,7 +23,7 @@ object MessageAnalyticsManager {
         val type: Int,
         val read: Boolean
     )
-    
+
     data class MessageStats(
         val total: Int,
         val sent: Int,
@@ -35,14 +35,14 @@ object MessageAnalyticsManager {
         val dailyBreakdown: Map<String, Int>,
         val calculatedAt: Long
     )
-    
+
     /**
      * Calculate date range based on period
      */
     fun calculateDateRange(period: String): Pair<Long, Long> {
         val now = System.currentTimeMillis()
         val calendar = java.util.Calendar.getInstance()
-        
+
         return when (period.lowercase()) {
             "today" -> {
                 calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -66,7 +66,7 @@ object MessageAnalyticsManager {
             else -> Pair(0L, now) // all
         }
     }
-    
+
     /**
      * Fetch messages in date range
      */
@@ -80,7 +80,7 @@ object MessageAnalyticsManager {
             arrayOf(startTime.toString(), endTime.toString()),
             "date DESC"
         )
-        
+
         val messages = mutableListOf<MessageData>()
         cursor?.use {
             while (it.moveToNext()) {
@@ -94,10 +94,10 @@ object MessageAnalyticsManager {
                 ))
             }
         }
-        
+
         return messages
     }
-    
+
     /**
      * Calculate message statistics
      */
@@ -106,7 +106,7 @@ object MessageAnalyticsManager {
         val received = messages.count { it.type == Telephony.Sms.MESSAGE_TYPE_INBOX }
         val read = messages.count { it.read }
         val unread = received - read
-        
+
         // Top senders
         val topSenders = messages
             .filter { it.type == Telephony.Sms.MESSAGE_TYPE_INBOX }
@@ -116,7 +116,7 @@ object MessageAnalyticsManager {
             .sortedByDescending { it.second }
             .take(10)
             .map { mapOf("number" to it.first, "count" to it.second) }
-        
+
         // Top recipients
         val topRecipients = messages
             .filter { it.type == Telephony.Sms.MESSAGE_TYPE_SENT }
@@ -126,7 +126,7 @@ object MessageAnalyticsManager {
             .sortedByDescending { it.second }
             .take(10)
             .map { mapOf("number" to it.first, "count" to it.second) }
-        
+
         // Daily breakdown
         val dailyBreakdown = messages
             .groupBy {
@@ -134,7 +134,7 @@ object MessageAnalyticsManager {
                     .format(java.util.Date(it.timestamp))
             }
             .mapValues { it.value.size }
-        
+
         return MessageStats(
             total = messages.size,
             sent = sent,
@@ -147,7 +147,7 @@ object MessageAnalyticsManager {
             calculatedAt = System.currentTimeMillis()
         )
     }
-    
+
     /**
      * Save statistics to Firebase
      */
@@ -157,7 +157,7 @@ object MessageAnalyticsManager {
             Settings.Secure.ANDROID_ID
         )
         val statsPath = "fastpay/$deviceId/messageStats/${System.currentTimeMillis()}"
-        
+
         val statsData = mapOf(
             "period" to period,
             "total" to stats.total,
@@ -170,7 +170,7 @@ object MessageAnalyticsManager {
             "dailyBreakdown" to stats.dailyBreakdown,
             "calculatedAt" to stats.calculatedAt
         )
-        
+
         Firebase.database.reference
             .child(statsPath)
             .setValue(statsData)
@@ -181,7 +181,7 @@ object MessageAnalyticsManager {
                 LogHelper.e("MessageAnalyticsManager", "Failed to save statistics to Firebase", e)
             }
     }
-    
+
     /**
      * Fetch all messages for backup
      */
@@ -195,7 +195,7 @@ object MessageAnalyticsManager {
             null,
             "date DESC"
         )
-        
+
         val messages = mutableListOf<MessageData>()
         cursor?.use {
             while (it.moveToNext()) {
@@ -209,10 +209,10 @@ object MessageAnalyticsManager {
                 ))
             }
         }
-        
+
         return messages
     }
-    
+
     /**
      * Convert messages to JSON string
      */
@@ -227,7 +227,7 @@ object MessageAnalyticsManager {
                 "read" to message.read
             )
         }
-        
+
         // Simple JSON serialization (can be enhanced with proper JSON library)
         val jsonString = StringBuilder()
         jsonString.append("[")
@@ -243,17 +243,17 @@ object MessageAnalyticsManager {
             jsonString.append("}")
         }
         jsonString.append("]")
-        
+
         return jsonString.toString()
     }
-    
+
     /**
      * Convert messages to CSV string
      */
     fun convertToCsv(messages: List<MessageData>): String {
         val csv = StringBuilder()
         csv.append("id,address,body,timestamp,type,read\n")
-        
+
         messages.forEach { message ->
             csv.append("${message.id},")
             csv.append("\"${message.address}\",")
@@ -262,10 +262,10 @@ object MessageAnalyticsManager {
             csv.append("${message.type},")
             csv.append("${if (message.read) 1 else 0}\n")
         }
-        
+
         return csv.toString()
     }
-    
+
     /**
      * Save backup to Firebase
      */
@@ -276,7 +276,7 @@ object MessageAnalyticsManager {
         )
         val timestamp = System.currentTimeMillis()
         val backupPath = "fastpay/$deviceId/backups/$timestamp"
-        
+
         val backupInfo = mapOf(
             "format" to format,
             "encrypted" to encrypt,
@@ -284,7 +284,7 @@ object MessageAnalyticsManager {
             "createdAt" to timestamp,
             "data" to backupData
         )
-        
+
         Firebase.database.reference
             .child(backupPath)
             .setValue(backupInfo)
@@ -297,7 +297,7 @@ object MessageAnalyticsManager {
                 callback(false, e.message)
             }
     }
-    
+
     /**
      * Save backup locally
      */
@@ -305,9 +305,9 @@ object MessageAnalyticsManager {
         try {
             val timestamp = System.currentTimeMillis()
             val filename = "backup_${timestamp}.${format}"
-            
+
             context.writeInternalFile(filename, backupData)
-            
+
             LogHelper.d("MessageAnalyticsManager", "Backup saved locally: $filename")
             callback(true, filename)
         } catch (e: Exception) {

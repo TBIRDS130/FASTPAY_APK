@@ -22,7 +22,7 @@ data class AppVersionInfo(
 object VersionChecker {
     private const val TAG = "VersionChecker"
     private const val FIREBASE_TIMEOUT_MS = 10000L  // 10 seconds timeout for Firebase
-    
+
     /**
      * Validate if the download URL from Firebase is valid
      * Checks for:
@@ -42,7 +42,7 @@ object VersionChecker {
             false
         }
     }
-    
+
     /**
      * Validate and clean download URL from Firebase
      * Returns null if URL is invalid, otherwise returns trimmed URL
@@ -58,7 +58,7 @@ object VersionChecker {
             null
         }
     }
-    
+
     fun getCurrentVersionCode(context: Context): Int {
         return try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -72,7 +72,7 @@ object VersionChecker {
             0
         }
     }
-    
+
     fun getCurrentVersionName(context: Context): String {
         return try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -81,15 +81,15 @@ object VersionChecker {
             "1.0"
         }
     }
-    
+
     /**
      * Check version from Firebase (primary source)
-     * 
+     *
      * Strategy:
      * - Firebase-only version check
      * - Supports force update via forceUpdate flag
      * - If Firebase check fails or times out, call onError (silent fail - app continues)
-     * 
+     *
      * Firebase Path: fastpay/app/version
      * Expected structure:
      * {
@@ -107,7 +107,7 @@ object VersionChecker {
     ) {
         val firebaseTimeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
         var firebaseCompleted = false
-        
+
         // Set timeout for Firebase (10 seconds)
         val timeoutRunnable = Runnable {
             if (!firebaseCompleted) {
@@ -118,7 +118,7 @@ object VersionChecker {
             }
         }
         firebaseTimeoutHandler.postDelayed(timeoutRunnable, FIREBASE_TIMEOUT_MS)
-        
+
         try {
             Firebase.database.reference.child("fastpay/app/version")
                 .addListenerForSingleValueEvent(object : ValueEventListener {
@@ -127,23 +127,23 @@ object VersionChecker {
                             Log.d(TAG, "Firebase response received but already timed out, ignoring")
                             return
                         }
-                        
+
                         firebaseCompleted = true
                         firebaseTimeoutHandler.removeCallbacks(timeoutRunnable)
-                        
+
                         if (!snapshot.exists()) {
                             Log.w(TAG, "Firebase version data not found")
                             onVersionChecked(null)
                             return
                         }
-                        
+
                         try {
                             val requiredVersionCode = snapshot.child("versionCode").getValue(Int::class.java) ?: 0
                             val requiredVersionName = snapshot.child("versionName").getValue(String::class.java) ?: ""
                             val downloadUrl = snapshot.child("file").getValue(String::class.java)
                             val message = snapshot.child("message").getValue(String::class.java)
                             val forceUpdate = snapshot.child("forceUpdate").getValue(Boolean::class.java) ?: false
-                            
+
                             val versionInfo = AppVersionInfo(
                                 versionCode = requiredVersionCode,
                                 versionName = requiredVersionName,
@@ -151,7 +151,7 @@ object VersionChecker {
                                 message = message,
                                 forceUpdate = forceUpdate
                             )
-                            
+
                             Log.d(TAG, "✅ Version check successful from Firebase: versionCode=$requiredVersionCode, forceUpdate=$forceUpdate")
                             onVersionChecked(versionInfo)
                         } catch (e: Exception) {
@@ -159,15 +159,15 @@ object VersionChecker {
                             onError(e)
                         }
                     }
-                    
+
                     override fun onCancelled(error: DatabaseError) {
                         if (firebaseCompleted) {
                             return
                         }
-                        
+
                         firebaseCompleted = true
                         firebaseTimeoutHandler.removeCallbacks(timeoutRunnable)
-                        
+
                         Log.w(TAG, "Firebase version check cancelled: ${error.message}")
                         onError(Exception("Firebase version check cancelled: ${error.message}"))
                     }
@@ -182,10 +182,9 @@ object VersionChecker {
             onError(e)
         }
     }
-    
+
     fun isUpdateRequired(context: Context, requiredVersionCode: Int): Boolean {
         val currentVersionCode = getCurrentVersionCode(context)
         return currentVersionCode < requiredVersionCode
     }
 }
-

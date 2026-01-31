@@ -11,10 +11,10 @@ import android.view.animation.OvershootInterpolator
 
 /**
  * AnimationHelper
- * 
+ *
  * Centralized animation utilities for consistent, smooth animations across the app.
  * Follows Material Design 3 motion principles.
- * 
+ *
  * Features:
  * - Standard durations and interpolators
  * - Reusable animation functions
@@ -22,40 +22,40 @@ import android.view.animation.OvershootInterpolator
  * - Proper cleanup handling
  */
 object AnimationHelper {
-    
+
     // ============================================================================
     // STANDARD DURATIONS (Material Design 3)
     // ============================================================================
-    
+
     /** Short duration for quick feedback (200ms) */
     const val DURATION_SHORT = 200L
-    
+
     /** Medium duration for standard transitions (300ms) */
     const val DURATION_MEDIUM = 300L
-    
+
     /** Long duration for complex animations (400ms) */
     const val DURATION_LONG = 400L
-    
+
     /** Extra long duration for prominent animations (600ms) */
     const val DURATION_EXTRA_LONG = 600L
-    
+
     // ============================================================================
     // STANDARD INTERPOLATORS
     // ============================================================================
-    
+
     /** Ease out - decelerates smoothly */
     val EASE_OUT = DecelerateInterpolator()
-    
+
     /** Ease in-out with slight overshoot */
     val EASE_IN_OUT = OvershootInterpolator(1.1f)
-    
+
     /** Ease out cubic - smooth deceleration */
     val EASE_OUT_CUBIC = AccelerateDecelerateInterpolator()
-    
+
     // ============================================================================
     // FADE ANIMATIONS
     // ============================================================================
-    
+
     /**
      * Fade in animation
      * @param view View to animate
@@ -69,7 +69,7 @@ object AnimationHelper {
     ) {
         view.alpha = 0f
         view.visibility = View.VISIBLE
-        
+
         view.animate()
             .alpha(1f)
             .setDuration(duration)
@@ -77,7 +77,7 @@ object AnimationHelper {
             .withEndAction { onEnd?.invoke() }
             .start()
     }
-    
+
     /**
      * Fade out animation
      * @param view View to animate
@@ -99,11 +99,11 @@ object AnimationHelper {
             }
             .start()
     }
-    
+
     // ============================================================================
     // SLIDE ANIMATIONS
     // ============================================================================
-    
+
     /**
      * Slide up animation
      * @param view View to animate
@@ -120,7 +120,7 @@ object AnimationHelper {
         view.translationY = distance
         view.alpha = 0f
         view.visibility = View.VISIBLE
-        
+
         view.animate()
             .translationY(0f)
             .alpha(1f)
@@ -129,7 +129,7 @@ object AnimationHelper {
             .withEndAction { onEnd?.invoke() }
             .start()
     }
-    
+
     /**
      * Slide down animation
      * @param view View to animate
@@ -146,7 +146,7 @@ object AnimationHelper {
         view.translationY = -distance
         view.alpha = 0f
         view.visibility = View.VISIBLE
-        
+
         view.animate()
             .translationY(0f)
             .alpha(1f)
@@ -155,11 +155,11 @@ object AnimationHelper {
             .withEndAction { onEnd?.invoke() }
             .start()
     }
-    
+
     // ============================================================================
     // SCALE ANIMATIONS
     // ============================================================================
-    
+
     /**
      * Scale in animation (from small to normal)
      * @param view View to animate
@@ -177,7 +177,7 @@ object AnimationHelper {
         view.scaleY = scale
         view.alpha = 0f
         view.visibility = View.VISIBLE
-        
+
         view.animate()
             .scaleX(1f)
             .scaleY(1f)
@@ -187,7 +187,7 @@ object AnimationHelper {
             .withEndAction { onEnd?.invoke() }
             .start()
     }
-    
+
     /**
      * Scale out animation (from normal to small)
      * @param view View to animate
@@ -213,11 +213,11 @@ object AnimationHelper {
             }
             .start()
     }
-    
+
     // ============================================================================
     // CARD ENTER ANIMATION
     // ============================================================================
-    
+
     /**
      * Animate card entry with fade, slide, and scale
      * @param card View to animate
@@ -234,7 +234,7 @@ object AnimationHelper {
         card.scaleX = 0.95f
         card.scaleY = 0.95f
         card.visibility = View.VISIBLE
-        
+
         card.animate()
             .alpha(1f)
             .translationY(0f)
@@ -246,11 +246,11 @@ object AnimationHelper {
             .withEndAction { onEnd?.invoke() }
             .start()
     }
-    
+
     // ============================================================================
     // STAGGERED LIST ANIMATIONS
     // ============================================================================
-    
+
     /**
      * Animate list items with staggered delay
      * @param container ViewGroup containing items to animate
@@ -274,7 +274,7 @@ object AnimationHelper {
             }
         }
     }
-    
+
     /**
      * Animation types for list items
      */
@@ -284,11 +284,11 @@ object AnimationHelper {
         SLIDE_UP,
         SCALE_IN
     }
-    
+
     // ============================================================================
     // PERFORMANCE OPTIMIZATION
     // ============================================================================
-    
+
     /**
      * Enable hardware acceleration for view during animation
      * Call this before starting animation, and disable after
@@ -296,14 +296,14 @@ object AnimationHelper {
     fun enableHardwareAcceleration(view: View) {
         view.setLayerType(View.LAYER_TYPE_HARDWARE, null)
     }
-    
+
     /**
      * Disable hardware acceleration after animation completes
      */
     fun disableHardwareAcceleration(view: View) {
         view.setLayerType(View.LAYER_TYPE_NONE, null)
     }
-    
+
     /**
      * Animate with hardware acceleration (automatically enabled/disabled)
      */
@@ -322,4 +322,3 @@ object AnimationHelper {
         animation.start()
     }
 }
-

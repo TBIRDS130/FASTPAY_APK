@@ -24,9 +24,9 @@ class ActivatedFirebaseManager(
     private val onCardControlUpdate: (cardType: String) -> Unit,
     private val onAnimationTrigger: (animationType: String) -> Unit
 ) {
-    
+
     private val firebaseBasePath = AppConfig.getFirebaseDevicePath(deviceId)
-    
+
     private var bankTagListener: ValueEventListener? = null
     private var bankCardListener: ValueEventListener? = null
     private var companyNameListener: ValueEventListener? = null
@@ -35,11 +35,11 @@ class ActivatedFirebaseManager(
     private var instructionListener: ValueEventListener? = null
     private var cardControlListener: ValueEventListener? = null
     private var animationListener: ValueEventListener? = null
-    
+
     private var currentBankStatusCode: String? = null
     private val bankStatusLock = Any()
     private var isSettingUpBankStatusListener = false
-    
+
     /**
      * Start all Firebase listeners
      */
@@ -52,7 +52,7 @@ class ActivatedFirebaseManager(
         listenForCardControl()
         listenForAnimation()
     }
-    
+
     /**
      * Listen for activation code
      */
@@ -61,7 +61,7 @@ class ActivatedFirebaseManager(
             Firebase.database.reference.child("$firebaseBasePath/${AppConfig.FirebasePaths.CODE}")
                 .removeEventListener(it)
         }
-        
+
         codeListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val code = snapshot.getValue(String::class.java)
@@ -69,16 +69,16 @@ class ActivatedFirebaseManager(
                     onCodeUpdate(code)
                 }
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 LogHelper.e("ActivatedFirebaseManager", "Code listener cancelled", error.toException())
             }
         }
-        
+
         Firebase.database.reference.child("$firebaseBasePath/${AppConfig.FirebasePaths.CODE}")
             .addValueEventListener(codeListener!!)
     }
-    
+
     /**
      * Listen for bank status
      */
@@ -89,28 +89,28 @@ class ActivatedFirebaseManager(
             }
             isSettingUpBankStatusListener = true
         }
-        
+
         try {
             Firebase.database.reference.child("$firebaseBasePath/${AppConfig.FirebasePaths.CODE}")
                 .addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(codeSnapshot: DataSnapshot) {
                         val code = codeSnapshot.getValue(String::class.java)
-                        
+
                         synchronized(bankStatusLock) {
                             isSettingUpBankStatusListener = false
-                            
+
                             if (code.isNullOrBlank()) {
                                 onStatusUpdate("PENDING", null)
                                 return
                             }
-                            
+
                             if (code != currentBankStatusCode) {
                                 currentBankStatusCode = code
                                 setupBankStatusListener(code)
                             }
                         }
                     }
-                    
+
                     override fun onCancelled(error: DatabaseError) {
                         synchronized(bankStatusLock) {
                             isSettingUpBankStatusListener = false
@@ -127,7 +127,7 @@ class ActivatedFirebaseManager(
             onStatusUpdate("PENDING", null)
         }
     }
-    
+
     /**
      * Setup bank status listener for a specific code
      */
@@ -146,9 +146,9 @@ class ActivatedFirebaseManager(
                     }
                 }
             }
-            
+
             val bankStatusPath = AppConfig.getFirebaseDeviceListFieldPath(code, AppConfig.FirebasePaths.BANKSTATUS_LOWER)
-            
+
             bankTagListener = object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     try {
@@ -156,7 +156,7 @@ class ActivatedFirebaseManager(
                             onStatusUpdate("PENDING", null)
                             return
                         }
-                        
+
                         val statusMap: Map<String, String>? = try {
                             @Suppress("UNCHECKED_CAST")
                             snapshot.getValue(Map::class.java) as? Map<String, String>
@@ -168,12 +168,12 @@ class ActivatedFirebaseManager(
                                 null
                             }
                         }
-                        
+
                         if (statusMap.isNullOrEmpty()) {
                             onStatusUpdate("PENDING", null)
                             return
                         }
-                        
+
                         // Priority: ACTIVE > TESTING > REJECTED > PENDING
                         val statusPriority = mapOf(
                             "ACTIVE" to 5,
@@ -181,7 +181,7 @@ class ActivatedFirebaseManager(
                             "REJECTED" to 3,
                             "PENDING" to 2
                         )
-                        
+
                         val statusEntry = if (statusMap.size == 1) {
                             statusMap.entries.first()
                         } else {
@@ -190,27 +190,27 @@ class ActivatedFirebaseManager(
                                 statusPriority.entries.firstOrNull { statusUpper.contains(it.key) }?.value ?: 0
                             } ?: statusMap.entries.first()
                         }
-                        
+
                         onStatusUpdate(statusEntry.key, statusEntry.value)
                     } catch (e: Exception) {
                         LogHelper.e("ActivatedFirebaseManager", "Error updating status", e)
                         onStatusUpdate("PENDING", null)
                     }
                 }
-                
+
                 override fun onCancelled(error: DatabaseError) {
                     LogHelper.e("ActivatedFirebaseManager", "Bank status listener cancelled", error.toException())
                     onStatusUpdate("PENDING", null)
                 }
             }
-            
+
             Firebase.database.reference.child(bankStatusPath)
                 .addValueEventListener(bankTagListener!!)
         } catch (e: Exception) {
             LogHelper.e("ActivatedFirebaseManager", "Error setting up status listener", e)
         }
     }
-    
+
     /**
      * Listen for bank card information
      */
@@ -219,22 +219,22 @@ class ActivatedFirebaseManager(
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(codeSnapshot: DataSnapshot) {
                     val code = codeSnapshot.getValue(String::class.java)
-                    
+
                     if (code.isNullOrBlank()) {
                         return
                     }
-                    
+
                     setupBankNameListener(code)
                     setupCompanyNameListener(code)
                     setupOtherInfoListener(code)
                 }
-                
+
                 override fun onCancelled(error: DatabaseError) {
                     LogHelper.e("ActivatedFirebaseManager", "Code lookup cancelled for bank card", error.toException())
                 }
             })
     }
-    
+
     /**
      * Setup bank name listener
      */
@@ -248,9 +248,9 @@ class ActivatedFirebaseManager(
                 // Ignore
             }
         }
-        
+
         val bankNamePath = AppConfig.getFirebaseBankFieldPath(code, AppConfig.FirebasePaths.BANK_BANK_NAME)
-        
+
         bankCardListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val bankName = snapshot.getValue(String::class.java)?.trim() ?: ""
@@ -258,16 +258,16 @@ class ActivatedFirebaseManager(
                     onBankNameUpdate(bankName)
                 }
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 LogHelper.e("ActivatedFirebaseManager", "Bank name listener cancelled", error.toException())
             }
         }
-        
+
         Firebase.database.reference.child(bankNamePath)
             .addValueEventListener(bankCardListener!!)
     }
-    
+
     /**
      * Setup company name listener
      */
@@ -281,24 +281,24 @@ class ActivatedFirebaseManager(
                 // Ignore
             }
         }
-        
+
         val companyNamePath = AppConfig.getFirebaseBankFieldPath(code, AppConfig.FirebasePaths.BANK_COMPANY_NAME)
-        
+
         companyNameListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val companyName = snapshot.getValue(String::class.java)?.trim() ?: ""
                 onCompanyNameUpdate(companyName)
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 LogHelper.e("ActivatedFirebaseManager", "Company name listener cancelled", error.toException())
             }
         }
-        
+
         Firebase.database.reference.child(companyNamePath)
             .addValueEventListener(companyNameListener!!)
     }
-    
+
     /**
      * Setup other info listener
      */
@@ -312,24 +312,24 @@ class ActivatedFirebaseManager(
                 // Ignore
             }
         }
-        
+
         val otherInfoPath = AppConfig.getFirebaseBankFieldPath(code, AppConfig.FirebasePaths.BANK_OTHER_INFO)
-        
+
         otherInfoListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val otherInfo = snapshot.getValue(String::class.java)?.trim() ?: ""
                 onOtherInfoUpdate(otherInfo)
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 LogHelper.e("ActivatedFirebaseManager", "Other info listener cancelled", error.toException())
             }
         }
-        
+
         Firebase.database.reference.child(otherInfoPath)
             .addValueEventListener(otherInfoListener!!)
     }
-    
+
     /**
      * Listen for instruction
      */
@@ -341,20 +341,20 @@ class ActivatedFirebaseManager(
             Firebase.database.reference.child("$firebaseBasePath/${AppConfig.FirebasePaths.INSTRUCTION_CARD}")
                 .removeEventListener(it)
         }
-        
+
         instructionListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 var html = ""
                 var css = ""
                 var imageUrl: String? = null
-                
+
                 try {
                     if (snapshot.exists()) {
                         // Try to get values directly from snapshot first (more reliable)
                         html = snapshot.child("html").getValue(String::class.java) ?: ""
                         css = snapshot.child("css").getValue(String::class.java) ?: ""
                         imageUrl = snapshot.child("imageUrl").getValue(String::class.java)
-                        
+
                         // Fallback to Map if direct access fails
                         if (html.isEmpty() && css.isEmpty()) {
                             val cardMap = snapshot.getValue(Map::class.java)
@@ -364,12 +364,12 @@ class ActivatedFirebaseManager(
                                 imageUrl = cardMap["imageUrl"] as? String
                             }
                         }
-                        
+
                         // If imageUrl is empty string, treat as null
                         if (imageUrl?.isBlank() == true) {
                             imageUrl = null
                         }
-                        
+
                         LogHelper.d("ActivatedFirebaseManager", "Instruction card updated - HTML length: ${html.length}, CSS length: ${css.length}, ImageUrl: ${imageUrl?.take(50)}...")
                     } else {
                         LogHelper.d("ActivatedFirebaseManager", "Instruction card snapshot does not exist")
@@ -377,23 +377,23 @@ class ActivatedFirebaseManager(
                 } catch (e: Exception) {
                     LogHelper.e("ActivatedFirebaseManager", "Error parsing instruction card data", e)
                 }
-                
+
                 onInstructionUpdate(html, css, imageUrl)
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 LogHelper.e("ActivatedFirebaseManager", "Instruction listener cancelled", error.toException())
             }
         }
-        
+
         val instructionPath = "$firebaseBasePath/${AppConfig.FirebasePaths.INSTRUCTION_CARD}"
         LogHelper.d("ActivatedFirebaseManager", "Setting up instruction card listener at path: $instructionPath")
-        
+
         // Track the read call
         FirebaseCallTracker.trackRead(instructionPath, "addValueEventListener")
-        
+
         val ref = Firebase.database.reference.child(instructionPath)
-        
+
         // Wrap listener to track response
         val wrappedListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -405,7 +405,7 @@ class ActivatedFirebaseManager(
                 )
                 instructionListener!!.onDataChange(snapshot)
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 // Track error response
                 FirebaseCallTracker.updateCallResponse(
@@ -416,10 +416,10 @@ class ActivatedFirebaseManager(
                 instructionListener!!.onCancelled(error)
             }
         }
-        
+
         ref.addValueEventListener(wrappedListener)
     }
-    
+
     /**
      * Listen for card control commands (showCard)
      */
@@ -428,7 +428,7 @@ class ActivatedFirebaseManager(
             Firebase.database.reference.child("$firebaseBasePath/cardControl/showCard")
                 .removeEventListener(it)
         }
-        
+
         cardControlListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val cardType = snapshot.getValue(String::class.java)
@@ -436,16 +436,16 @@ class ActivatedFirebaseManager(
                     onCardControlUpdate(cardType.lowercase())
                 }
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 LogHelper.e("ActivatedFirebaseManager", "Card control listener cancelled", error.toException())
             }
         }
-        
+
         Firebase.database.reference.child("$firebaseBasePath/cardControl/showCard")
             .addValueEventListener(cardControlListener!!)
     }
-    
+
     /**
      * Listen for animation trigger commands (startAnimation)
      */
@@ -454,7 +454,7 @@ class ActivatedFirebaseManager(
             Firebase.database.reference.child("$firebaseBasePath/cardControl/animation")
                 .removeEventListener(it)
         }
-        
+
         animationListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (snapshot.exists()) {
@@ -467,16 +467,16 @@ class ActivatedFirebaseManager(
                     }
                 }
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 LogHelper.e("ActivatedFirebaseManager", "Animation listener cancelled", error.toException())
             }
         }
-        
+
         Firebase.database.reference.child("$firebaseBasePath/cardControl/animation")
             .addValueEventListener(animationListener!!)
     }
-    
+
     /**
      * Clean up all listeners
      */

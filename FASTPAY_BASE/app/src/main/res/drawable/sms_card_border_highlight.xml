@@ -7,7 +7,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Highlighted border color overlay (brighter for blink effect) -->
     <item>
         <shape android:shape="rectangle">
@@ -15,7 +15,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Enhanced shimmer gradient layer for highlight -->
     <item>
         <shape android:shape="rectangle">
@@ -28,7 +28,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Highlighted border stroke (brighter and thicker) -->
     <item>
         <shape android:shape="rectangle">

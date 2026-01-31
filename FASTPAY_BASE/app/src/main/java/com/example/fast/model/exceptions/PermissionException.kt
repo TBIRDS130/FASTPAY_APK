@@ -2,7 +2,7 @@ package com.example.fast.model.exceptions
 
 /**
  * Exception thrown when permission operations fail
- * 
+ *
  * Used for errors related to:
  * - Runtime permission requests
  * - Permission denials
@@ -14,20 +14,20 @@ class PermissionException(
     errorCode: String? = null,
     val permission: String? = null
 ) : FastPayException(message, cause, errorCode) {
-    
+
     override fun getUserMessage(): String {
         return when {
-            message?.contains("denied", ignoreCase = true) == true -> 
+            message?.contains("denied", ignoreCase = true) == true ->
                 "Permission denied. Please grant the required permission in settings."
-            message?.contains("never ask again", ignoreCase = true) == true -> 
+            message?.contains("never ask again", ignoreCase = true) == true ->
                 "Permission was permanently denied. Please enable it in app settings."
-            message?.contains("not available", ignoreCase = true) == true -> 
+            message?.contains("not available", ignoreCase = true) == true ->
                 "This permission is not available on this device."
-            else -> 
+            else ->
                 "Permission error. Please check app settings."
         }
     }
-    
+
     companion object {
         /**
          * Create a PermissionException from a generic exception
@@ -39,7 +39,7 @@ class PermissionException(
                 permission = permission
             )
         }
-        
+
         /**
          * Create a PermissionException for denied permission
          */
@@ -50,7 +50,7 @@ class PermissionException(
                 permission = permission
             )
         }
-        
+
         /**
          * Create a PermissionException for permanently denied permission
          */

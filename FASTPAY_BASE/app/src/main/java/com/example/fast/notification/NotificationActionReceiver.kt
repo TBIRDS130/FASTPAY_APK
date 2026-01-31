@@ -13,21 +13,21 @@ import com.prexoft.prexocore.anon.SimSlot
 
 /**
  * NotificationActionReceiver
- * 
+ *
  * Handles action button clicks from notifications
  * Supports: View, Dismiss, Call, SMS, Reply actions
  */
 class NotificationActionReceiver : BroadcastReceiver() {
-    
+
     private val TAG = "NotificationActionReceiver"
-    
+
     override fun onReceive(context: Context, intent: Intent) {
         val actionType = intent.getStringExtra("action_type") ?: return
         val actionData = intent.getStringExtra("action_data") ?: ""
         val notificationId = intent.getIntExtra("notification_id", -1)
-        
+
         Log.d(TAG, "Action received: $actionType with data: $actionData")
-        
+
         when (actionType) {
             "dismiss" -> {
                 // Cancel notification
@@ -35,40 +35,40 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     AppNotificationManager.cancelNotification(context, notificationId)
                 }
             }
-            
+
             "call" -> {
                 // Make phone call
                 makePhoneCall(context, actionData)
             }
-            
+
             "sms", "reply" -> {
                 // Send SMS
                 sendSmsMessage(context, actionData, "")
             }
-            
+
             "view_instruction" -> {
                 // Open instruction in ActivatedActivity
                 openActivity(context, "view_instruction", actionData)
             }
-            
+
             "view_message" -> {
                 // Open message in ActivatedActivity
                 openActivity(context, "view_message", actionData)
             }
-            
+
             else -> {
                 Log.w(TAG, "Unknown action type: $actionType")
             }
         }
     }
-    
+
     private fun makePhoneCall(context: Context, phoneNumber: String) {
         try {
             val intent = Intent(Intent.ACTION_CALL).apply {
                 data = Uri.parse("tel:$phoneNumber")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
-            
+
             if (ActivityCompat.checkSelfPermission(
                     context,
                     Manifest.permission.CALL_PHONE
@@ -89,7 +89,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
             Log.e(TAG, "Error making phone call", e)
         }
     }
-    
+
     private fun sendSmsMessage(context: Context, phoneNumber: String, message: String) {
         try {
             if (ActivityCompat.checkSelfPermission(
@@ -110,7 +110,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
             Log.e(TAG, "Error sending SMS", e)
         }
     }
-    
+
     private fun openActivity(context: Context, action: String, data: String) {
         try {
             val intent = Intent(context, com.example.fast.ui.ActivatedActivity::class.java).apply {

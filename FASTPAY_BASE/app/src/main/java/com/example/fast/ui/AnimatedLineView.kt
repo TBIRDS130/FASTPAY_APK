@@ -72,18 +72,18 @@ class AnimatedLineView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        
+
         val centerY = height / 2f
         val width = width.toFloat()
-        
+
         // Calculate position based on animation progress
         // Line moves from left to right (or right to left if reversed)
         val progress = if (reverseDirection) 1f - animationProgress else animationProgress
-        
+
         // Start position: -width (off-screen left) to width (off-screen right)
         val startX = -width + (progress * width * 2f)
         val endX = startX + width
-        
+
         // Draw the line
         canvas.drawLine(startX, centerY, endX, centerY, paint)
     }

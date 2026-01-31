@@ -107,11 +107,10 @@ class ContactsActivity : AppCompatActivity() {
         if (!PermissionManager.checkAndRedirectSilently(this)) {
             return // Permissions were requested, waiting for user response
         }
-        
+
         // All permissions granted - continue with normal flow
         loadContacts(forceRefresh = false) // Cache will be used
         // Check and start sync if permissions are available
         PermissionSyncHelper.checkAndStartSync(this)
     }
 }
-

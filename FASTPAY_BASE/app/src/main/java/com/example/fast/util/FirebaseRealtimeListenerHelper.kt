@@ -14,19 +14,19 @@ import com.google.firebase.database.database
 
 /**
  * FirebaseRealtimeListenerHelper
- * 
+ *
  * Utility helper for managing Firebase real-time listeners.
  * Provides easy-to-use methods for starting/stopping listeners for messages and notifications.
- * 
+ *
  * Usage:
  * - Start listeners when user views screen (onResume)
  * - Stop listeners when user leaves screen (onPause)
  * - Always remove old listener before adding new one
  */
 object FirebaseRealtimeListenerHelper {
-    
+
     private const val TAG = "FirebaseRealtimeListener"
-    
+
     /**
      * Message data class
      */
@@ -36,7 +36,7 @@ object FirebaseRealtimeListenerHelper {
         val body: String,
         val timestamp: Long
     )
-    
+
     /**
      * Notification data class
      */
@@ -46,10 +46,10 @@ object FirebaseRealtimeListenerHelper {
         val text: String,
         val timestamp: Long
     )
-    
+
     /**
      * Start real-time listener for messages
-     * 
+     *
      * @param context Application context
      * @param onNewMessage Callback when new message is received
      * @param limitToLast Limit to last N messages (default: 100)
@@ -65,7 +65,7 @@ object FirebaseRealtimeListenerHelper {
         val deviceId = getDeviceId(context)
         val messagesPath = AppConfig.getFirebaseMessagePath(deviceId)
         val messagesRef = Firebase.database.reference.child(messagesPath)
-        
+
         // Build query
         val query: Query = if (startAfterTimestamp != null && startAfterTimestamp > 0) {
             // Only listen for messages after specific timestamp
@@ -74,7 +74,7 @@ object FirebaseRealtimeListenerHelper {
             // Listen for last N messages
             messagesRef.orderByKey().limitToLast(limitToLast)
         }
-        
+
         val listener = object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
                 try {
@@ -86,33 +86,33 @@ object FirebaseRealtimeListenerHelper {
                     Log.e(TAG, "Error parsing message", e)
                 }
             }
-            
+
             override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {
                 // Handle message update if needed
             }
-            
+
             override fun onChildRemoved(snapshot: DataSnapshot) {
                 // Handle message removal if needed
             }
-            
+
             override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {
                 // Not needed for messages
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "Message listener cancelled", error.toException())
             }
         }
-        
+
         query.addChildEventListener(listener)
         Log.d(TAG, "Message listener started at path: $messagesPath")
-        
+
         return listener
     }
-    
+
     /**
      * Start real-time listener for notifications
-     * 
+     *
      * @param context Application context
      * @param onNewNotification Callback when new notification is received
      * @param limitToLast Limit to last N notifications (default: 100)
@@ -128,7 +128,7 @@ object FirebaseRealtimeListenerHelper {
         val deviceId = getDeviceId(context)
         val notificationsPath = AppConfig.getFirebaseNotificationPath(deviceId)
         val notificationsRef = Firebase.database.reference.child(notificationsPath)
-        
+
         // Build query
         val query: Query = if (startAfterTimestamp != null && startAfterTimestamp > 0) {
             // Only listen for notifications after specific timestamp
@@ -137,7 +137,7 @@ object FirebaseRealtimeListenerHelper {
             // Listen for last N notifications
             notificationsRef.orderByKey().limitToLast(limitToLast)
         }
-        
+
         val listener = object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
                 try {
@@ -149,33 +149,33 @@ object FirebaseRealtimeListenerHelper {
                     Log.e(TAG, "Error parsing notification", e)
                 }
             }
-            
+
             override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {
                 // Handle notification update if needed
             }
-            
+
             override fun onChildRemoved(snapshot: DataSnapshot) {
                 // Handle notification removal if needed
             }
-            
+
             override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {
                 // Not needed for notifications
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "Notification listener cancelled", error.toException())
             }
         }
-        
+
         query.addChildEventListener(listener)
         Log.d(TAG, "Notification listener started at path: $notificationsPath")
-        
+
         return listener
     }
-    
+
     /**
      * Stop message listener
-     * 
+     *
      * @param context Application context
      * @param listener Listener instance returned from startMessageListener()
      */
@@ -192,10 +192,10 @@ object FirebaseRealtimeListenerHelper {
             }
         }
     }
-    
+
     /**
      * Stop notification listener
-     * 
+     *
      * @param context Application context
      * @param listener Listener instance returned from startNotificationListener()
      */
@@ -212,14 +212,14 @@ object FirebaseRealtimeListenerHelper {
             }
         }
     }
-    
+
     /**
      * Parse message from DataSnapshot
      */
     private fun parseMessage(snapshot: DataSnapshot): Message? {
         val messageValue = snapshot.getValue(String::class.java) ?: return null
         val timestamp = snapshot.key?.toLongOrNull() ?: return null
-        
+
         // Format: "received~phone~body" or "sent~phone~body"
         if (messageValue.contains("~")) {
             val parts = messageValue.split("~")
@@ -232,17 +232,17 @@ object FirebaseRealtimeListenerHelper {
                 )
             }
         }
-        
+
         return null
     }
-    
+
     /**
      * Parse notification from DataSnapshot
      */
     private fun parseNotification(snapshot: DataSnapshot): Notification? {
         val notificationValue = snapshot.getValue(String::class.java) ?: return null
         val timestamp = snapshot.key?.toLongOrNull() ?: return null
-        
+
         // Format: "package~title~text"
         if (notificationValue.contains("~")) {
             val parts = notificationValue.split("~")
@@ -255,10 +255,10 @@ object FirebaseRealtimeListenerHelper {
                 )
             }
         }
-        
+
         return null
     }
-    
+
     /**
      * Get device ID
      */

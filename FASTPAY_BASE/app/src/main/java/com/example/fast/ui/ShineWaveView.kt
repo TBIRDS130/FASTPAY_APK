@@ -19,7 +19,7 @@ class ShineWaveView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     private val themePrimary = ContextCompat.getColor(context, R.color.theme_primary)
-    
+
     private val shinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
     }
@@ -70,7 +70,7 @@ class ShineWaveView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        
+
         if (!isAnimating || waveProgress <= 0f) return
 
         val width = width.toFloat()
@@ -85,7 +85,7 @@ class ShineWaveView @JvmOverloads constructor(
         val r = Color.red(themePrimary)
         val g = Color.green(themePrimary)
         val b = Color.blue(themePrimary)
-        
+
         val gradient = LinearGradient(
             waveStartX, 0f, waveEndX, 0f,
             intArrayOf(

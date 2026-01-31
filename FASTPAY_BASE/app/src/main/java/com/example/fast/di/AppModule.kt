@@ -10,7 +10,7 @@ import javax.inject.Singleton
 
 /**
  * Hilt module for providing application-level dependencies
- * 
+ *
  * Provides:
  * - Application context
  * - Application instance
@@ -18,7 +18,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-    
+
     /**
      * Provide Application context
      * Use this for operations that need Context but not Application-specific features
@@ -28,6 +28,6 @@ object AppModule {
     fun provideContext(@ApplicationContext context: Context): Context {
         return context
     }
-    
+
     // Application is already provided by Hilt's ApplicationContextModule.
 }

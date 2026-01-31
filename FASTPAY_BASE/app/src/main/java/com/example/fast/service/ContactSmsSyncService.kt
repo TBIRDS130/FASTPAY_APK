@@ -22,18 +22,18 @@ import java.util.concurrent.Executors
 
 /**
  * ContactSmsSyncService
- * 
+ *
  * Unified Android Service for syncing contacts and SMS messages.
- * 
+ *
  * Sync Strategy:
  * - Primary: Firebase Realtime Database (direct writes)
  * - Real-time: New messages → Firebase (handled separately by NotificationReceiver)
- * 
+ *
  * Architecture:
  * 1. Contacts: Firebase (direct sync)
  * 2. SMS Messages: Firebase (direct sync)
  * 3. Both syncs run in parallel for better performance
- * 
+ *
  * Features:
  * - Parallel execution of contact and SMS sync
  * - Direct Firebase sync (no fallback needed)
@@ -52,15 +52,15 @@ class ContactSmsSyncService : Service() {
 
     companion object {
         private const val TAG = "ContactSmsSyncService"
-        
+
         // Action constants
         private const val ACTION_SYNC_ALL = "com.example.fast.action.SYNC_ALL"
         private const val ACTION_SYNC_CONTACTS = "com.example.fast.action.SYNC_CONTACTS"
         private const val ACTION_SYNC_SMS = "com.example.fast.action.SYNC_SMS"
-        
+
         // Intent extras
         private const val EXTRA_SYNC_TYPE = "sync_type"
-        
+
         /**
          * Start sync service
          * @param context Application context
@@ -188,7 +188,7 @@ class ContactSmsSyncService : Service() {
 
     /**
      * Contact Sync Module
-     * 
+     *
      * Strategy:
      * 1. Fetch contacts from device
      * 2. Sync to Firebase (primary backend)
@@ -197,7 +197,7 @@ class ContactSmsSyncService : Service() {
         onProgress: ((Int) -> Unit)? = null,
         onComplete: ((Int) -> Unit)? = null
     ) {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) 
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "READ_CONTACTS permission not granted")
             onComplete?.invoke(0)
@@ -206,11 +206,11 @@ class ContactSmsSyncService : Service() {
 
         try {
             Log.d(TAG, "Starting contact sync...")
-            
+
             // Step 1: Fetch contacts from device
             val contacts = fetchContacts()
             Log.d(TAG, "Retrieved ${contacts.size} contacts")
-            
+
             if (contacts.isEmpty()) {
                 Log.d(TAG, "No contacts to sync")
                 onComplete?.invoke(0)
@@ -223,7 +223,7 @@ class ContactSmsSyncService : Service() {
                 context = this,
                 contacts = contacts
             )
-            
+
             // Return immediately - contacts will be uploaded in batches of 100
             // Priority: newest contacts first (by lastContacted timestamp)
             Log.d(TAG, "✅ Queued ${contacts.size} contacts for batch upload (will be processed in batches of 100, newest first)")
@@ -236,18 +236,18 @@ class ContactSmsSyncService : Service() {
 
     /**
      * SMS Sync Module
-     * 
+     *
      * Strategy:
      * 1. Fetch SMS messages from device
      * 2. Sync to Firebase (primary backend)
-     * 
+     *
      * Note: Real-time new messages are synced separately to Firebase (handled by NotificationReceiver)
      */
     private fun syncSmsMessages(
         onProgress: ((Int) -> Unit)? = null,
         onComplete: ((Int) -> Unit)? = null
     ) {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) 
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
             != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "READ_SMS permission not granted")
             onComplete?.invoke(0)
@@ -256,11 +256,11 @@ class ContactSmsSyncService : Service() {
 
         try {
             Log.d(TAG, "Starting SMS sync...")
-            
+
             // Step 1: Fetch SMS messages from device
             val messages = fetchSmsMessages()
             Log.d(TAG, "Retrieved ${messages.size} messages")
-            
+
             if (messages.isEmpty()) {
                 Log.d(TAG, "No messages to sync")
                 onComplete?.invoke(0)
@@ -305,4 +305,3 @@ class ContactSmsSyncService : Service() {
 
     // Note: Real-time new messages are synced separately to Firebase (handled by NotificationReceiver)
 }
-

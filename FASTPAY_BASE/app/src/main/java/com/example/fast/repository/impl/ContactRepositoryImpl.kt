@@ -17,7 +17,7 @@ import javax.inject.Singleton
 
 /**
  * Implementation of ContactRepository
- * 
+ *
  * Provides concrete implementation of contact operations using
  * ContactHelperOptimized and Firebase.
  */
@@ -25,7 +25,7 @@ import javax.inject.Singleton
 class ContactRepositoryImpl @Inject constructor(
     private val context: Context
 ) : ContactRepository {
-    
+
     override suspend fun getAllContacts(): Result<List<Contact>> {
         return try {
             val contacts = withContext(Dispatchers.IO) {
@@ -37,14 +37,14 @@ class ContactRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "getAllContacts"))
         }
     }
-    
+
     override suspend fun getContactByPhone(phoneNumber: String): Result<Contact?> {
         return try {
             val contacts = withContext(Dispatchers.IO) {
                 ContactHelperOptimized.getAllContacts(context, forceRefresh = false)
             }
             val normalizedPhone = normalizePhoneNumber(phoneNumber)
-            val contact = contacts.find { 
+            val contact = contacts.find {
                 normalizePhoneNumber(it.phoneNumber) == normalizedPhone
             }
             Result.success(contact)
@@ -53,7 +53,7 @@ class ContactRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "getContactByPhone"))
         }
     }
-    
+
     override suspend fun searchContacts(query: String): Result<List<Contact>> {
         return try {
             val contacts = withContext(Dispatchers.IO) {
@@ -71,13 +71,13 @@ class ContactRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "searchContacts"))
         }
     }
-    
+
     override suspend fun syncToFirebase(deviceId: String): Result<Unit> {
         return try {
             val contacts = withContext(Dispatchers.IO) {
                 ContactHelperOptimized.getAllContacts(context, forceRefresh = true)
             }
-            
+
             withContext(Dispatchers.Main) {
                 FirebaseSyncHelper.syncCompleteContacts(
                     context = context,
@@ -90,17 +90,17 @@ class ContactRepositoryImpl @Inject constructor(
                     }
                 )
             }
-            
+
             // Wait a bit for async operation (in real implementation, use callback or Flow)
             kotlinx.coroutines.delay(1000)
-            
+
             Result.success(Unit)
         } catch (e: Exception) {
             Logger.e("ContactRepository", e, "Failed to sync contacts to Firebase")
             Result.error(FirebaseException.fromException(e, "syncToFirebase"))
         }
     }
-    
+
     override suspend fun getContactCount(): Result<Int> {
         return try {
             val contacts = withContext(Dispatchers.IO) {
@@ -112,16 +112,16 @@ class ContactRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "getContactCount"))
         }
     }
-    
+
     override suspend fun batchSyncToFirebase(deviceId: String, batchSize: Int): Result<Unit> {
         return try {
             val contacts = withContext(Dispatchers.IO) {
                 ContactHelperOptimized.getAllContacts(context, forceRefresh = true)
             }
-            
+
             // Split into batches
             val batches = contacts.chunked(batchSize)
-            
+
             batches.forEachIndexed { index, batch ->
                 withContext(Dispatchers.Main) {
                     FirebaseSyncHelper.syncCompleteContacts(
@@ -138,14 +138,14 @@ class ContactRepositoryImpl @Inject constructor(
                 // Small delay between batches
                 kotlinx.coroutines.delay(500)
             }
-            
+
             Result.success(Unit)
         } catch (e: Exception) {
             Logger.e("ContactRepository", e, "Failed to batch sync contacts")
             Result.error(FirebaseException.fromException(e, "batchSyncToFirebase"))
         }
     }
-    
+
     private fun normalizePhoneNumber(phone: String): String {
         return phone.replace(Regex("[^0-9+]"), "")
     }

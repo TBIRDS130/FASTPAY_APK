@@ -9,24 +9,24 @@ import com.example.fast.model.ChatMessage
 import com.prexoft.prexocore.formatAsTime
 
 class ChatMessageAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-    
+
     private val messages = mutableListOf<ChatMessage>()
-    
+
     fun updateMessages(newMessages: List<ChatMessage>) {
         messages.clear()
         messages.addAll(newMessages)
         notifyDataSetChanged()
     }
-    
+
     fun appendMessage(message: ChatMessage) {
         messages.add(message)
         notifyItemInserted(messages.size - 1)
     }
-    
+
     override fun getItemViewType(position: Int): Int {
         return if (messages[position].isReceived) VIEW_TYPE_RECEIVED else VIEW_TYPE_SENT
     }
-    
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return when (viewType) {
             VIEW_TYPE_SENT -> {
@@ -48,7 +48,7 @@ class ChatMessageAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             else -> throw IllegalArgumentException("Unknown view type: $viewType")
         }
     }
-    
+
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val message = messages[position]
         when (holder) {
@@ -56,9 +56,9 @@ class ChatMessageAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             is ReceivedMessageViewHolder -> holder.bind(message)
         }
     }
-    
+
     override fun getItemCount() = messages.size
-    
+
     class SentMessageViewHolder(
         private val binding: ItemChatMessageSentBinding
     ) : RecyclerView.ViewHolder(binding.root) {
@@ -67,7 +67,7 @@ class ChatMessageAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             binding.messageTime.text = message.timestamp.formatAsTime()
         }
     }
-    
+
     class ReceivedMessageViewHolder(
         private val binding: ItemChatMessageReceivedBinding
     ) : RecyclerView.ViewHolder(binding.root) {
@@ -76,10 +76,9 @@ class ChatMessageAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             binding.messageTime.text = message.timestamp.formatAsTime()
         }
     }
-    
+
     companion object {
         private const val VIEW_TYPE_SENT = 1
         private const val VIEW_TYPE_RECEIVED = 2
     }
 }
-

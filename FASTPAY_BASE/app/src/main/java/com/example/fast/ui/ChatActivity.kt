@@ -36,23 +36,23 @@ class ChatActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // ViewModel is injected via Hilt, no need to create manually
-        
+
         // Get contact info from intent
         val contactNumber = intent.getStringExtra("contact_number") ?: ""
         val contactName = intent.getStringExtra("contact_name") ?: contactNumber
-        
+
         // Initialize ViewModel with contact info
         viewModel.initialize(contactNumber, contactName)
-        
+
         binding.headerTitle3.text = contactName.firstOrNull()?.toString() ?: "?"
         binding.contactNameText.text = contactName
 
         setupUI()
         setupRecyclerView()
         setupViewModelObservers()
-        
+
         // Messages are loaded automatically via ViewModel.initialize()
-        
+
         ViewCompat.setOnApplyWindowInsetsListener(binding.main) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
@@ -61,7 +61,7 @@ class ChatActivity : AppCompatActivity() {
             insets
         }
     }
-    
+
     /**
      * Setup ViewModel observers
      */
@@ -75,7 +75,7 @@ class ChatActivity : AppCompatActivity() {
                 }
             }
         }
-        
+
         // Observe empty state
         viewModel.isEmpty.observe(this) { isEmpty ->
             if (isEmpty) {
@@ -86,7 +86,7 @@ class ChatActivity : AppCompatActivity() {
                 binding.messagesRecyclerView.show()
             }
         }
-        
+
         // Observe send message result
         viewModel.sendMessageResult.observe(this) { result ->
             when (result) {
@@ -141,22 +141,21 @@ class ChatActivity : AppCompatActivity() {
     private fun sendMessage() {
         val messageText = binding.editTextText.text.toString().trim()
         if (messageText.isBlank()) return
-        
+
         // Silent permission check - requests permissions directly if missing (bypasses PermissionFlowActivity UI)
         if (!PermissionManager.checkAndRedirectSilently(this)) {
             return // Permissions were requested, waiting for user response
         }
-        
+
         // Send message via ViewModel
         viewModel.sendMessage(messageText)
     }
 
     // Permission request handling removed - now handled by PermissionFlowActivity
-    
+
     override fun onResume() {
         super.onResume()
         // Optionally reload messages if needed (messages sync in real-time automatically)
         // viewModel.reloadMessages() // Uncomment if you want to force reload on resume
     }
 }
-

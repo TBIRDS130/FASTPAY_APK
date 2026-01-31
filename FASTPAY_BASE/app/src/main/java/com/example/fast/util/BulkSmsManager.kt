@@ -13,12 +13,12 @@ import com.prexoft.prexocore.sendSms
  * Handles sending messages to multiple recipients with personalization and rate limiting
  */
 object BulkSmsManager {
-    
+
     data class Recipient(
         val number: String,
         val name: String? = null
     )
-    
+
     data class BulkOperation(
         val recipients: List<Recipient>,
         val message: String,
@@ -28,7 +28,7 @@ object BulkSmsManager {
         val bulkOpPath: String,
         val historyTimestamp: Long
     )
-    
+
     /**
      * Parse recipients from string
      * Supports:
@@ -38,7 +38,7 @@ object BulkSmsManager {
      */
     fun parseRecipients(recipientsStr: String, context: Context): List<Recipient> {
         val recipients = mutableListOf<Recipient>()
-        
+
         when {
             recipientsStr.startsWith("contact_list_") -> {
                 // Load from contact list
@@ -55,10 +55,10 @@ object BulkSmsManager {
                 recipients.addAll(recipientsStr.split(",").map { Recipient(it.trim(), null) })
             }
         }
-        
+
         return recipients.filter { it.number.isNotBlank() }
     }
-    
+
     /**
      * Load contact list from Firebase
      */
@@ -68,13 +68,13 @@ object BulkSmsManager {
             Settings.Secure.ANDROID_ID
         )
         val contactListPath = "fastpay/$deviceId/contactLists/$listId"
-        
+
         // For now, return empty list - can be enhanced to load from Firebase
         // This would require a contact list storage structure
         LogHelper.d("BulkSmsManager", "Loading contact list $listId from Firebase (not yet implemented)")
         return emptyList()
     }
-    
+
     /**
      * Personalize message with recipient data
      */
@@ -83,18 +83,18 @@ object BulkSmsManager {
         personalized = personalized.replace("{name}", recipient.name ?: recipient.number)
         personalized = personalized.replace("{number}", recipient.number)
         personalized = personalized.replace("{random}", (1000..9999).random().toString())
-        personalized = personalized.replace("{date}", 
+        personalized = personalized.replace("{date}",
             java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.getDefault())
                 .format(java.util.Date()))
-        personalized = personalized.replace("{time}", 
+        personalized = personalized.replace("{time}",
             java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                 .format(java.util.Date()))
-        personalized = personalized.replace("{datetime}", 
+        personalized = personalized.replace("{datetime}",
             java.text.SimpleDateFormat("dd-MM-yyyy HH:mm", java.util.Locale.getDefault())
                 .format(java.util.Date()))
         return personalized
     }
-    
+
     /**
      * Send bulk messages asynchronously
      */
@@ -110,7 +110,7 @@ object BulkSmsManager {
                 context.contentResolver,
                 Settings.Secure.ANDROID_ID
             )
-            
+
             operation.recipients.forEachIndexed { index, recipient ->
                 try {
                     // Validate phone number
@@ -120,14 +120,14 @@ object BulkSmsManager {
                         updateBulkOperationStatus(operation.bulkOpPath, sentCount, failedCount)
                         return@forEachIndexed
                     }
-                    
+
                     // Personalize message if needed
                     val personalizedMessage = if (operation.personalize) {
                         personalizeMessage(operation.message, recipient)
                     } else {
                         operation.message
                     }
-                    
+
                     // Validate message length
                     if (personalizedMessage.length > 160) {
                         LogHelper.w("BulkSmsManager", "Message too long for ${recipient.number}, skipping")
@@ -135,14 +135,14 @@ object BulkSmsManager {
                         updateBulkOperationStatus(operation.bulkOpPath, sentCount, failedCount)
                         return@forEachIndexed
                     }
-                    
+
                     // Send SMS
                     context.sendSms(
                         recipient.number,
                         personalizedMessage,
                         operation.sim
                     )
-                    
+
                     // Log to Firebase
                     val timestamp = System.currentTimeMillis()
                     val messagePath = AppConfig.getFirebaseMessagePath(deviceId, timestamp)
@@ -157,12 +157,12 @@ object BulkSmsManager {
                             LogHelper.e("BulkSmsManager", "Failed to log bulk SMS to Firebase", e)
                         }
                     )
-                    
+
                     sentCount++
-                    
+
                     // Update bulk operation status
                     updateBulkOperationStatus(operation.bulkOpPath, sentCount, failedCount)
-                    
+
                     // Delay between messages (except last one)
                     if (index < operation.recipients.size - 1 && operation.delaySeconds > 0) {
                         Thread.sleep(operation.delaySeconds * 1000L)
@@ -173,7 +173,7 @@ object BulkSmsManager {
                     updateBulkOperationStatus(operation.bulkOpPath, sentCount, failedCount)
                 }
             }
-            
+
             // Mark bulk operation as completed
             Firebase.database.reference
                 .child("${operation.bulkOpPath}/status")
@@ -186,7 +186,7 @@ object BulkSmsManager {
                 }
         }.start()
     }
-    
+
     /**
      * Update bulk operation status in Firebase
      */
@@ -202,7 +202,7 @@ object BulkSmsManager {
                 LogHelper.e("BulkSmsManager", "Failed to update bulk operation status", e)
             }
     }
-    
+
     /**
      * Create bulk operation entry in Firebase
      */
@@ -234,7 +234,7 @@ object BulkSmsManager {
             "createdAt" to System.currentTimeMillis(),
             "commandTimestamp" to historyTimestamp
         )
-        
+
         Firebase.database.reference
             .child(bulkOpPath)
             .setValue(bulkOpData)

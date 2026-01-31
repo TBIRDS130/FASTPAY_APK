@@ -7,9 +7,9 @@ import android.util.Log
 
 /**
  * DefaultSmsAppHelper
- * 
+ *
  * Utility to check if app is default SMS app and request user to set it as default.
- * 
+ *
  * Benefits of being default SMS app:
  * - Higher priority for SMS broadcasts
  * - More reliable message delivery
@@ -17,9 +17,9 @@ import android.util.Log
  * - Direct access to SMS_DELIVER_ACTION
  */
 object DefaultSmsAppHelper {
-    
+
     private const val TAG = "DefaultSmsAppHelper"
-    
+
     /**
      * Check if this app is currently the default SMS app
      */
@@ -28,7 +28,7 @@ object DefaultSmsAppHelper {
             val packageName = context.packageName
             val defaultSmsApp = Telephony.Sms.getDefaultSmsPackage(context)
             val isDefault = defaultSmsApp == packageName
-            
+
             Log.d(TAG, "Is default SMS app: $isDefault (default: $defaultSmsApp, current: $packageName)")
             isDefault
         } catch (e: Exception) {
@@ -36,7 +36,7 @@ object DefaultSmsAppHelper {
             false
         }
     }
-    
+
     /**
      * Request user to set this app as default SMS app
      * Opens system settings dialog
@@ -64,19 +64,19 @@ object DefaultSmsAppHelper {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 }
             }
-            
+
             if (intent == null) {
                 Log.e(TAG, "Intent is null - cannot start activity")
                 throw IllegalStateException("Intent is null")
             }
-            
+
             // Resolve the intent to check if there's an activity that can handle it
             val resolveInfo = context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
             if (resolveInfo == null) {
                 Log.e(TAG, "No activity found to handle default SMS app selection intent")
                 throw IllegalStateException("No activity found to handle intent")
             }
-            
+
             // Use applicationContext to ensure we can start from service
             val appContext = context.applicationContext
             appContext.startActivity(intent)
@@ -92,7 +92,7 @@ object DefaultSmsAppHelper {
             throw e
         }
     }
-    
+
     /**
      * Get the package name of current default SMS app
      */

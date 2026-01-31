@@ -8,15 +8,15 @@ import com.example.fast.model.exceptions.SmsException
 
 /**
  * Maps technical exceptions to user-friendly error messages
- * 
+ *
  * This utility provides a centralized way to convert exceptions
  * into messages that can be displayed to users.
  */
 object ErrorMessageMapper {
-    
+
     /**
      * Get a user-friendly message from an exception
-     * 
+     *
      * @param exception The exception to map
      * @return User-friendly error message
      */
@@ -30,10 +30,10 @@ object ErrorMessageMapper {
             else -> getGenericMessage(exception)
         }
     }
-    
+
     /**
      * Get a user-friendly message with optional title
-     * 
+     *
      * @param exception The exception to map
      * @param title Optional title for the error
      * @return Pair of (title, message)
@@ -43,7 +43,7 @@ object ErrorMessageMapper {
         val errorTitle = title ?: getDefaultTitle(exception)
         return Pair(errorTitle, message)
     }
-    
+
     /**
      * Get default title for an exception type
      */
@@ -57,25 +57,25 @@ object ErrorMessageMapper {
             else -> "Error"
         }
     }
-    
+
     /**
      * Get generic message for unknown exceptions
      */
     private fun getGenericMessage(exception: Throwable): String {
         val message = exception.message ?: "An unexpected error occurred"
-        
+
         return when {
-            message.contains("network", ignoreCase = true) -> 
+            message.contains("network", ignoreCase = true) ->
                 "Network error. Please check your internet connection."
-            message.contains("timeout", ignoreCase = true) -> 
+            message.contains("timeout", ignoreCase = true) ->
                 "The operation took too long. Please try again."
-            message.contains("permission", ignoreCase = true) -> 
+            message.contains("permission", ignoreCase = true) ->
                 "Permission error. Please check app settings."
-            else -> 
+            else ->
                 "Something went wrong. Please try again."
         }
     }
-    
+
     /**
      * Check if error is recoverable (user can retry)
      */
@@ -93,7 +93,7 @@ object ErrorMessageMapper {
             else -> true
         }
     }
-    
+
     /**
      * Get action suggestion for the error
      */

@@ -7,11 +7,11 @@ import com.google.firebase.database.ValueEventListener
 
 /**
  * Firebase Read Helper
- * 
+ *
  * Wrapper for Firebase read operations with automatic call tracking
  */
 object FirebaseReadHelper {
-    
+
     /**
      * Add a value event listener with tracking
      */
@@ -21,7 +21,7 @@ object FirebaseReadHelper {
     ): ValueEventListener {
         // Track the read call
         FirebaseCallTracker.trackRead(ref.path.toString(), "addValueEventListener")
-        
+
         // Wrap the listener to track responses
         val wrappedListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -33,7 +33,7 @@ object FirebaseReadHelper {
                 )
                 listener.onDataChange(snapshot)
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 // Track error response
                 FirebaseCallTracker.updateCallResponse(
@@ -44,11 +44,11 @@ object FirebaseReadHelper {
                 listener.onCancelled(error)
             }
         }
-        
+
         ref.addValueEventListener(wrappedListener)
         return wrappedListener
     }
-    
+
     /**
      * Add a listener for single value event with tracking
      */
@@ -58,7 +58,7 @@ object FirebaseReadHelper {
     ) {
         // Track the read call
         FirebaseCallTracker.trackRead(ref.path.toString(), "addListenerForSingleValueEvent")
-        
+
         // Wrap the listener to track responses
         val wrappedListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -70,7 +70,7 @@ object FirebaseReadHelper {
                 )
                 listener.onDataChange(snapshot)
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 // Track error response
                 FirebaseCallTracker.updateCallResponse(
@@ -81,7 +81,7 @@ object FirebaseReadHelper {
                 listener.onCancelled(error)
             }
         }
-        
+
         ref.addListenerForSingleValueEvent(wrappedListener)
     }
 }

@@ -5,10 +5,10 @@ import kotlin.UnsafeVariance
 
 /**
  * Sealed class representing the result of an operation that can fail
- * 
+ *
  * This is a functional approach to error handling that makes errors explicit
  * and forces callers to handle both success and failure cases.
- * 
+ *
  * Usage:
  * ```
  * when (val result = someOperation()) {
@@ -22,7 +22,7 @@ import kotlin.UnsafeVariance
  *     }
  * }
  * ```
- * 
+ *
  * Or with extension functions:
  * ```
  * result.onSuccess { data ->
@@ -37,24 +37,24 @@ sealed class Result<out T> {
      * Represents a successful operation with data
      */
     data class Success<out T>(val data: T) : Result<T>()
-    
+
     /**
      * Represents a failed operation with an exception
      */
     data class Error(val exception: FastPayException) : Result<Nothing>()
-    
+
     /**
      * Returns true if the result is a success
      */
     val isSuccess: Boolean
         get() = this is Success
-    
+
     /**
      * Returns true if the result is an error
      */
     val isError: Boolean
         get() = this is Error
-    
+
     /**
      * Get the data if success, null otherwise
      */
@@ -62,7 +62,7 @@ sealed class Result<out T> {
         is Success -> data
         is Error -> null
     }
-    
+
     /**
      * Get the exception if error, null otherwise
      */
@@ -70,7 +70,7 @@ sealed class Result<out T> {
         is Success -> null
         is Error -> exception
     }
-    
+
     /**
      * Execute block if result is success
      */
@@ -80,7 +80,7 @@ sealed class Result<out T> {
         }
         return this
     }
-    
+
     /**
      * Execute block if result is error
      */
@@ -90,7 +90,7 @@ sealed class Result<out T> {
         }
         return this
     }
-    
+
     /**
      * Transform the data if success, otherwise return error
      */
@@ -100,7 +100,7 @@ sealed class Result<out T> {
             is Error -> this
         }
     }
-    
+
     /**
      * Transform the data if success using another Result, otherwise return error
      */
@@ -110,7 +110,7 @@ sealed class Result<out T> {
             is Error -> this
         }
     }
-    
+
     /**
      * Get the data or throw the exception
      * Use with caution - prefer getOrNull() or when expression
@@ -119,7 +119,7 @@ sealed class Result<out T> {
         is Success -> data
         is Error -> throw exception
     }
-    
+
     /**
      * Get the data or return default value
      */
@@ -127,18 +127,18 @@ sealed class Result<out T> {
         is Success -> data
         is Error -> default
     }
-    
+
     companion object {
         /**
          * Create a success result
          */
         fun <T> success(data: T): Result<T> = Success(data)
-        
+
         /**
          * Create an error result
          */
         fun <T> error(exception: FastPayException): Result<T> = Error(exception)
-        
+
         /**
          * Create a result from a nullable value
          * Returns Error if value is null
@@ -152,7 +152,7 @@ sealed class Result<out T> {
                 )
             }
         }
-        
+
         /**
          * Create a result from a try-catch block
          */

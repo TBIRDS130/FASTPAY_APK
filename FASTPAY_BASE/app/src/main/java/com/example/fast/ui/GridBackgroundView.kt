@@ -174,7 +174,7 @@ class GridBackgroundView @JvmOverloads constructor(
                 val pulseAlpha = (0.1f + 0.2f * (0.5f + 0.5f * kotlin.math.sin(animationProgress * 2 * kotlin.math.PI).toFloat())) * 255
                 val originalAlpha = gridPaint.alpha
                 gridPaint.alpha = pulseAlpha.toInt()
-                
+
                 var x = -gridSize
                 while (x < width) {
                     canvas.drawLine(x, 0f, x, height, gridPaint)
@@ -185,7 +185,7 @@ class GridBackgroundView @JvmOverloads constructor(
                     canvas.drawLine(0f, y, width, y, gridPaint)
                     y += gridSize
                 }
-                
+
                 gridPaint.alpha = originalAlpha
             }
             GridAnimationType.SPIRAL -> {

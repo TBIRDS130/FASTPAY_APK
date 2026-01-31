@@ -49,7 +49,7 @@ function Write-Info {
 function Find-AndroidProjects {
     $projects = @()
     $rootPath = $PSScriptRoot
-    
+
     # Check root directory
     if (Test-Path "$rootPath\gradlew.bat") {
         $projectName = Split-Path $rootPath -Leaf
@@ -58,7 +58,7 @@ function Find-AndroidProjects {
             Path = $rootPath
         }
     }
-    
+
     # Check subdirectories
     Get-ChildItem -Path $rootPath -Directory | ForEach-Object {
         $gradlePath = "$($_.FullName)\gradlew.bat"
@@ -69,7 +69,7 @@ function Find-AndroidProjects {
             }
         }
     }
-    
+
     return $projects
 }
 
@@ -80,7 +80,7 @@ function Setup-JavaEnvironment {
         Write-Info "Java found at: $env:JAVA_HOME"
         return $true
     }
-    
+
     # Common Java installation paths
     $javaPaths = @(
         "$env:ProgramFiles\Android\Android Studio\jbr",
@@ -95,7 +95,7 @@ function Setup-JavaEnvironment {
         "${env:ProgramFiles(x86)}\Java\jdk-17",
         "${env:ProgramFiles(x86)}\Java\jdk"
     )
-    
+
     foreach ($path in $javaPaths) {
         if (Test-Path $path) {
             $env:JAVA_HOME = $path
@@ -103,7 +103,7 @@ function Setup-JavaEnvironment {
             return $true
         }
     }
-    
+
     # Try to find Java in PATH
     try {
         $javaVersion = java -version 2>&1 | Select-Object -First 1
@@ -114,7 +114,7 @@ function Setup-JavaEnvironment {
     } catch {
         # Java not in PATH
     }
-    
+
     Write-Warning "Java not automatically detected. Please set JAVA_HOME manually."
     Write-Info "You can set it with: `$env:JAVA_HOME = 'C:\path\to\java'"
     return $false
@@ -126,9 +126,9 @@ function Get-ApkPath {
         [string]$ProjectPath,
         [string]$BuildType
     )
-    
+
     $apkPath = "$ProjectPath\app\build\outputs\apk\$BuildType\app-$BuildType.apk"
-    
+
     # Alternative path (some projects use different structure)
     if (-not (Test-Path $apkPath)) {
         $apkPath = "$ProjectPath\app\build\outputs\apk\$BuildType\*.apk"
@@ -137,7 +137,7 @@ function Get-ApkPath {
             return $apkFiles[0].FullName
         }
     }
-    
+
     return $apkPath
 }
 
@@ -149,22 +149,22 @@ function Build-Apk {
         [bool]$CleanFirst,
         [bool]$QuickCheck
     )
-    
+
     Push-Location $ProjectPath
-    
+
     try {
         # Setup Java
         if (-not (Setup-JavaEnvironment)) {
             Write-Error "Java setup failed. Cannot proceed with build."
             return $false
         }
-        
+
         # Proactive file lock cleanup (runs by default to prevent build failures)
         if ($AutoFixLock) {
             Resolve-LockedBuildArtifacts -Proactive $true
             Start-Sleep -Seconds 1
         }
-        
+
         # Clean if requested
         if ($CleanFirst) {
             Write-Step "Cleaning project..."
@@ -173,12 +173,12 @@ function Build-Apk {
                 Write-Warning "Clean command had issues, but continuing..."
             }
         }
-        
+
         # Quick check mode
         if ($QuickCheck) {
             Write-Step "Running quick compilation check..."
             & .\gradlew.bat compileDebugKotlin --no-daemon 2>&1 | Tee-Object -Variable output
-            
+
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "Quick check passed! No compilation errors."
                 return $true
@@ -187,14 +187,14 @@ function Build-Apk {
                 return $false
             }
         }
-        
+
         function Invoke-Build {
             Write-Step "Building $BuildType APK (this may take a few minutes)..."
             Write-Info "Please wait..."
-            
+
             $startTime = Get-Date
             $buildOutput = @()
-            
+
             # Use Start-Process with timeout to prevent hanging
             $processInfo = New-Object System.Diagnostics.ProcessStartInfo
             $processInfo.FileName = ".\gradlew.bat"
@@ -204,37 +204,37 @@ function Build-Apk {
             $processInfo.RedirectStandardError = $true
             $processInfo.CreateNoWindow = $true
             $processInfo.WorkingDirectory = $ProjectPath
-            
+
             $process = New-Object System.Diagnostics.Process
             $process.StartInfo = $processInfo
-            
+
             # Capture output
             $outputBuilder = New-Object System.Text.StringBuilder
             $errorBuilder = New-Object System.Text.StringBuilder
-            
+
             $outputEvent = Register-ObjectEvent -InputObject $process -EventName OutputDataReceived -Action {
                 if ($EventArgs.Data) {
                     [void]$Event.MessageData.AppendLine($EventArgs.Data)
                     Write-Host $EventArgs.Data
                 }
             } -MessageData $outputBuilder
-            
+
             $errorEvent = Register-ObjectEvent -InputObject $process -EventName ErrorDataReceived -Action {
                 if ($EventArgs.Data) {
                     [void]$Event.MessageData.AppendLine($EventArgs.Data)
                     Write-Host $EventArgs.Data -ForegroundColor Red
                 }
             } -MessageData $errorBuilder
-            
+
             try {
                 $process.Start() | Out-Null
                 $process.BeginOutputReadLine()
                 $process.BeginErrorReadLine()
-                
+
                 # Wait with timeout (15 minutes max)
                 $timeout = 900
                 $process.WaitForExit($timeout * 1000)
-                
+
                 if (-not $process.HasExited) {
                     Write-Warning "Build process timed out after $timeout seconds. Terminating..."
                     $process.Kill()
@@ -245,11 +245,11 @@ function Build-Apk {
                         Duration = $timeout
                     }
                 }
-                
+
                 # Get remaining output
                 Start-Sleep -Milliseconds 500
                 $buildOutput = ($outputBuilder.ToString() + $errorBuilder.ToString()) -split "`n"
-                
+
             } finally {
                 Unregister-Event -SourceIdentifier $outputEvent.Name
                 Unregister-Event -SourceIdentifier $errorEvent.Name
@@ -258,33 +258,33 @@ function Build-Apk {
                 }
                 $process.Dispose()
             }
-            
+
             $endTime = Get-Date
             $duration = ($endTime - $startTime).TotalSeconds
-            
+
             return @{
                 ExitCode = $process.ExitCode
                 Output = $buildOutput
                 Duration = $duration
             }
         }
-        
+
         function Resolve-LockedBuildArtifacts {
             param([bool]$Proactive = $false)
-            
+
             if ($Proactive) {
                 Write-Step "Proactively checking and cleaning locked build artifacts..."
             } else {
                 Write-Warning "Detected locked build artifacts. Attempting to unlock..."
             }
-            
+
             # Stop Gradle daemons first
             try {
                 Write-Info "Stopping Gradle daemons..."
                 & .\gradlew.bat --stop 2>&1 | Out-Null
                 Start-Sleep -Seconds 1
             } catch {}
-            
+
             # Kill Java processes that may lock build files
             try {
                 Write-Info "Checking for Java processes that might lock files..."
@@ -295,22 +295,22 @@ function Build-Apk {
                     Start-Sleep -Seconds 1
                 }
             } catch {}
-            
+
             # Clean .gradle lock files
             $gradleDir = Join-Path $ProjectPath ".gradle"
             if (Test-Path $gradleDir) {
                 try {
                     Write-Info "Cleaning Gradle lock files..."
-                    Get-ChildItem -Path $gradleDir -Filter "*.lock" -Recurse -ErrorAction SilentlyContinue | 
+                    Get-ChildItem -Path $gradleDir -Filter "*.lock" -Recurse -ErrorAction SilentlyContinue |
                         Remove-Item -Force -ErrorAction SilentlyContinue
                 } catch {}
             }
-            
+
             # Try to delete build directory using multiple methods
             $buildDir = Join-Path $ProjectPath "app\build"
             if (Test-Path $buildDir) {
                 Write-Info "Cleaning build directory..."
-                
+
                 # Method 1: Standard deletion
                 try {
                     Remove-Item -Recurse -Force $buildDir -ErrorAction Stop
@@ -319,13 +319,13 @@ function Build-Apk {
                 } catch {
                     Write-Info "Standard deletion failed, trying advanced methods..."
                 }
-                
+
                 # Method 2: Try to delete specific locked files first (common R.jar issue)
                 $commonLockedFiles = @(
                     "$buildDir\intermediates\compile_and_runtime_not_namespaced_r_class_jar\debug\processDebugResources\R.jar",
                     "$buildDir\intermediates\compile_and_runtime_not_namespaced_r_class_jar\release\processReleaseResources\R.jar"
                 )
-                
+
                 foreach ($lockedFile in $commonLockedFiles) {
                     if (Test-Path $lockedFile) {
                         try {
@@ -339,17 +339,17 @@ function Build-Apk {
                         }
                     }
                 }
-                
+
                 # Method 3: Robocopy trick (mirror empty directory to delete locked files)
                 try {
                     Write-Info "Using robocopy method to force delete locked files..."
                     $emptyDir = Join-Path $env:TEMP "empty_build_dir_$(Get-Random)"
                     New-Item -ItemType Directory -Path $emptyDir -Force | Out-Null
-                    
+
                     try {
                         & robocopy $emptyDir $buildDir /MIR /NFL /NDL /NJH /NJS 2>&1 | Out-Null
                         Start-Sleep -Seconds 1
-                        
+
                         # Check if it worked
                         if (-not (Test-Path $buildDir)) {
                             Write-Success "Build directory cleaned using robocopy method"
@@ -362,7 +362,7 @@ function Build-Apk {
                 } catch {
                     Write-Warning "Robocopy method failed: $_"
                 }
-                
+
                 # Method 4: Final attempt with standard deletion
                 Start-Sleep -Seconds 1
                 try {
@@ -379,29 +379,29 @@ function Build-Apk {
                 }
             }
         }
-        
+
         # Full build (first attempt)
         $buildResult = Invoke-Build
         $duration = $buildResult.Duration
         $buildOutput = $buildResult.Output
         $exitCode = $buildResult.ExitCode
-        
+
         if ($exitCode -eq 0) {
             Write-Success "Build completed successfully in $([math]::Round($duration, 1)) seconds!"
-            
+
             # Find APK
             $apkPath = Get-ApkPath -ProjectPath $ProjectPath -BuildType $BuildType
-            
+
             if (Test-Path $apkPath) {
                 $apkInfo = Get-Item $apkPath
                 $apkSize = [math]::Round($apkInfo.Length / 1MB, 2)
-                
+
                 Write-ColorOutput "`nAPK Information:" "Cyan"
                 Write-ColorOutput "   Location: $apkPath" "White"
                 Write-ColorOutput "   Size: $apkSize MB" "White"
                 Write-ColorOutput "   Build Type: $BuildType" "White"
                 Write-ColorOutput "   Modified: $($apkInfo.LastWriteTime)" "White"
-                
+
                 # Ask to open folder
                 Write-Host ""
                 $openFolder = Read-Host "Open APK folder? (Y/N)"
@@ -409,7 +409,7 @@ function Build-Apk {
                     $apkDir = Split-Path $apkPath -Parent
                     Invoke-Item $apkDir
                 }
-                
+
                 return $true
             } else {
                 Write-Warning "Build succeeded but APK not found at expected location: $apkPath"
@@ -430,36 +430,36 @@ function Build-Apk {
                 Write-Warning "Build failed due to locked files. Auto-fix is enabled - retrying once..."
                 Resolve-LockedBuildArtifacts -Proactive $false
                 Start-Sleep -Seconds 2
-                
+
                 # Retry build once
                 $buildResult = Invoke-Build
                 $duration = $buildResult.Duration
                 $buildOutput = $buildResult.Output
                 $exitCode = $buildResult.ExitCode
-                
+
                 if ($exitCode -eq 0) {
                     Write-Success "Build completed successfully after auto-fix in $([math]::Round($duration, 1)) seconds!"
-                    
+
                     # Find APK
                     $apkPath = Get-ApkPath -ProjectPath $ProjectPath -BuildType $BuildType
                     if (Test-Path $apkPath) {
                         $apkInfo = Get-Item $apkPath
                         $apkSize = [math]::Round($apkInfo.Length / 1MB, 2)
-                        
+
                         Write-ColorOutput "`nAPK Information:" "Cyan"
                         Write-ColorOutput "   Location: $apkPath" "White"
                         Write-ColorOutput "   Size: $apkSize MB" "White"
                         Write-ColorOutput "   Build Type: $BuildType" "White"
                         Write-ColorOutput "   Modified: $($apkInfo.LastWriteTime)" "White"
                     }
-                    
+
                     return $true
                 }
             }
-            
+
             Write-Error "Build failed!"
             Write-Info "Check the output above for error details."
-            
+
             # Show common errors and solutions
             if ($buildOutput -match "FAILURE|error|Error") {
                 Write-ColorOutput "`nCommon solutions:" "Yellow"
@@ -472,7 +472,7 @@ function Build-Apk {
                     Write-Info "6. Close Android Studio/VS Code and rerun"
                 }
             }
-            
+
             return $false
         }
     } finally {
@@ -485,28 +485,28 @@ function Main {
     Write-ColorOutput "`n========================================" "Cyan"
     Write-ColorOutput "     Smart APK Builder Script" "Cyan"
     Write-ColorOutput "========================================" "Cyan"
-    
+
     # Override BuildType if Release flag is set
     if ($Release) {
         $BuildType = "release"
     }
-    
+
     # Normalize BuildType
     $BuildType = $BuildType.ToLower()
     if ($BuildType -notin @("debug", "release")) {
         Write-Error "Invalid build type: $BuildType (must be 'debug' or 'release')"
         exit 1
     }
-    
+
     # Find projects
     $projects = Find-AndroidProjects
-    
+
     if ($projects.Count -eq 0) {
         Write-Error "No Android projects found in current directory or subdirectories!"
         Write-Info "Make sure you're running this script from the workspace root."
         exit 1
     }
-    
+
     # List projects mode
     if ($List -or $projects.Count -gt 1 -and $Project -eq "") {
         Write-ColorOutput "`nAvailable Android Projects:" "Cyan"
@@ -515,7 +515,7 @@ function Main {
             Write-ColorOutput "       Path: $($projects[$i].Path)" "DarkGray"
         }
         Write-Host ""
-        
+
         if ($Project -eq "") {
             if ($projects.Count -eq 1) {
                 $selectedProject = $projects[0]
@@ -549,12 +549,12 @@ function Main {
             $selectedProject = $projects[0]
         }
     }
-    
+
     if (-not $selectedProject) {
         Write-Error "No project selected!"
         exit 1
     }
-    
+
     # Display build information
     Write-ColorOutput "`nBuild Configuration:" "Cyan"
     Write-ColorOutput "   Project: $($selectedProject.Name)" "White"
@@ -563,7 +563,7 @@ function Main {
     Write-ColorOutput "   Clean First: $Clean" "White"
     Write-ColorOutput "   Quick Check: $Quick" "White"
     Write-ColorOutput "   Auto-Fix Locks: $AutoFixLock (proactive)" "White"
-    
+
     # Confirm build unless prompts are disabled
     if (-not $Quick -and -not $NoPrompt) {
         Write-Host ""
@@ -573,10 +573,10 @@ function Main {
             exit 0
         }
     }
-    
+
     # Execute build
     $success = Build-Apk -ProjectPath $selectedProject.Path -BuildType $BuildType -CleanFirst $Clean -QuickCheck $Quick
-    
+
     if ($success) {
         Write-ColorOutput "`nAll done!" "Green"
         exit 0

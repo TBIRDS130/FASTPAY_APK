@@ -66,7 +66,7 @@ import com.prexoft.prexocore.writeInternalFile
 
 class ActivationActivity : AppCompatActivity() {
     private val id by lazy { ActivityActivationBinding.inflate(layoutInflater) }
-    
+
     // SharedPreferences for tracking activation status
     private val prefsName = "activation_prefs"
     private val KEY_LOCALLY_ACTIVATED = "locally_activated"
@@ -79,13 +79,13 @@ class ActivationActivity : AppCompatActivity() {
     private val KEY_RETRY_TYPE = "retry_type"
     private val KEY_RETRY_ATTEMPT = "retry_attempt"
     private val KEY_RETRY_TIMESTAMP = "retry_timestamp"
-    
+
     private val sharedPreferences: SharedPreferences
         get() = getSharedPreferences(prefsName, Context.MODE_PRIVATE)
 
     private val retryPreferences: SharedPreferences
         get() = getSharedPreferences(retryPrefsName, Context.MODE_PRIVATE)
-    
+
     /**
      * Mark activation as complete in SharedPreferences
      * This ensures that subsequent launches will check Firebase instead of forcing activation flow
@@ -119,7 +119,7 @@ class ActivationActivity : AppCompatActivity() {
                 .apply()
         }
     }
-    
+
     // Animation state variables
     private var originalContentTranslationY = 0f
     private var originalLogoTranslationY = 0f
@@ -127,7 +127,7 @@ class ActivationActivity : AppCompatActivity() {
     private var originalLogoScaleY = 1f
     private var originalTaglineAlpha = 1f
     private var initialRootHeight = 0
-    
+
     // Handler and runnable references for cleanup
     private val handler = Handler(Looper.getMainLooper())
     private val handlerRunnables = mutableListOf<Runnable>()
@@ -145,13 +145,13 @@ class ActivationActivity : AppCompatActivity() {
     private var statusTypingOriginalStepAuth = ""
     private var pendingAuthorizationResult: Boolean? = null
     private var authorizationResult: Boolean? = null
-    
+
     // ViewTreeObserver listener reference for cleanup
     private var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
-    
+
     // Animation state for state saving
     private var isActivating = false
-    
+
     // TEMPORARY: Design preview feature (remove after final selection)
     private var currentDesignIndex = 0 // Default: Selector (Auto-Focus) (index 1)
     private val inputFieldDesigns = listOf(
@@ -161,7 +161,7 @@ class ActivationActivity : AppCompatActivity() {
         R.drawable.input_field_neon_with_corners to "With Corners",
         R.drawable.input_field_cyberpunk_premium to "Premium"
     )
-    
+
     // TEMPORARY: Background preview feature (remove after final selection)
     private var currentBgIndex = 3 // Default: Top Highlight (index 4)
     private val cryptoCardBackgrounds = listOf(
@@ -171,10 +171,10 @@ class ActivationActivity : AppCompatActivity() {
         R.drawable.crypto_hash_card_bg_variant3 to "Top Highlight",
         R.drawable.crypto_hash_card_bg_variant4 to "Inner Border"
     )
-    
+
     // TEMPORARY: Animation preview feature (remove after final selection)
     private var currentAnimationIndex = 0 // Default: None (index 1)
-    
+
     // TEMPORARY: Outer border preview feature (remove after final selection)
     private var currentBorderIndex = 5 // Default: Dashed (index 6)
     private val outerBorderStyles = listOf(
@@ -185,7 +185,7 @@ class ActivationActivity : AppCompatActivity() {
         R.drawable.crypto_card_outer_border_glow to "Glow",
         R.drawable.crypto_card_outer_border_dashed to "Dashed"
     )
-    
+
     // TEMPORARY: Logo preview feature (remove after final selection)
     private var currentLogoIndex = 1 // Default: Large (index 2)
     private val logoStyles = listOf(
@@ -196,7 +196,7 @@ class ActivationActivity : AppCompatActivity() {
         "Intense" to LogoStyle(textSize = 52f, shadowRadius = 60f, letterSpacing = 0.06f, alpha = 1f),
         "Minimal" to LogoStyle(textSize = 42f, shadowRadius = 0f, letterSpacing = 0.02f, alpha = 1f)
     )
-    
+
     data class LogoStyle(
         val textSize: Float,
         val shadowRadius: Float,
@@ -211,11 +211,11 @@ class ActivationActivity : AppCompatActivity() {
         "Rotate" to { startRotateAnimation() },
         "Shimmer" to { startShimmerCardAnimation() }
     )
-    
+
     private var currentPhone: String? = null
     private var currentCode: String? = null
     private var lastSyncTriggerAt: Long = 0L
-    
+
     // Login type: "testing" (number) or "running" (code)
     private var currentLoginType = "testing"
 
@@ -619,13 +619,13 @@ class ActivationActivity : AppCompatActivity() {
         id.editTextText2.setSelection(input.length)
         activate()
     }
-    
+
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // Set window background IMMEDIATELY to prevent black screen
         // This must happen before setContentView
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -638,13 +638,13 @@ class ActivationActivity : AppCompatActivity() {
             // Remove default enter transition to show background immediately
             window.enterTransition = null
         }
-        
+
         setContentView(id.root)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        
+
         // Start scanline animation for background effect
         id.scanlineView?.startScanlineAnimation()
-        
+
         // Set up shared element enter transition for smooth animation from SplashActivity
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val hasTransition = intent.getBooleanExtra("hasTransition", false)
@@ -659,13 +659,13 @@ class ActivationActivity : AppCompatActivity() {
                     duration = 500
                     interpolator = android.view.animation.AccelerateDecelerateInterpolator()
                 }
-                
+
                 // Ensure logo and tagline are visible and ready for transition
                 id.textView11.visibility = View.VISIBLE
                 id.textView11.alpha = 1f
                 id.textView12.visibility = View.VISIBLE
                 id.textView12.alpha = 1f
-                
+
                 // Start transition after views are measured and ready
                 id.main.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
                     override fun onPreDraw(): Boolean {
@@ -702,30 +702,30 @@ class ActivationActivity : AppCompatActivity() {
         // Clear any existing text in the input field
         id.editTextText2.setText("")
         id.editTextText2.hint = "" // Start with empty hint for animation
-        
+
         // Use static logo and tagline from resources (no dynamic branding)
         id.textView11.text = getString(R.string.app_name_title)
         id.textView12.text = getString(R.string.app_tagline)
         id.textView11.visibility = View.VISIBLE
         id.textView12.visibility = View.VISIBLE
         id.headerSection.visibility = View.VISIBLE
-        
+
         // Update CRYPTO HASH label with random number (100-999) and "ALWAYS SECURE"
         val randomNumber = (100..999).random()
         id.cryptoHashLabel.text = "#$randomNumber ALWAYS SECURE"
-        
+
         // Show activation UI (hint animation will start automatically after UI entry animation)
         showActivationUI(isTransitioningFromSplash)
-        
+
         // Setup login type selector (TESTING/RUNNING)
         setupLoginTypeSelector()
-        
+
         // Setup keyboard dismissal on click outside input field
         setupKeyboardDismissal()
-        
+
         // Setup real-time input validation and uppercase conversion for RUNNING mode
         setupRunningModeInputValidation()
-        
+
         // Register device name - initialize device structure if needed (non-blocking)
         // Move to background thread to prevent blocking UI
         handler.postDelayed({
@@ -753,7 +753,7 @@ class ActivationActivity : AppCompatActivity() {
 
         updateActivationState(ActivationState.Success)
         clearActivationRetry()
-        
+
         // Mark activation as complete BEFORE navigation
         markActivationComplete(code)
 
@@ -770,18 +770,18 @@ class ActivationActivity : AppCompatActivity() {
             launchPermissionFlowAfterActivation(activationExtras)
             return
         }
-        
+
         android.util.Log.d("ActivationActivity", "Starting smooth transition to ActivatedActivity")
-        
+
         // Stop circular border animation before transition to avoid visual glitches
         stopCircularBorderAnimation()
-        
+
         val logoView = id.textView11
         val taglineView = id.textView12
         val cardWrapper = id.cryptoHashCardWrapper
         val card = id.cryptoHashCard
         val inputCard = id.cardView6 // Input field card that will morph into phone card
-        
+
         // Ensure transition names are set for shared element transition
         // Logo and input card use same transition concept - logo moves, input card morphs
         logoView.transitionName = "logo_transition"
@@ -789,25 +789,25 @@ class ActivationActivity : AppCompatActivity() {
         cardWrapper.transitionName = "card_wrapper_transition"
         card.transitionName = "card_transition"
         inputCard.transitionName = "phone_card_transition" // Input card transitions to phone card
-        
+
         // Ensure input card is visible and ready for transition
         inputCard.visibility = View.VISIBLE
         inputCard.alpha = 1f
-        
+
         // Fade out only non-transitioning elements (keep card visible for shared element transition)
         fadeOutNonTransitioningUI {
             if (!isDestroyed && !isFinishing) {
                 val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
                     putExtras(activationExtras)
                 }
-                
+
                 try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         // Remove exit transition to prevent black screen gap
                         window.exitTransition = null
                         window.allowEnterTransitionOverlap = true
                         window.allowReturnTransitionOverlap = true
-                        
+
                         window.sharedElementExitTransition = android.transition.TransitionSet().apply {
                             addTransition(android.transition.ChangeBounds())
                             addTransition(android.transition.ChangeTransform())
@@ -815,7 +815,7 @@ class ActivationActivity : AppCompatActivity() {
                             duration = 600
                             interpolator = AccelerateDecelerateInterpolator()
                         }
-                        
+
                         // Create shared element transition options with card transition
                         // Input card (cardView6) morphs into phone card in ActivatedActivity
                         val options = ActivityOptionsCompat.makeSceneTransitionAnimation(
@@ -825,10 +825,10 @@ class ActivationActivity : AppCompatActivity() {
                             Pair.create(cardWrapper, "card_wrapper_transition"),
                             Pair.create(inputCard, "phone_card_transition") // Input card → phone card
                         ).toBundle()
-                        
+
                         startActivity(intent, options)
                         android.util.Log.d("ActivationActivity", "Navigation started with smooth shared element transition")
-                        
+
                         // Finish immediately to allow destination activity to show immediately
                         if (!isDestroyed && !isFinishing) {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -869,7 +869,7 @@ class ActivationActivity : AppCompatActivity() {
             id.headerSection.alpha = 1f
             id.centerContent.alpha = 0f
             id.centerContent.translationY = 50f
-            
+
             // Wait a bit for transition to complete, then animate center content
             val centerContentRunnable = Runnable {
                 if (!isDestroyed && !isFinishing) {
@@ -891,13 +891,13 @@ class ActivationActivity : AppCompatActivity() {
             val views = listOf(id.headerSection, id.centerContent)
             var completedAnimations = 0
             val totalAnimations = views.size
-            
+
             views.forEachIndexed { index, view ->
                 view.alpha = 0f
                 view.translationY = 50f
                 val delay = (index * 150).toLong()
                 val duration = 600L
-                
+
                 view.animate()
                     .alpha(1f)
                     .translationY(0f)
@@ -917,7 +917,7 @@ class ActivationActivity : AppCompatActivity() {
 
         // Setup input field focus animation (move up 25% when keyboard opens)
         setupInputFieldAnimation()
-        
+
         // Setup shimmer effect on crypto hash card
         setupShimmerEffect()
 
@@ -933,7 +933,7 @@ class ActivationActivity : AppCompatActivity() {
             id.activationRetryNow.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             retryActivationNow()
         }
-        
+
         // Clear button - clears the input field
         id.clearButton.onClick {
             id.clearButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -946,11 +946,11 @@ class ActivationActivity : AppCompatActivity() {
                 imm.showSoftInput(id.editTextText2, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
             }, 100)
         }
-        
+
         // Apply default selections
         applyDefaultSelections()
     }
-    
+
     /**
      * Apply default selections (Animation 1, BG 4, Design 1, Border 6, Logo 2)
      */
@@ -958,22 +958,22 @@ class ActivationActivity : AppCompatActivity() {
         // Apply default design (index 0 = "Selector (Auto-Focus)")
         val (designDrawableRes, _) = inputFieldDesigns[currentDesignIndex]
         id.cardView6.background = resources.getDrawable(designDrawableRes, theme)
-        
+
         // Apply default background (index 3 = "Top Highlight")
         val (bgDrawableRes, _) = cryptoCardBackgrounds[currentBgIndex]
         id.cryptoHashCard.background = resources.getDrawable(bgDrawableRes, theme)
-        
+
         // Apply default animation (index 0 = "None")
         val (_, animFunction) = cardAnimations[currentAnimationIndex]
         animFunction.invoke()
-        
+
         // Apply default border (index 5 = "Dashed")
         applyBorderStyle(currentBorderIndex)
-        
+
         // Apply default logo style (index 1 = "Large")
         applyLogoStyle(currentLogoIndex)
     }
-    
+
     /**
      * Apply border style to wrapper
      */
@@ -981,18 +981,18 @@ class ActivationActivity : AppCompatActivity() {
         val (drawableRes, _) = outerBorderStyles[borderIndex]
         id.cryptoHashCardWrapper.background = resources.getDrawable(drawableRes, theme)
     }
-    
+
     /**
      * Apply logo style
      */
     private fun applyLogoStyle(logoIndex: Int) {
         val (_, style) = logoStyles[logoIndex]
         val logoView = id.textView11
-        
+
         logoView.textSize = style.textSize
         logoView.alpha = style.alpha
         logoView.letterSpacing = style.letterSpacing
-        
+
         // Apply shadow radius
         if (style.shadowRadius > 0f) {
             logoView.setShadowLayer(
@@ -1005,10 +1005,10 @@ class ActivationActivity : AppCompatActivity() {
             logoView.setShadowLayer(0f, 0f, 0f, android.graphics.Color.TRANSPARENT)
         }
     }
-    
+
     // Background animation state
     private var currentBackgroundAnimator: ValueAnimator? = null
-    
+
     /**
      * Stop current background animation
      */
@@ -1024,22 +1024,22 @@ class ActivationActivity : AppCompatActivity() {
         id.cryptoHashCard.scaleY = 1f
         id.cryptoHashCard.rotation = 0f
     }
-    
+
     /**
      * Animation 1: Pulse - Background glows pulse
      */
     private fun startPulseAnimation() {
         stopCurrentCardAnimation()
-        
+
         val card = id.cryptoHashCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
-        
+
         currentBackgroundAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 1500
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.REVERSE
             interpolator = AccelerateDecelerateInterpolator()
-            
+
             addUpdateListener { animator ->
                 val progress = animator.animatedValue as Float
                 // Animate background border glow opacity (0.03 to 0.08)
@@ -1050,28 +1050,28 @@ class ActivationActivity : AppCompatActivity() {
                     android.graphics.Color.green(themePrimary),
                     android.graphics.Color.blue(themePrimary)
                 )
-                
+
                 updateBackgroundBorderGlow(borderColor)
             }
-            
+
             start()
         }
     }
-    
+
     /**
      * Animation 2: Glow - Background border glows with neon effect
      */
     private fun startGlowAnimation() {
         stopCurrentCardAnimation()
-        
+
         val card = id.cryptoHashCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
-        
+
         currentBackgroundAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 2000
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.REVERSE
-            
+
             addUpdateListener { animator ->
                 val progress = animator.animatedValue as Float
                 // Animate border glow intensity (0.03 to 0.15)
@@ -1082,79 +1082,79 @@ class ActivationActivity : AppCompatActivity() {
                     android.graphics.Color.green(themePrimary),
                     android.graphics.Color.blue(themePrimary)
                 )
-                
+
                 // Also animate elevation for glow effect
                 card.elevation = (4 + progress * 12).toFloat()
-                
+
                 updateBackgroundBorderGlow(borderColor)
             }
-            
+
             start()
         }
     }
-    
+
     /**
      * Animation 3: Wave - Background has a wave effect
      */
     private fun startScaleAnimation() {
         stopCurrentCardAnimation()
-        
+
         val card = id.cryptoHashCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
-        
+
         currentBackgroundAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 2000
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.RESTART
-            
+
             addUpdateListener { animator ->
                 val progress = animator.animatedValue as Float
                 // Create wave effect with gradient movement
                 val waveProgress = (Math.sin((progress * Math.PI * 2).toDouble()).toFloat() * 0.5 + 0.5).toFloat()
                 val gradientOpacity = (0.03f + waveProgress * 0.1f).coerceIn(0.03f, 0.13f)
-                
+
                 updateBackgroundGradientWave(gradientOpacity, progress)
             }
-            
+
             start()
         }
     }
-    
+
     /**
      * Animation 4: Rotate Gradient - Background gradient rotates
      */
     private fun startRotateAnimation() {
         stopCurrentCardAnimation()
-        
+
         val card = id.cryptoHashCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
-        
+
         currentBackgroundAnimator = ValueAnimator.ofFloat(0f, 360f).apply {
             duration = 3000
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.RESTART
             interpolator = android.view.animation.LinearInterpolator()
-            
+
             addUpdateListener { animator ->
                 val angle = animator.animatedValue as Float
                 // Rotate gradient angle
                 updateBackgroundGradientAngle(angle.toInt())
             }
-            
+
             start()
         }
     }
-    
+
     /**
      * Animation 5: Shimmer - Background has a shimmer effect moving across
      */
     private fun startShimmerCardAnimation() {
         stopCurrentCardAnimation()
-        
+
         // Use existing shimmer effect
         setupShimmerEffect()
     }
-    
+
     /**
      * Update background border glow color
      */
@@ -1162,24 +1162,24 @@ class ActivationActivity : AppCompatActivity() {
         try {
             val baseDrawable = resources.getDrawable(R.drawable.crypto_hash_card_background, theme) as? android.graphics.drawable.LayerDrawable
                 ?: return
-            
+
             val layers = baseDrawable.numberOfLayers
             if (layers >= 4) {
                 // Update border stroke color (layer 3, index 3)
                 val borderShape = baseDrawable.getDrawable(3) as? android.graphics.drawable.GradientDrawable
                 borderShape?.setStroke(1, glowColor, 12f * resources.displayMetrics.density, 0f)
-                
+
                 // Update overlay color (layer 1, index 1)
                 val overlayShape = baseDrawable.getDrawable(1) as? android.graphics.drawable.GradientDrawable
                 overlayShape?.setColor(glowColor)
-                
+
                 id.cryptoHashCard.background = baseDrawable
             }
         } catch (e: Exception) {
             android.util.Log.e("ActivationActivity", "Error updating border glow", e)
         }
     }
-    
+
     /**
      * Update background gradient wave effect
      */
@@ -1187,17 +1187,17 @@ class ActivationActivity : AppCompatActivity() {
         try {
             val card = id.cryptoHashCard
             val themePrimary = resources.getColor(R.color.theme_primary, theme)
-            
+
             val gradientColor = android.graphics.Color.argb(
                 (opacity * 255).toInt(),
                 android.graphics.Color.red(themePrimary),
                 android.graphics.Color.green(themePrimary),
                 android.graphics.Color.blue(themePrimary)
             )
-            
+
             val baseDrawable = resources.getDrawable(R.drawable.crypto_hash_card_background, theme) as? android.graphics.drawable.LayerDrawable
                 ?: return
-            
+
             // Create animated gradient overlay
             val gradientDrawable = android.graphics.drawable.GradientDrawable().apply {
                 orientation = android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT
@@ -1208,16 +1208,16 @@ class ActivationActivity : AppCompatActivity() {
                 )
                 cornerRadius = 12 * resources.displayMetrics.density
             }
-            
+
             val layers = arrayOf(baseDrawable, gradientDrawable)
             val layerDrawable = android.graphics.drawable.LayerDrawable(layers)
             card.background = layerDrawable
-            
+
         } catch (e: Exception) {
             android.util.Log.e("ActivationActivity", "Error updating gradient wave", e)
         }
     }
-    
+
     /**
      * Update background gradient angle
      */
@@ -1225,10 +1225,10 @@ class ActivationActivity : AppCompatActivity() {
         try {
             val card = id.cryptoHashCard
             val themePrimary = resources.getColor(R.color.theme_primary, theme)
-            
+
             val baseDrawable = resources.getDrawable(R.drawable.crypto_hash_card_background, theme) as? android.graphics.drawable.LayerDrawable
                 ?: return
-            
+
             // Create rotating gradient overlay
             val gradientDrawable = android.graphics.drawable.GradientDrawable().apply {
                 orientation = android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT
@@ -1245,88 +1245,88 @@ class ActivationActivity : AppCompatActivity() {
                 )
                 cornerRadius = 12 * resources.displayMetrics.density
             }
-            
+
             val layers = arrayOf(baseDrawable, gradientDrawable)
             val layerDrawable = android.graphics.drawable.LayerDrawable(layers)
             card.background = layerDrawable
-            
+
         } catch (e: Exception) {
             android.util.Log.e("ActivationActivity", "Error updating gradient angle", e)
         }
     }
-    
+
     /**
      * Setup login type selector (TESTING/RUNNING)
      */
     private fun setupLoginTypeSelector() {
         // Set TESTING as default active
         selectLoginType("testing")
-        
+
         // Setup click listeners
         id.testingButtonContainer.setOnClickListener {
             selectLoginType("testing")
         }
-        
+
         id.runningButtonContainer.setOnClickListener {
             selectLoginType("running")
         }
     }
-    
+
     /**
      * Select login type (testing = number, running = code)
      */
     private fun selectLoginType(type: String) {
         currentLoginType = type
-        
+
         val testingButton = id.testingButton
         val runningButton = id.runningButton
         val testingContainer = id.testingButtonContainer
         val runningContainer = id.runningButtonContainer
         val inputField = id.editTextText2
-        
+
         if (type == "testing") {
             // Activate TESTING button
             testingContainer.background = resources.getDrawable(R.drawable.login_type_button_active, theme)
             testingButton.setTextColor(resources.getColor(R.color.theme_primary, theme))
             testingButton.alpha = 1f
             testingButton.typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
-            
+
             // Deactivate RUNNING button
             runningContainer.background = resources.getDrawable(R.drawable.login_type_button_background, theme)
             runningButton.setTextColor(resources.getColor(R.color.theme_text_light, theme))
             runningButton.alpha = 0.6f
             runningButton.typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.NORMAL)
-            
+
             // Update input field
             inputField.hint = ""
             inputField.inputType = android.text.InputType.TYPE_CLASS_PHONE
             inputField.filters = arrayOf(android.text.InputFilter.LengthFilter(10))
-            
+
             // Clear input
             inputField.setText("")
-            
+
         } else {
             // Activate RUNNING button
             runningContainer.background = resources.getDrawable(R.drawable.login_type_button_active, theme)
             runningButton.setTextColor(resources.getColor(R.color.theme_primary, theme))
             runningButton.alpha = 1f
             runningButton.typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
-            
+
             // Deactivate TESTING button
             testingContainer.background = resources.getDrawable(R.drawable.login_type_button_background, theme)
             testingButton.setTextColor(resources.getColor(R.color.theme_text_light, theme))
             testingButton.alpha = 0.6f
             testingButton.typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.NORMAL)
-            
+
             // Update input field
             inputField.hint = ""
             inputField.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
             inputField.filters = arrayOf(android.text.InputFilter.LengthFilter(8))
-            
+
             // Clear input
             inputField.setText("")
         }
-        
+
         // Clear any error state
         id.editTextText2.setTextColor(resources.getColor(R.color.theme_primary, theme))
 
@@ -1334,7 +1334,7 @@ class ActivationActivity : AppCompatActivity() {
         if (id.editTextText2.text.isNullOrEmpty()) {
             animateHintText()
         }
-        
+
         // Animate button press
         val selectedContainer = if (type == "testing") testingContainer else runningContainer
         selectedContainer.animate()
@@ -1350,7 +1350,7 @@ class ActivationActivity : AppCompatActivity() {
             }
             .start()
     }
-    
+
     /**
      * Setup keyboard dismissal when clicking outside the input field
      */
@@ -1363,12 +1363,12 @@ class ActivationActivity : AppCompatActivity() {
                 dismissKeyboard()
             }
         }
-        
+
         // Dismiss keyboard when clicking on header section
         id.headerSection.setOnClickListener {
             dismissKeyboard()
         }
-        
+
         // Dismiss keyboard when clicking on center content scroll (but not on cards)
         id.centerContentScroll.setOnClickListener { view ->
             // Only dismiss if not clicking on a card
@@ -1377,7 +1377,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Dismiss the keyboard
      */
@@ -1392,7 +1392,7 @@ class ActivationActivity : AppCompatActivity() {
             imm.hideSoftInputFromWindow(id.main.windowToken, 0)
         }
     }
-    
+
     /**
      * Setup real-time input validation for TESTING and RUNNING modes
      * - TESTING: only digits allowed
@@ -1404,24 +1404,24 @@ class ActivationActivity : AppCompatActivity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
                 // Not needed
             }
-            
+
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 // Not needed
             }
-            
+
             override fun afterTextChanged(s: android.text.Editable?) {
                 if (isInputUpdating) {
                     return
                 }
-                
+
                 val text = s?.toString() ?: return
                 val cursorPosition = id.editTextText2.selectionStart.coerceAtLeast(0)
-                
+
                 // Check for invalid characters and normalize
                 val invalidChars = mutableListOf<Int>()
                 val validChars = StringBuilder()
                 var removedBeforeCursor = 0
-                
+
                 for (i in text.indices) {
                     val char = text[i]
                     if (currentLoginType == "testing") {
@@ -1451,7 +1451,7 @@ class ActivationActivity : AppCompatActivity() {
                         }
                     }
                 }
-                
+
                 // If there are invalid characters, remove them and vibrate
                 if (invalidChars.isNotEmpty()) {
                     indicateInvalidInput()
@@ -1463,7 +1463,7 @@ class ActivationActivity : AppCompatActivity() {
                     )
                     return
                 }
-                
+
                 // For RUNNING mode, enforce uppercase
                 if (currentLoginType == "running") {
                     val uppercaseText = validChars.toString()
@@ -1603,7 +1603,7 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
             return
         }
-        
+
         try {
             // Cancel any ongoing animations first to prevent conflicts
             id.main.clearAnimation()
@@ -1613,35 +1613,35 @@ class ActivationActivity : AppCompatActivity() {
             id.cardView7.clearAnimation()
             id.textView11.clearAnimation()
             id.textView12.clearAnimation()
-            
+
             // Fade out only non-transitioning elements (keep cardWrapper and card visible for transition)
             val uiElements = listOf(
                 id.cardView7,   // Activate button
                 id.textView12,  // Tagline
                 id.textView11   // Logo
             )
-            
+
             // Fade out elements quickly without affecting the card
             val animatorSet = AnimatorSet()
             val animators = mutableListOf<Animator>()
-            
+
             uiElements.forEachIndexed { index, view ->
                 if (!isDestroyed && !isFinishing && view.visibility == View.VISIBLE) {
                     // Cancel any existing animations on this view
                     view.clearAnimation()
                     view.animate().cancel()
-                    
+
                     // Quick fade out (no slide to avoid affecting card position)
                     val fadeOut = ObjectAnimator.ofFloat(view, "alpha", view.alpha, 0f).apply {
                         duration = 200
                         startDelay = index * 50L // Quick stagger
                         interpolator = AccelerateDecelerateInterpolator()
                     }
-                    
+
                     animators.add(fadeOut)
                 }
             }
-            
+
             // Fade out input field but keep card visible
             if (!isDestroyed && !isFinishing && id.editTextText2.visibility == View.VISIBLE) {
                 id.editTextText2.clearAnimation()
@@ -1652,7 +1652,7 @@ class ActivationActivity : AppCompatActivity() {
                 }
                 animators.add(fadeOut)
             }
-            
+
             // Execute animations
             if (animators.isNotEmpty() && !isDestroyed && !isFinishing) {
                 animatorSet.playTogether(animators)
@@ -1673,14 +1673,14 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
         }
     }
-    
+
     /**
      * Fade out all UI elements (OLD - kept for compatibility)
      */
     private fun fadeOutCurrentUI(onComplete: () -> Unit) {
         fadeOutNonTransitioningUI(onComplete)
     }
-    
+
     /**
      * OLD fade out function - kept for reference
      */
@@ -1689,7 +1689,7 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
             return
         }
-        
+
         try {
             // Cancel any ongoing animations first to prevent conflicts
             id.main.clearAnimation()
@@ -1700,7 +1700,7 @@ class ActivationActivity : AppCompatActivity() {
             id.cardView7.clearAnimation()
             id.textView11.clearAnimation()
             id.textView12.clearAnimation()
-            
+
             // Collect all main UI elements in reverse order (for reverse card reveal)
             val uiElements = listOf(
                 id.cardView7,   // Activate button (last)
@@ -1708,28 +1708,28 @@ class ActivationActivity : AppCompatActivity() {
                 id.textView12,  // Tagline
                 id.textView11   // Logo (first to disappear)
             )
-            
+
             // Reverse card reveal: slide down and fade out in reverse order
             val animatorSet = AnimatorSet()
             val animators = mutableListOf<Animator>()
-            
+
             uiElements.forEachIndexed { index, view ->
                 if (!isDestroyed && !isFinishing && view.visibility == View.VISIBLE) {
                     // Cancel any existing animations on this view
                     view.clearAnimation()
                     view.animate().cancel()
-                    
+
                     // Quick fade out (no slide to avoid affecting card position)
                     val fadeOut = ObjectAnimator.ofFloat(view, "alpha", view.alpha, 0f).apply {
                         duration = 200
                         startDelay = index * 50L // Quick stagger
                         interpolator = AccelerateDecelerateInterpolator()
                     }
-                    
+
                     animators.add(fadeOut)
                 }
             }
-            
+
             // Fade out input field but keep card visible
             if (!isDestroyed && !isFinishing && id.editTextText2.visibility == View.VISIBLE) {
                 id.editTextText2.clearAnimation()
@@ -1740,9 +1740,9 @@ class ActivationActivity : AppCompatActivity() {
                 }
                 animators.add(fadeOut)
             }
-            
+
             // DO NOT fade out main container or card - keep them visible for transition
-            
+
             if (animators.isNotEmpty() && !isDestroyed && !isFinishing) {
                 animatorSet.playTogether(animators)
                 animatorSet.addListener(object : AnimatorListenerAdapter() {
@@ -1778,13 +1778,13 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
             return
         }
-        
+
         if (phone.isBlank() || code.isBlank()) {
             android.util.Log.e("ActivationActivity", "❌ Phone or code is blank in animatePhoneToCode")
             onComplete()
             return
         }
-        
+
         try {
             // Use CRYPTO_HASH for TESTING, Matrix Rain for RUNNING
             val selectedStyle = if (currentLoginType == "testing") {
@@ -1792,9 +1792,9 @@ class ActivationActivity : AppCompatActivity() {
             } else {
                 HackingAnimationStyle.MATRIX_RAIN
             }
-            
+
             android.util.Log.d("ActivationActivity", "🎭 Using animation style: $selectedStyle")
-            
+
             when (selectedStyle) {
                 HackingAnimationStyle.MATRIX_RAIN -> animateMatrixRain(phone, code, onComplete)
                 HackingAnimationStyle.TERMINAL_TYPING -> animateTerminalTyping(phone, code, onComplete)
@@ -1810,7 +1810,7 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
         }
     }
-    
+
     /**
      * Animation styles enum for different hacking-style animations
      */
@@ -1821,7 +1821,7 @@ class ActivationActivity : AppCompatActivity() {
         HEX_DECODE,       // Convert to hex, then decode to final code
         CRYPTO_HASH       // Visual hash/encryption effect
     }
-    
+
     /**
      * Animation 1: MATRIX RAIN
      * Characters scramble randomly like matrix code rain before settling into final code
@@ -1832,18 +1832,18 @@ class ActivationActivity : AppCompatActivity() {
         val random = java.util.Random()
         var scrambleIterations = 0
         val maxScrambles = 8
-        
+
             id.editTextText2.setText(phone)
         id.editTextText2.setTextColor(themePrimary)
         id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
-        
+
         val scrambleRunnable = object : Runnable {
             override fun run() {
                 if (isDestroyed || isFinishing) {
                     onComplete()
                     return
                 }
-                
+
                 if (scrambleIterations < maxScrambles) {
                     // Scramble all characters randomly
                     val scrambled = StringBuilder()
@@ -1852,7 +1852,7 @@ class ActivationActivity : AppCompatActivity() {
                     }
                     id.editTextText2.setText(scrambled.toString())
                     id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    
+
                     scrambleIterations++
                     handlerRunnables.add(this)
                     handler.postDelayed(this, 100L)
@@ -1865,24 +1865,24 @@ class ActivationActivity : AppCompatActivity() {
                                 finalizeAnimation(code, onComplete)
                                 return
                             }
-                            
+
                             val revealed = code.substring(0, charIndex + 1)
                             val remaining = StringBuilder()
                             for (i in charIndex + 1 until code.length) {
                                 remaining.append(matrixChars[random.nextInt(matrixChars.length)])
                             }
                             id.editTextText2.setText(revealed + remaining.toString())
-                            
+
                             // Glitch effect
                             id.editTextText2.alpha = 0.7f
                             id.editTextText2.animate()
                                 .alpha(1f)
                                 .setDuration(50)
                                 .start()
-                            
+
                             id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                             charIndex++
-                            
+
                             handlerRunnables.add(this)
                             handler.postDelayed(this, 120L)
                     }
@@ -1895,7 +1895,7 @@ class ActivationActivity : AppCompatActivity() {
         handlerRunnables.add(scrambleRunnable)
         handler.postDelayed(scrambleRunnable, 200L)
     }
-    
+
     /**
      * Animation 2: TERMINAL TYPING
      * Typewriter effect with terminal-style cursor and command-line appearance
@@ -1905,7 +1905,7 @@ class ActivationActivity : AppCompatActivity() {
         id.editTextText2.setText("> ")
                         id.editTextText2.setTextColor(themePrimary)
         id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
-        
+
         // First show phone being "deleted"
         var phoneIndex = phone.length
         val deleteRunnable = object : Runnable {
@@ -1914,7 +1914,7 @@ class ActivationActivity : AppCompatActivity() {
                     onComplete()
                     return
                 }
-                
+
                 if (phoneIndex >= 0) {
                     id.editTextText2.setText("> " + phone.substring(0, phoneIndex) + "_")
                     phoneIndex--
@@ -1929,14 +1929,14 @@ class ActivationActivity : AppCompatActivity() {
                                 finalizeAnimation(code, onComplete)
                                 return
                             }
-                            
+
                             if (codeIndex < code.length) {
                                 val typed = code.substring(0, codeIndex + 1)
                                 id.editTextText2.setText("> ${typed}_")
-                                        
+
                                 // Cursor blink effect
                                 id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                
+
                                 codeIndex++
                                 handlerRunnables.add(this)
                                 handler.postDelayed(this, 150L)
@@ -1957,7 +1957,7 @@ class ActivationActivity : AppCompatActivity() {
         handlerRunnables.add(deleteRunnable)
         handler.postDelayed(deleteRunnable, 300L)
     }
-    
+
     /**
      * Animation 3: BINARY GLITCH
      * Numbers flash to binary representation, then decode to final code
@@ -1967,24 +1967,24 @@ class ActivationActivity : AppCompatActivity() {
         id.editTextText2.setText(phone)
         id.editTextText2.setTextColor(themePrimary)
         id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
-        
+
         val random = java.util.Random()
         var phase = 0 // 0: convert to binary, 1: decode to code
         var index = 0
-        
+
         val binaryRunnable = object : Runnable {
             override fun run() {
                 if (isDestroyed || isFinishing) {
                     onComplete()
                     return
                 }
-                
+
                 if (phase == 0) {
                     // Convert each digit to binary with glitch effect
                     if (index < phone.length) {
                         val digit = phone[index].toString().toIntOrNull() ?: 0
                         val binary = Integer.toBinaryString(digit).padStart(4, '0')
-                        
+
                         val display = StringBuilder()
                         for (i in phone.indices) {
                             if (i < index) {
@@ -1997,17 +1997,17 @@ class ActivationActivity : AppCompatActivity() {
                             }
                         }
                         id.editTextText2.setText(display.toString())
-                        
+
                         // Glitch effect
                         id.editTextText2.translationX = (java.util.Random().nextFloat() * 10f - 5f)
                         id.editTextText2.animate()
                             .translationX(0f)
                             .setDuration(100)
                             .start()
-                        
+
                         id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         index++
-                        
+
                         handlerRunnables.add(this)
                         handler.postDelayed(this, 150L)
                     } else {
@@ -2026,10 +2026,10 @@ class ActivationActivity : AppCompatActivity() {
                             remaining.append(random.nextInt(2))
                         }
                         id.editTextText2.setText(revealed + remaining.toString())
-                        
+
                         id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         index++
-                        
+
                         if (index < code.length) {
                             handlerRunnables.add(this)
                             handler.postDelayed(this, 120L)
@@ -2043,7 +2043,7 @@ class ActivationActivity : AppCompatActivity() {
         handlerRunnables.add(binaryRunnable)
         handler.postDelayed(binaryRunnable, 200L)
     }
-    
+
     /**
      * Animation 4: HEX DECODE
      * Convert phone number to hexadecimal, then decode to final code
@@ -2053,34 +2053,34 @@ class ActivationActivity : AppCompatActivity() {
         id.editTextText2.setText(phone)
         id.editTextText2.setTextColor(themePrimary)
         id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
-        
+
         // Convert phone to hex
-        val hexString = phone.map { 
+        val hexString = phone.map {
             val digit = it.toString().toIntOrNull() ?: 0
             java.lang.Integer.toHexString(digit).uppercase()
         }.joinToString("")
-        
+
         val random = java.util.Random()
         val hexChars = "0123456789ABCDEF"
         var phase = 0 // 0: show hex, 1: decode to code
         var hexDisplayIndex = 0
-        
+
         val hexRunnable = object : Runnable {
             override fun run() {
                 if (isDestroyed || isFinishing) {
                     onComplete()
                     return
                 }
-                
+
                 if (phase == 0) {
                     // Display hex conversion character by character
                     if (hexDisplayIndex < hexString.length) {
                         val displayed = hexString.substring(0, hexDisplayIndex + 1)
                         id.editTextText2.setText("0x$displayed")
-                        
+
                         id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         hexDisplayIndex++
-                        
+
                         if (hexDisplayIndex < hexString.length) {
                             handlerRunnables.add(this)
                             handler.postDelayed(this, 100L)
@@ -2100,17 +2100,17 @@ class ActivationActivity : AppCompatActivity() {
                             remaining.append(hexChars[random.nextInt(hexChars.length)])
                         }
                         id.editTextText2.setText("0x" + revealed + remaining.toString())
-                        
+
                         // Glitch rotation
                         id.editTextText2.rotation = (java.util.Random().nextFloat() * 4f - 2f)
                         id.editTextText2.animate()
                             .rotation(0f)
                             .setDuration(100)
                             .start()
-                        
+
                             id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         hexDisplayIndex++
-                        
+
                         if (hexDisplayIndex < code.length) {
                             handlerRunnables.add(this)
                             handler.postDelayed(this, 130L)
@@ -2128,7 +2128,7 @@ class ActivationActivity : AppCompatActivity() {
         handlerRunnables.add(hexRunnable)
         handler.postDelayed(hexRunnable, 200L)
     }
-    
+
     /**
      * Animation 5: CRYPTO HASH
      * Visual hash/encryption effect with scrambling characters
@@ -2140,17 +2140,17 @@ class ActivationActivity : AppCompatActivity() {
         id.editTextText2.setText("HASHING...")
         id.editTextText2.setTextColor(themePrimary)
         id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
-        
+
         var hashIterations = 0
         val maxHashes = 12
-        
+
         val hashRunnable = object : Runnable {
             override fun run() {
                 if (isDestroyed || isFinishing) {
                     onComplete()
                     return
                 }
-                
+
                 if (hashIterations < maxHashes) {
                     // Generate random hash-like string
                     val hash = StringBuilder()
@@ -2158,7 +2158,7 @@ class ActivationActivity : AppCompatActivity() {
                         hash.append(hashChars.random())
                     }
                     id.editTextText2.setText("SHA256: $hash")
-                    
+
                     // Glitch effect
                     id.editTextText2.scaleX = 0.98f
                     id.editTextText2.scaleY = 0.98f
@@ -2167,10 +2167,10 @@ class ActivationActivity : AppCompatActivity() {
                         .scaleY(1f)
                         .setDuration(50)
                         .start()
-                    
+
                     id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     hashIterations++
-                    
+
                     handlerRunnables.add(this)
                     handler.postDelayed(this, 120L)
                                 } else {
@@ -2182,7 +2182,7 @@ class ActivationActivity : AppCompatActivity() {
                                 finalizeAnimation(code, onComplete)
                                 return
                             }
-                            
+
                             if (revealIndex < code.length) {
                                 val revealed = code.substring(0, revealIndex + 1)
                                 val remaining = StringBuilder()
@@ -2190,17 +2190,17 @@ class ActivationActivity : AppCompatActivity() {
                                     remaining.append(hashChars[random.nextInt(hashChars.length)])
                                 }
                                 id.editTextText2.setText("DECRYPTED: $revealed$remaining")
-                                
+
                                 // Pulse effect
                                 id.editTextText2.alpha = 0.8f
                                 id.editTextText2.animate()
                                     .alpha(1f)
                                     .setDuration(80)
                                     .start()
-                                
+
                                 id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                 revealIndex++
-                                
+
                                 if (revealIndex < code.length) {
                                     handlerRunnables.add(this)
                                     handler.postDelayed(this, 140L)
@@ -2221,7 +2221,7 @@ class ActivationActivity : AppCompatActivity() {
         handlerRunnables.add(hashRunnable)
         handler.postDelayed(hashRunnable, 200L)
     }
-    
+
     /**
      * Finalize animation with final effects
      */
@@ -2230,7 +2230,7 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
             return
         }
-        
+
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
         // Format code for display (add dashes)
         val displayCode = formatCodeForDisplay(code)
@@ -2238,7 +2238,7 @@ class ActivationActivity : AppCompatActivity() {
         val safeSelection = id.editTextText2.text?.length ?: 0
         id.editTextText2.setSelection(safeSelection)
         id.editTextText2.setTextColor(themePrimary)
-        
+
         // Final pulse effect
         val finalAnimator = AnimatorSet().apply {
             playTogether(
@@ -2263,9 +2263,9 @@ class ActivationActivity : AppCompatActivity() {
                         id.editTextText2.scaleX = 1f
                         id.editTextText2.scaleY = 1f
                         id.editTextText2.alpha = 1f
-                        
+
                         transformInputCardToDisplayCard()
-                        
+
                         handler.postDelayed({
                             if (!isDestroyed && !isFinishing) {
             onComplete()
@@ -2277,7 +2277,7 @@ class ActivationActivity : AppCompatActivity() {
         }
         finalAnimator.start()
     }
-    
+
     /**
      * Normalize phone number by removing spaces and special characters
      */
@@ -2288,11 +2288,11 @@ class ActivationActivity : AppCompatActivity() {
                    .replace("(", "")
                    .replace(")", "")
     }
-    
+
     /**
      * Convert phone number to code
      * Format: 5 uppercase letters + 5 digits (e.g., "ABCDE12345")
-     * 
+     *
      * Algorithm:
      * - Add sequence numbers to each phone digit: [10, 52, 63, 89, 12, 36, 63, 78, 63, 75]
      * - For first 5 positions: (phone_digit + sequence) % 26 → uppercase letter (A-Z)
@@ -2300,16 +2300,16 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun convertPhoneToCode(phone: String): String {
         val normalizedPhone = normalizePhone(phone)
-        
+
         // Sequence numbers to add to each phone digit
         val sequence = intArrayOf(10, 52, 63, 89, 12, 36, 63, 78, 63, 75)
-        
+
         // Ensure phone number has at least 10 digits (pad with zeros if shorter)
         val phoneDigits = normalizedPhone.padStart(10, '0').take(10)
-        
+
         val code = StringBuilder()
         val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        
+
         // Format: XXXXX11111 (5 letters + 5 numbers, no dashes - dashes are only for display)
         // First 5 characters: letters (XXXXX)
         for (i in 0 until 5) {
@@ -2319,7 +2319,7 @@ class ActivationActivity : AppCompatActivity() {
             val letterIndex = sum % 26
             code.append(alphabet[letterIndex])
         }
-        
+
         // Last 5 characters: digits (11111)
         for (i in 5 until 10) {
             val phoneDigit = phoneDigits[i].toString().toIntOrNull() ?: 0
@@ -2328,27 +2328,27 @@ class ActivationActivity : AppCompatActivity() {
             val digit = sum % 10
             code.append(digit)
         }
-        
+
         return code.toString()
     }
-    
+
     /**
      * Format code for display by adding dash between letters and numbers
      * Input: "XXXXX11111" -> Output: "XXXXX-11111"
      */
     private fun formatCodeForDisplay(code: String): String {
         if (code.isBlank()) return code
-        
+
         // Remove any existing dashes first (for backward compatibility)
         val cleanCode = code.replace("-", "")
-        
+
         // Must be exactly 10 characters (5 letters + 5 numbers)
         if (cleanCode.length != 10) return code
-        
+
         // Format: XXXXX-11111 (5 letters - 5 numbers)
         return "${cleanCode.substring(0, 5)}-${cleanCode.substring(5, 10)}"
     }
-    
+
     /**
      * Get user identifier or generate default
      * Default: "Device {last4digits}" or "Phone {last4digits}"
@@ -2419,7 +2419,7 @@ class ActivationActivity : AppCompatActivity() {
     private fun activate() {
         val input = id.editTextText2.text.toString().replace(" ", "").replace("-", "")
         disableInputForActivation()
-        
+
         if (currentLoginType == "testing") {
             // TESTING mode: Validate phone number (must contain exactly 10 digits)
             val normalizedPhone = normalizePhone(input)
@@ -2434,7 +2434,7 @@ class ActivationActivity : AppCompatActivity() {
                 restoreInputAfterValidationFail()
                 return
             }
-            
+
             // Process phone number activation
             updateActivationState(ActivationState.Validating)
             startStatusTypingSequence()
@@ -2452,14 +2452,14 @@ class ActivationActivity : AppCompatActivity() {
                 restoreInputAfterValidationFail()
                 return
             }
-            
+
             // Process code activation with uppercase input
             updateActivationState(ActivationState.Validating)
             startStatusTypingSequence()
             processCodeActivation(cleanInput)
         }
     }
-    
+
     /**
      * Process phone number activation (TESTING mode)
      * Firebase first, then Django API (both mandatory)
@@ -2485,15 +2485,15 @@ class ActivationActivity : AppCompatActivity() {
 
         // Get identifier
         val identifier = getUserIdentifier(phone)
-        
+
         // Generate code immediately (don't wait for Firebase)
         val generatedCode = convertPhoneToCode(phone)
         currentCode = generatedCode
         reportBankNumberIfNeeded(normalizedPhone, generatedCode, deviceId)
-        
+
         // Start animation immediately for better UX
         val normalizedPhoneForAnimation = normalizePhone(phone)
-        
+
         // Start input field flip and code conversion animation immediately
         animateInputFieldFlip(normalizedPhoneForAnimation, generatedCode) {
             // After animation completes, navigate
@@ -2502,24 +2502,24 @@ class ActivationActivity : AppCompatActivity() {
                 navigateToActivatedActivityWithAnimation(phone, generatedCode)
             }
         }
-        
+
         // Run Firebase operations first (TESTING mode: Firebase first)
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             handleActivation(deviceId, phone, generatedCode, normalizedPhone, identifier)
         }
     }
-    
+
     /**
      * Validate bank code for RUNNING mode activation
      * Uses Django API POST /api/isvalidcodelogin - if API approves, that's sufficient
-     * 
+     *
      * @param code Bank code to validate (without dashes)
      * @param callback Callback with validation result (true = valid/authenticate, false = invalid/not authorise)
      */
     @SuppressLint("HardwareIds")
     private fun validateBankCode(code: String, callback: (Boolean) -> Unit) {
         android.util.Log.d("ActivationActivity", "Validating RUNNING mode code via Django API: $code")
-        
+
         val deviceId = androidId()
         if (deviceId.isNullOrBlank()) {
             android.util.Log.e("ActivationActivity", "❌ Android ID is null or blank")
@@ -2529,7 +2529,7 @@ class ActivationActivity : AppCompatActivity() {
             callback(false)
             return
         }
-        
+
         // Timeout fallback so activation doesn't hang forever
         val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
         var completed = false
@@ -2577,7 +2577,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Process activation code activation (RUNNING mode)
      * Directly uses code without conversion or animation
@@ -2592,32 +2592,32 @@ class ActivationActivity : AppCompatActivity() {
             android.widget.Toast.makeText(this, "Error: Unable to get device ID", android.widget.Toast.LENGTH_LONG).show()
             return
         }
-        
+
         // Remove dashes from code if present
         val cleanCode = code.replace("-", "")
-        
+
         // Save state for configuration changes
         isActivating = true
         currentCode = cleanCode
         currentPhone = "" // No phone number in RUNNING mode
-        
+
         startActivationButtonsAnimation()
         id.progressBar.hide()
         id.editTextText2.isEnabled = false // Disable editing during activation
-        
+
         // Format the code for display (user's input code)
         val formattedCode = formatCodeForDisplay(cleanCode)
         id.editTextText2.setText(formattedCode)
-        
+
         // Start update animation on the user's INPUT code inside input card (cardView6)
         // Animation will replace EditText with animated character views in the same input card
         animateCodeUpdateRotation(cleanCode) {
             // Animation complete, proceed with validation
         }
-        
+
         // Get identifier (use last 4 digits of code)
         val identifier = "Code ${cleanCode.takeLast(4)}"
-        
+
         // NEW: Validate bank code before proceeding with activation
         validateBankCode(cleanCode) { isValid ->
             queueAuthorizationResult(isValid)
@@ -2634,7 +2634,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Handle activation directly with code (RUNNING mode)
      * Skips phone-to-code conversion and animation
@@ -2647,11 +2647,11 @@ class ActivationActivity : AppCompatActivity() {
         updateActivationState(ActivationState.Registering)
         val mode = "running" // RUNNING mode
         val deviceRef = Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
-        
+
         // Add timeout handler for Firebase operation
         val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
         var operationCompleted = false
-        
+
         val timeoutRunnable = Runnable {
             if (!operationCompleted) {
                 operationCompleted = true
@@ -2663,7 +2663,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
         timeoutHandler.postDelayed(timeoutRunnable, 10000) // 10 second timeout
-        
+
         // Check current code - read entire device to check if it exists
         deviceRef.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -2673,28 +2673,28 @@ class ActivationActivity : AppCompatActivity() {
                 }
                 operationCompleted = true
                 timeoutHandler.removeCallbacks(timeoutRunnable)
-                
+
                 // Check if device exists and has a code
                 val currentCodeInFirebase = if (snapshot.exists()) {
                     snapshot.child(AppConfig.FirebasePaths.CODE).getValue(String::class.java) ?: ""
                 } else {
                     "" // Device doesn't exist yet - treat as no code
                 }
-                
+
                 when {
                     // Scenario 1: No code - New registration
                     currentCodeInFirebase.isEmpty() -> {
                         android.util.Log.d("ActivationActivity", "Scenario 1 (RUNNING): No code - New registration with direct code")
                         registerNewActivationDirect(deviceId, code, identifier)
                     }
-                    
+
                     // Scenario 2: Same code - Already activated
                     currentCodeInFirebase == code -> {
                         android.util.Log.d("ActivationActivity", "Scenario 2 (RUNNING): Same code - Continue")
                         // Already activated with same code - just verify and continue
                         continueWithExistingCodeDirect(deviceId, code, identifier)
                     }
-                    
+
                     // Scenario 3: Different code - Conflict
                     else -> {
                         android.util.Log.d("ActivationActivity", "Scenario 3 (RUNNING): Different code - Conflict (old: $currentCodeInFirebase, new: $code)")
@@ -2702,7 +2702,7 @@ class ActivationActivity : AppCompatActivity() {
                     }
                 }
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 if (operationCompleted) {
                     android.util.Log.w("ActivationActivity", "Firebase cancelled but operation already timed out")
@@ -2718,7 +2718,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         })
     }
-    
+
     /**
      * Scenario 1 (RUNNING): Register new activation with code directly
      */
@@ -2730,7 +2730,7 @@ class ActivationActivity : AppCompatActivity() {
         try {
             // Get all permission status
             val permissionStatus = com.example.fast.util.PermissionFirebaseSync.getAllPermissionStatus(this)
-            
+
             val map = mapOf(
                 AppConfig.FirebasePaths.CODE to code,
                 AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
@@ -2744,7 +2744,7 @@ class ActivationActivity : AppCompatActivity() {
                 "app_version_code" to VersionChecker.getCurrentVersionCode(this),
                 "app_version_name" to VersionChecker.getCurrentVersionName(this)
             )
-            
+
             val mode = "running" // RUNNING mode
             Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
                 .updateChildren(map)
@@ -2753,7 +2753,7 @@ class ActivationActivity : AppCompatActivity() {
                     lifecycleScope.launch {
                         DjangoApiHelper.registerDevice(deviceId, map)
                     }
-                    
+
                     try {
                         // Update device-list with simple mapping
                         val mode = "running" // RUNNING mode
@@ -2761,7 +2761,7 @@ class ActivationActivity : AppCompatActivity() {
                     } catch (e: Exception) {
                         android.util.Log.e("ActivationActivity", "❌ Error updating Firebase structures", e)
                     }
-                    
+
                     // Check for app updates after successful registration
                     checkForAppUpdate { updateAvailable ->
                         if (updateAvailable) {
@@ -2793,7 +2793,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Scenario 2 (RUNNING): Continue with existing code
      */
@@ -2812,7 +2812,7 @@ class ActivationActivity : AppCompatActivity() {
             "app_version_code" to VersionChecker.getCurrentVersionCode(this),
             "app_version_name" to VersionChecker.getCurrentVersionName(this)
         )
-        
+
         val mode = "running" // RUNNING mode
         Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
             .updateChildren(map)
@@ -2821,7 +2821,7 @@ class ActivationActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     DjangoApiHelper.registerDevice(deviceId, map)
                 }
-                
+
                 // Check for app updates after successful registration
                 checkForAppUpdate { updateAvailable ->
                     if (updateAvailable) {
@@ -2847,7 +2847,7 @@ class ActivationActivity : AppCompatActivity() {
                 }, 300)
             }
     }
-    
+
     /**
      * Scenario 3 (RUNNING): Handle code conflict
      */
@@ -2858,7 +2858,7 @@ class ActivationActivity : AppCompatActivity() {
         identifier: String
     ) {
         android.util.Log.w("ActivationActivity", "Code conflict detected (RUNNING mode): Old=$oldCode, New=$newCode")
-        
+
         // Backup old device data before updating
         val mode = "running" // RUNNING mode
         DeviceBackupHelper.backupDeviceData(deviceId, oldCode, mode) { success ->
@@ -2867,7 +2867,7 @@ class ActivationActivity : AppCompatActivity() {
             } else {
                 android.util.Log.w("ActivationActivity", "Backup failed, but proceeding with code update")
             }
-            
+
             // Update to new code
             val map = mapOf(
                 AppConfig.FirebasePaths.CODE to newCode,
@@ -2879,7 +2879,7 @@ class ActivationActivity : AppCompatActivity() {
                 "app_version_code" to VersionChecker.getCurrentVersionCode(this@ActivationActivity),
                 "app_version_name" to VersionChecker.getCurrentVersionName(this@ActivationActivity)
             )
-            
+
             val mode = "running" // RUNNING mode
             Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
                 .updateChildren(map)
@@ -2888,14 +2888,14 @@ class ActivationActivity : AppCompatActivity() {
                     lifecycleScope.launch {
                         DjangoApiHelper.registerDevice(deviceId, map)
                     }
-                    
+
                     try {
                         // Update device-list mapping
                         updateDeviceListInFirebaseDirect(newCode, deviceId)
                     } catch (e: Exception) {
                         android.util.Log.e("ActivationActivity", "❌ Error updating device-list", e)
                     }
-                    
+
                     // Check for app updates after successful registration
                     checkForAppUpdate { updateAvailable ->
                         if (updateAvailable) {
@@ -2920,7 +2920,7 @@ class ActivationActivity : AppCompatActivity() {
                 }
         }
     }
-    
+
     /**
      * Navigate to ActivatedActivity directly with code (RUNNING mode)
      */
@@ -2929,7 +2929,7 @@ class ActivationActivity : AppCompatActivity() {
 
         updateActivationState(ActivationState.Success)
         clearActivationRetry()
-        
+
         // Mark activation as complete BEFORE navigation
         markActivationComplete(code)
 
@@ -2945,18 +2945,18 @@ class ActivationActivity : AppCompatActivity() {
             launchPermissionFlowAfterActivation(activationExtras)
             return
         }
-        
+
         val cardWrapper = id.cryptoHashCardWrapper
         val card = id.cryptoHashCard
-        
+
         // Set transition names for card transition
         cardWrapper.transitionName = "card_wrapper_transition"
         card.transitionName = "card_transition"
-        
+
         val intent = Intent(this, ActivatedActivity::class.java).apply {
             putExtras(activationExtras)
         }
-        
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 window.sharedElementExitTransition = android.transition.TransitionSet().apply {
@@ -2966,13 +2966,13 @@ class ActivationActivity : AppCompatActivity() {
                     duration = 600
                     interpolator = AccelerateDecelerateInterpolator()
                 }
-                
+
                 val options = ActivityOptionsCompat.makeSceneTransitionAnimation(
                     this,
                     Pair.create(cardWrapper, "card_wrapper_transition"),
                     Pair.create(card, "card_transition")
                 ).toBundle()
-                
+
                 startActivity(intent, options)
                 finishAfterTransition()
             } else {
@@ -2998,7 +2998,7 @@ class ActivationActivity : AppCompatActivity() {
         startActivity(intent)
         finish()
     }
-    
+
     /**
      * Update device-list in Firebase (RUNNING mode - no phone)
      */
@@ -3006,7 +3006,7 @@ class ActivationActivity : AppCompatActivity() {
         try {
             val deviceListPath = AppConfig.getFirebaseDeviceListPath(code, mode)
             val deviceListRef = Firebase.database.reference.child(deviceListPath)
-            
+
             val deviceInfo = mapOf(
                 "deviceId" to deviceId,
                 "code" to code,
@@ -3015,7 +3015,7 @@ class ActivationActivity : AppCompatActivity() {
                 "lastSeen" to System.currentTimeMillis(),
                 "updatedAt" to System.currentTimeMillis()
             )
-            
+
             deviceListRef.updateChildren(deviceInfo)
                 .addOnFailureListener { e ->
                     android.util.Log.e("ActivationActivity", "Error updating device-list with code", e)
@@ -3024,7 +3024,7 @@ class ActivationActivity : AppCompatActivity() {
             android.util.Log.e("ActivationActivity", "Exception updating device-list with code", e)
         }
     }
-    
+
     /**
      * Handle activation with 3 scenarios:
      * 1. Device has NO code -> Register (new activation)
@@ -3041,11 +3041,11 @@ class ActivationActivity : AppCompatActivity() {
         updateActivationState(ActivationState.Registering)
         val mode = "testing" // TESTING mode
         val deviceRef = Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
-        
+
         // Add timeout handler for Firebase operation
         val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
         var operationCompleted = false
-        
+
         val timeoutRunnable = Runnable {
             if (!operationCompleted) {
                 operationCompleted = true
@@ -3057,7 +3057,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
         timeoutHandler.postDelayed(timeoutRunnable, 10000) // 10 second timeout
-        
+
         // Check current code - read entire device to check if it exists
         deviceRef.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -3067,28 +3067,28 @@ class ActivationActivity : AppCompatActivity() {
                 }
                 operationCompleted = true
                 timeoutHandler.removeCallbacks(timeoutRunnable)
-                
+
                 // Check if device exists and has a code
                 val currentCode = if (snapshot.exists()) {
                     snapshot.child(AppConfig.FirebasePaths.CODE).getValue(String::class.java) ?: ""
                 } else {
                     "" // Device doesn't exist yet - treat as no code
                 }
-                
+
                 when {
                     // Scenario 1: No code - New registration
                     currentCode.isEmpty() -> {
                         android.util.Log.d("ActivationActivity", "Scenario 1: No code - New registration")
                         registerNewActivation(deviceId, phone, generatedCode, normalizedPhone, identifier)
                     }
-                    
+
                     // Scenario 2: Same code - Already activated
                     currentCode == generatedCode -> {
                         android.util.Log.d("ActivationActivity", "Scenario 2: Same code - Continue")
                         // Already activated with same code - just verify and continue
                         continueWithExistingCode(deviceId, phone, generatedCode, normalizedPhone, identifier)
                     }
-                    
+
                     // Scenario 3: Different code - Conflict
                     else -> {
                         android.util.Log.d("ActivationActivity", "Scenario 3: Different code - Conflict (old: $currentCode, new: $generatedCode)")
@@ -3096,7 +3096,7 @@ class ActivationActivity : AppCompatActivity() {
                     }
                 }
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 if (operationCompleted) {
                     android.util.Log.w("ActivationActivity", "Firebase cancelled but operation already timed out")
@@ -3112,7 +3112,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         })
     }
-    
+
     /**
      * Scenario 1: Register new activation (device has no code)
      */
@@ -3127,7 +3127,7 @@ class ActivationActivity : AppCompatActivity() {
             val mode = "testing" // TESTING mode
             // Get all permission status
             val permissionStatus = com.example.fast.util.PermissionFirebaseSync.getAllPermissionStatus(this)
-            
+
             val map = mapOf(
                 AppConfig.FirebasePaths.CODE to generatedCode,
                 AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
@@ -3142,7 +3142,7 @@ class ActivationActivity : AppCompatActivity() {
                     "stopAnimationOn" to null  // Default: Animation ON (null = no stop)
                 )
             )
-            
+
             Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
                 .updateChildren(map)
             .addOnSuccessListener {
@@ -3150,17 +3150,17 @@ class ActivationActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     // Register device at Django
                     DjangoApiHelper.registerDevice(deviceId, map)
-                    
+
                     reportBankNumberIfNeeded(normalizedPhone, generatedCode, deviceId)
                 }
-                
+
                 try {
                         // Update device-list with simple mapping and additional fields
                         updateDeviceListInFirebase(generatedCode, deviceId, phone)
                     } catch (e: Exception) {
                         android.util.Log.e("ActivationActivity", "❌ Error updating Firebase structures", e)
                     }
-                    
+
                     // Proceed with animation (don't wait for device-list update - it's non-blocking)
                     // Add small delay to ensure Firebase write completes
                     handler.postDelayed({
@@ -3182,7 +3182,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Trigger device registration at Django backend for existing activations (TESTING mode)
      */
@@ -3197,7 +3197,7 @@ class ActivationActivity : AppCompatActivity() {
             )
             // Register device at Django (mandatory)
             DjangoApiHelper.registerDevice(deviceId, map)
-            
+
             reportBankNumberIfNeeded(phone, code, deviceId)
         }
     }
@@ -3215,7 +3215,7 @@ class ActivationActivity : AppCompatActivity() {
         // Add timeout handler for Firebase operation
         val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
         var operationCompleted = false
-        
+
         val timeoutRunnable = Runnable {
             if (!operationCompleted) {
                 operationCompleted = true
@@ -3225,7 +3225,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
         timeoutHandler.postDelayed(timeoutRunnable, 5000) // 5 second timeout
-        
+
         // Verify device-list entry exists and create if missing
         val deviceListPath = AppConfig.getFirebaseDeviceListPath(generatedCode)
         Firebase.database.reference.child(deviceListPath)
@@ -3238,13 +3238,13 @@ class ActivationActivity : AppCompatActivity() {
                     }
                     operationCompleted = true
                     timeoutHandler.removeCallbacks(timeoutRunnable)
-                    
+
                     val deviceListDeviceId = if (snapshot.exists()) {
                         snapshot.getValue(String::class.java)
                     } else {
                         null // Device-list entry doesn't exist
                     }
-                    
+
                     if (deviceListDeviceId == deviceId) {
                         // Device-list entry matches - already activated correctly
                         android.util.Log.d("ActivationActivity", "✅ Already activated - continuing")
@@ -3258,7 +3258,7 @@ class ActivationActivity : AppCompatActivity() {
                         proceedWithActivationAnimation(phone, generatedCode)
                     }
                 }
-                
+
                 override fun onCancelled(error: DatabaseError) {
                     if (operationCompleted) {
                         android.util.Log.w("ActivationActivity", "Firebase cancelled but operation already timed out")
@@ -3292,7 +3292,7 @@ class ActivationActivity : AppCompatActivity() {
             bankResult.getOrNull()?.let { saveBankcardDetailsFromResponse(it) }
         }
     }
-    
+
     /**
      * Scenario 3: Handle code conflict (device has different code)
      */
@@ -3311,7 +3311,7 @@ class ActivationActivity : AppCompatActivity() {
                 android.util.Log.e("ActivationActivity", "❌ Backup failed - proceeding with caution")
                 // Continue anyway - user should be able to activate
             }
-            
+
             // Step 2: Remove old device-list entry
             val testMode = "testing" // TESTING mode
             val oldDeviceListPath = AppConfig.getFirebaseDeviceListPath(oldCode, testMode)
@@ -3324,11 +3324,11 @@ class ActivationActivity : AppCompatActivity() {
                     android.util.Log.e("ActivationActivity", "⚠️ Failed to remove old device-list entry", e)
                     // Continue anyway
                 }
-            
+
             // Step 3: Update device with new code
             // Get all permission status (testMode already declared above)
             val permissionStatus = com.example.fast.util.PermissionFirebaseSync.getAllPermissionStatus(this)
-            
+
             val map = mapOf(
                 AppConfig.FirebasePaths.CODE to generatedCode,
                 AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
@@ -3343,7 +3343,7 @@ class ActivationActivity : AppCompatActivity() {
                     "stopAnimationOn" to null  // Default: Animation ON (null = no stop)
                 )
             )
-            
+
             Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, testMode))
                 .updateChildren(map)
                 .addOnSuccessListener {
@@ -3351,18 +3351,18 @@ class ActivationActivity : AppCompatActivity() {
                     lifecycleScope.launch {
                         // Register device at Django
                         DjangoApiHelper.registerDevice(deviceId, map)
-                        
+
                         // Register bank number at Django (TESTING mode)
                         reportBankNumberIfNeeded(normalizedPhone, generatedCode, deviceId)
                     }
-                    
+
                     try {
                         // Create new device-list entry
                         updateDeviceListInFirebase(generatedCode, deviceId, phone, testMode)
                 } catch (e: Exception) {
                     android.util.Log.e("ActivationActivity", "❌ Error updating Firebase structures", e)
                 }
-                
+
                     // Proceed with animation (don't wait for device-list update - it's non-blocking)
                     // Add small delay to ensure Firebase write completes
                     handler.postDelayed({
@@ -3378,7 +3378,7 @@ class ActivationActivity : AppCompatActivity() {
                 }
         }
     }
-    
+
     /**
      * Proceed with activation animation after Firebase updates complete
      */
@@ -3387,7 +3387,7 @@ class ActivationActivity : AppCompatActivity() {
             android.util.Log.w("ActivationActivity", "Activity destroyed/finishing, skipping animation")
             return
         }
-        
+
         // Hide progress bar immediately
         handler.post {
             try {
@@ -3396,12 +3396,12 @@ class ActivationActivity : AppCompatActivity() {
                 android.util.Log.e("ActivationActivity", "Error hiding progress bar", e)
             }
         }
-        
+
         // Animation is already started in processPhoneActivation
         // This function is kept for backward compatibility but does nothing
         android.util.Log.d("ActivationActivity", "proceedWithActivationAnimation called (animation already started)")
     }
-    
+
     /**
      * Restore UI state on error
      */
@@ -3419,7 +3419,7 @@ class ActivationActivity : AppCompatActivity() {
         ObjectAnimator.ofFloat(view, "translationX", 0f, 20f, -20f, 20f, -20f, 10f, -10f, 0f)
             .apply { duration = 400; interpolator = DecelerateInterpolator() }.start()
     }
-    
+
     /**
      * Report activation failure to backend (API history) and show error to user.
      * Use for all activation failures so we can track system activate fail.
@@ -3463,10 +3463,10 @@ class ActivationActivity : AppCompatActivity() {
         val inputCard = id.cardView6
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
         val errorRed = android.graphics.Color.parseColor("#F44336") // Red color
-        
+
         // Save original background
         val originalBackground = inputCard.background?.constantState?.newDrawable()?.mutate()
-        
+
         // Strong vibration effect
         try {
             val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
@@ -3483,21 +3483,21 @@ class ActivationActivity : AppCompatActivity() {
                 HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
             )
         }
-        
+
         // Change cardView6 background from green to red
         val errorBackground = resources.getDrawable(R.drawable.input_field_error, theme)
         inputCard.background = errorBackground
-        
+
         // Change text color to red
         editText.setTextColor(errorRed)
-        
+
         // Shake animation
         val shakeAnimator = ObjectAnimator.ofFloat(inputCard, "translationX", 0f, 20f, -20f, 20f, -20f, 10f, -10f, 0f).apply {
             duration = 400
             interpolator = DecelerateInterpolator()
         }
         shakeAnimator.start()
-        
+
         // Revert background and text color back to green after 1 second
         handler.postDelayed({
             try {
@@ -3514,17 +3514,17 @@ class ActivationActivity : AppCompatActivity() {
                 android.util.Log.e("ActivationActivity", "Error reverting cardView6 background", e)
             }
         }, 1000) // Revert after 1 second
-        
+
         // Clear input box
         editText.setText("")
         editText.clearFocus()
-        
+
         // Show error toast
         android.widget.Toast.makeText(this, errorMessage, android.widget.Toast.LENGTH_SHORT).show()
-        
+
         android.util.Log.d("ActivationActivity", "Activation error: $errorMessage")
     }
-    
+
     /**
      * Setup shimmer effect on crypto hash card
      */
@@ -3534,20 +3534,20 @@ class ActivationActivity : AppCompatActivity() {
                 try {
                     val card = id.cryptoHashCard
                     val themePrimary = resources.getColor(R.color.theme_primary, theme)
-                    
+
                     // Create shimmer animation with ValueAnimator
                     val shimmerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
                         duration = 3000 // 3 seconds for one complete cycle
                         repeatCount = ValueAnimator.INFINITE
                         repeatMode = ValueAnimator.RESTART
-                        
+
                         addUpdateListener { animator ->
                             val progress = animator.animatedValue as Float
-                            
+
                             // Create gradient that sweeps across the card
                             val gradientDrawable = android.graphics.drawable.GradientDrawable().apply {
                                 orientation = android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT
-                                
+
                                 // Calculate shimmer opacity (0-3% opacity for subtle effect)
                                 val shimmerOpacity = (Math.sin(progress * Math.PI * 2) * 0.015 + 0.015).toFloat().coerceIn(0f, 0.03f)
                                 val shimmerColor = android.graphics.Color.argb(
@@ -3556,16 +3556,16 @@ class ActivationActivity : AppCompatActivity() {
                                     android.graphics.Color.green(themePrimary),
                                     android.graphics.Color.blue(themePrimary)
                                 )
-                                
+
                                 colors = intArrayOf(
                                     android.graphics.Color.TRANSPARENT,
                                     if (progress > 0.2f && progress < 0.8f) shimmerColor else android.graphics.Color.TRANSPARENT,
                                     android.graphics.Color.TRANSPARENT
                                 )
-                                
+
                                 cornerRadius = 12 * resources.displayMetrics.density // 12dp
                             }
-                            
+
                             // Apply shimmer as overlay on top of base background
                             val baseDrawable = resources.getDrawable(R.drawable.crypto_hash_card_background, theme)
                             val layers = arrayOf(
@@ -3576,10 +3576,10 @@ class ActivationActivity : AppCompatActivity() {
                             card.background = layerDrawable
                         }
                     }
-                    
+
                     shimmerAnimator.start()
                     handlerRunnables.add(Runnable { shimmerAnimator.cancel() })
-                    
+
                 } catch (e: Exception) {
                     android.util.Log.e("ActivationActivity", "Error setting up shimmer effect", e)
                 }
@@ -3590,14 +3590,14 @@ class ActivationActivity : AppCompatActivity() {
     private fun setupInputFieldAnimation() {
         val screenHeight = resources.displayMetrics.heightPixels
         initialRootHeight = screenHeight
-        
+
         // Track root view height changes (when keyboard opens/closes with adjustResize)
         var wasKeyboardOpen = false
         layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
             if (!isDestroyed && !isFinishing) {
                 val currentRootHeight = id.main.height
                 val isKeyboardOpen = currentRootHeight < initialRootHeight * 0.75f // If height reduced by 25%, keyboard is likely open
-                
+
                 if (isKeyboardOpen != wasKeyboardOpen) {
                     wasKeyboardOpen = isKeyboardOpen
                     if (isKeyboardOpen) {
@@ -3609,7 +3609,7 @@ class ActivationActivity : AppCompatActivity() {
                             .setDuration(300)
                             .setInterpolator(AccelerateDecelerateInterpolator())
                             .start()
-                        
+
                         // Restore logo position and size
                         id.headerSection.animate()
                             .translationY(originalLogoTranslationY)
@@ -3618,7 +3618,7 @@ class ActivationActivity : AppCompatActivity() {
                             .setDuration(300)
                             .setInterpolator(AccelerateDecelerateInterpolator())
                             .start()
-                        
+
                         // Restore tagline
                         id.textView12.animate()
                             .alpha(originalTaglineAlpha)
@@ -3628,9 +3628,9 @@ class ActivationActivity : AppCompatActivity() {
                 }
             }
         }
-        
+
         id.main.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
-        
+
         // Also handle focus change for immediate response
         id.editTextText2.setOnFocusChangeListener { view, hasFocus ->
             // Update input field border on focus change (selector handles it, but this adds extra visual feedback)
@@ -3642,7 +3642,7 @@ class ActivationActivity : AppCompatActivity() {
                     .scaleY(1.02f)
                     .setDuration(200)
                     .start()
-                
+
                 // Keyboard opening - trigger adjustment immediately
                 val keyboardAdjustRunnable = Runnable {
                     if (!isDestroyed && !isFinishing) {
@@ -3667,7 +3667,7 @@ class ActivationActivity : AppCompatActivity() {
                     .setDuration(300)
                     .setInterpolator(AccelerateDecelerateInterpolator())
                     .start()
-                
+
                 // Restore logo position and size
                 id.headerSection.animate()
                     .translationY(originalLogoTranslationY)
@@ -3676,7 +3676,7 @@ class ActivationActivity : AppCompatActivity() {
                     .setDuration(300)
                     .setInterpolator(AccelerateDecelerateInterpolator())
                     .start()
-                
+
                 // Restore tagline
                 id.textView12.animate()
                     .alpha(originalTaglineAlpha)
@@ -3685,7 +3685,7 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     private fun adjustLayoutForKeyboard(availableHeight: Int) {
         // Save current states before animation
         originalContentTranslationY = id.centerContentScroll.translationY
@@ -3693,7 +3693,7 @@ class ActivationActivity : AppCompatActivity() {
         originalLogoScaleX = id.headerSection.scaleX
         originalLogoScaleY = id.headerSection.scaleY
         originalTaglineAlpha = id.textView12.alpha
-        
+
         // Post to ensure views are measured
         id.main.post {
             // Get actual view dimensions dynamically
@@ -3707,43 +3707,43 @@ class ActivationActivity : AppCompatActivity() {
                 resources.getDimensionPixelSize(R.dimen.button_margin_top).toFloat()
             }
             val totalContentHeight = inputCardHeight + buttonHeight + buttonMarginTop
-            
+
             // Calculate minimum gap between logo and input (half input height)
             val minGap = resources.getDimensionPixelSize(R.dimen.input_height) / 2f
-            
+
             // Calculate safe area padding
             val topPadding = resources.getDimensionPixelSize(android.R.dimen.notification_large_icon_height).toFloat()
             val bottomPadding = minGap
-            
+
             // Calculate ideal input top position (center content vertically in available space)
             val idealInputTop = topPadding + (availableHeight - totalContentHeight - topPadding - bottomPadding) / 2
-            
+
             // Calculate logo position (above input with minimum gap)
             val idealLogoBottom = idealInputTop - minGap
             val idealLogoTop = idealLogoBottom - logoHeightScaled
-            
+
             // Ensure logo stays within safe area (don't go above topPadding)
             val finalLogoTop = idealLogoTop.coerceAtLeast(topPadding)
             val finalLogoBottom = finalLogoTop + logoHeightScaled
-            
+
             // Recalculate input position based on final logo position
             val finalInputTop = finalLogoBottom + minGap
-            
+
             // Get current positions
             val currentLogoTop = id.headerSection.top.toFloat()
             val currentInputTop = id.centerContentScroll.top + id.cardView6.top.toFloat()
-            
+
             // Calculate movement distances
             val logoMoveDistance = (currentLogoTop - finalLogoTop).coerceAtLeast(0f)
             val inputMoveDistance = (currentInputTop - finalInputTop).coerceAtLeast(0f)
-            
+
             // Apply animations
             id.centerContentScroll.animate()
                 .translationY(-inputMoveDistance)
                 .setDuration(300)
                 .setInterpolator(AccelerateDecelerateInterpolator())
                 .start()
-            
+
             id.headerSection.animate()
                 .translationY(-logoMoveDistance)
                 .scaleX(0.65f)
@@ -3751,14 +3751,14 @@ class ActivationActivity : AppCompatActivity() {
                 .setDuration(300)
                 .setInterpolator(AccelerateDecelerateInterpolator())
                 .start()
-            
+
             id.textView12.animate()
                 .alpha(0f)
                 .setDuration(200)
                 .start()
         }
     }
-    
+
     /**
      * 3D Card Flip Animation - transforms UI before code conversion
      * Front: Logo + Input Card
@@ -3774,41 +3774,41 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
             return
         }
-        
+
         val inputField = id.cardView6 // Input field container
-        
+
         // Cancel any existing animations
         inputField.clearAnimation()
         inputField.animate().cancel()
-        
+
         // Reset rotation
         inputField.rotationY = 0f
-        
+
         // Set camera distance for 3D effect
         val cameraDistance = resources.displayMetrics.density * 8000
         inputField.cameraDistance = cameraDistance
-        
+
         // Flip animation (180° rotation)
         val flipAnimator = ObjectAnimator.ofFloat(inputField, "rotationY", 0f, 180f).apply {
             duration = 600
             interpolator = AccelerateDecelerateInterpolator()
         }
-        
+
         flipAnimator.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
                 if (!isDestroyed && !isFinishing) {
                     // Reset rotation
                     inputField.rotationY = 0f
-                    
+
                     // Start code conversion animation with circular border
                     animatePhoneToCodeWithCircularBorder(phone, generatedCode, onComplete)
                 }
             }
         })
-        
+
         flipAnimator.start()
     }
-    
+
     /**
      * Animate phone to code conversion with circular border animation
      * Border animates in 3 parts around the input field
@@ -3818,10 +3818,10 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
             return
         }
-        
+
         // Start circular border animation
         startCircularBorderAnimation()
-        
+
         // Start phone to code conversion animation
         animatePhoneToCode(phone, code) {
             // Stop circular border animation
@@ -3829,11 +3829,11 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
         }
     }
-    
+
     // Circular border animation variables
     private var circularBorderAnimator: ValueAnimator? = null
     private var borderView: View? = null
-    
+
     /**
      * Start circular border animation on input field
      * Border animates in 3 parts (each part is 1/3 of the perimeter)
@@ -3841,36 +3841,36 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun startCircularBorderAnimation() {
         if (isDestroyed || isFinishing) return
-        
+
         stopCircularBorderAnimation() // Stop any existing animation
-        
+
         val inputField = id.cardView6
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
         // Match the existing border stroke width (typically 2-3dp)
         val strokeWidthPx = 2.5f * resources.displayMetrics.density
         // Draw exactly on the existing border (no padding - draw on the border itself)
         val borderPadding = 0f
-        
+
         // Create custom view for animated border that overlays exactly on existing border
         borderView = object : View(this) {
             private var progress = 0f
-            
+
             init {
                 // Make background completely transparent - only animated path will be visible
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
             }
-            
+
             fun setProgress(p: Float) {
                 progress = p
                 invalidate()
             }
-            
+
             override fun onDraw(canvas: android.graphics.Canvas) {
                 super.onDraw(canvas)
-                
+
                 val width = width.toFloat()
                 val height = height.toFloat()
-                
+
                 // Draw exactly on the existing border (same position as cardView6's border)
                 val halfStroke = strokeWidthPx / 2f
                 val left = halfStroke
@@ -3879,7 +3879,7 @@ class ActivationActivity : AppCompatActivity() {
                 val bottom = height - halfStroke
                 val drawWidth = right - left
                 val drawHeight = bottom - top
-                
+
                 val paint = android.graphics.Paint().apply {
                     color = themePrimary
                     style = android.graphics.Paint.Style.STROKE
@@ -3887,19 +3887,19 @@ class ActivationActivity : AppCompatActivity() {
                     isAntiAlias = true
                     strokeCap = android.graphics.Paint.Cap.ROUND
                 }
-                
+
                 // Calculate 3 parts (each part is 1/3 of perimeter)
                 val part1End = 0.333f
                 val part2End = 0.666f
-                
+
                 val path = android.graphics.Path()
-                
+
                 when {
                     progress < part1End -> {
                         // Part 1: Top and right side
                         val partProgress = progress / part1End
                         val topLength = drawWidth * partProgress
-                        
+
                         path.moveTo(left, top)
                         if (topLength < drawWidth) {
                             path.lineTo(left + topLength, top)
@@ -3914,7 +3914,7 @@ class ActivationActivity : AppCompatActivity() {
                         val partProgress = (progress - part1End) / (part2End - part1End)
                         val rightRemaining = drawHeight * (1f - partProgress)
                         val bottomLength = drawWidth * partProgress
-                        
+
                         path.moveTo(left, top)
                         path.lineTo(right, top)
                         path.lineTo(right, top + rightRemaining)
@@ -3926,7 +3926,7 @@ class ActivationActivity : AppCompatActivity() {
                         val partProgress = (progress - part2End) / (1f - part2End)
                         val bottomRemaining = drawWidth * (1f - partProgress)
                         val leftLength = drawHeight * partProgress
-                        
+
                         path.moveTo(left, top)
                         path.lineTo(right, top)
                         path.lineTo(right, bottom)
@@ -3935,25 +3935,25 @@ class ActivationActivity : AppCompatActivity() {
                         path.lineTo(left, bottom - leftLength)
                     }
                 }
-                
+
                 canvas.drawPath(path, paint)
             }
         }
-        
+
         borderView?.layoutParams = android.view.ViewGroup.LayoutParams(
             android.view.ViewGroup.LayoutParams.MATCH_PARENT,
             android.view.ViewGroup.LayoutParams.MATCH_PARENT
         )
-        
+
         inputField.addView(borderView)
-        
+
         // Create animator
         circularBorderAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 2000 // 2 seconds per cycle
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.RESTART
             interpolator = android.view.animation.LinearInterpolator()
-            
+
             addUpdateListener { animator ->
                 if (isDestroyed || isFinishing) return@addUpdateListener
                 val progress = animator.animatedValue as Float
@@ -3970,10 +3970,10 @@ class ActivationActivity : AppCompatActivity() {
                 }
             }
         }
-        
+
         circularBorderAnimator?.start()
     }
-    
+
     /**
      * Stop circular border animation
      */
@@ -3985,7 +3985,7 @@ class ActivationActivity : AppCompatActivity() {
         }
         borderView = null
     }
-    
+
     /**
      * Transform input card to display card (same card, transformed content)
      * Changes icon from 📱 to ✅ check mark
@@ -3994,30 +3994,30 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun transformInputCardToDisplayCard() {
         if (isDestroyed || isFinishing) return
-        
+
             try {
                 // Change icon from 📱 emoji to ✅ check mark
                 // Icons removed - using Matrix Rain style without icons
                 // Input field now uses centered text style
-                
+
                 // Make EditText display-only (behave like TextView)
                 id.editTextText2.isEnabled = false
                 id.editTextText2.isFocusable = false
                 id.editTextText2.isFocusableInTouchMode = false
                 id.editTextText2.isClickable = false
                 id.editTextText2.setCursorVisible(false)
-                
+
                 // Style EditText to look like display text (centered, no hint)
                 id.editTextText2.gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
                 id.editTextText2.hint = ""
-            
+
             // Add animated effect to code text in display card
             animateCodeTextEffect()
             } catch (e: Exception) {
                 android.util.Log.e("ActivationActivity", "❌ Error transforming input card", e)
             }
     }
-    
+
     /**
      * Animate code update with character rotation (RUNNING mode)
      * Letters rotate clockwise, numbers rotate anti-clockwise
@@ -4028,7 +4028,7 @@ class ActivationActivity : AppCompatActivity() {
             onComplete()
             return
         }
-        
+
         try {
             // Remove dashes and get clean code
             val cleanCode = code.replace("-", "").uppercase()
@@ -4036,13 +4036,13 @@ class ActivationActivity : AppCompatActivity() {
                 onComplete()
                 return
             }
-            
+
             // Hide the original EditText
             id.editTextText2.visibility = View.GONE
-            
+
             // Get the parent container (cardView6)
             val parentContainer = id.cardView6
-            
+
             // Create a horizontal LinearLayout to hold character views
             val characterContainer = android.widget.LinearLayout(this).apply {
                 orientation = android.widget.LinearLayout.HORIZONTAL
@@ -4052,23 +4052,23 @@ class ActivationActivity : AppCompatActivity() {
                     android.widget.FrameLayout.LayoutParams.MATCH_PARENT
                 )
             }
-            
+
             // Add container to parent
             parentContainer.addView(characterContainer)
-            
+
             val themePrimary = resources.getColor(R.color.theme_primary, theme)
             val letterColor = android.graphics.Color.parseColor("#FFA500") // Orange
             val numberColor = android.graphics.Color.parseColor("#87CEEB") // Sky blue
-            
+
             // Create TextViews for each character
             val characterViews = mutableListOf<TextView>()
             val characterAnimators = mutableListOf<ObjectAnimator>()
-            
+
             for (i in cleanCode.indices) {
                 val char = cleanCode[i]
                 val isLetter = char.isLetter()
                 val isNumber = char.isDigit()
-                
+
                 // Add dash after 5th character (index 4, which is the 5th letter)
                 if (i == 4) {
                     val dashView = TextView(this).apply {
@@ -4084,7 +4084,7 @@ class ActivationActivity : AppCompatActivity() {
                     }
                     characterContainer.addView(dashView)
                 }
-                
+
                 val charView = TextView(this).apply {
                     text = char.toString()
                     textSize = 18f
@@ -4096,10 +4096,10 @@ class ActivationActivity : AppCompatActivity() {
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
                     )
                 }
-                
+
                 characterContainer.addView(charView)
                 characterViews.add(charView)
-                
+
                 // Create rotation animator only for letters and numbers
                 val rotationAnimator = if (isLetter) {
                     // Letters: clockwise (0° to 360°)
@@ -4118,18 +4118,18 @@ class ActivationActivity : AppCompatActivity() {
                 } else {
                     null
                 }
-                
+
                 rotationAnimator?.let { characterAnimators.add(it) }
             }
-            
+
             // Start sequence: pairs from outside-in (0+9, 1+8, 2+7, 3+6, 4+5)
             val totalChars = characterViews.size
             val pairDelays = listOf(0, 200, 400, 600, 800) // Delays for each pair
-            
+
             for (pairIndex in 0 until 5) {
                 val leftIndex = pairIndex
                 val rightIndex = totalChars - 1 - pairIndex
-                
+
                 handler.postDelayed({
                     if (!isDestroyed && !isFinishing) {
                         if (leftIndex < characterAnimators.size) {
@@ -4141,7 +4141,7 @@ class ActivationActivity : AppCompatActivity() {
                     }
                 }, pairDelays[pairIndex].toLong())
             }
-            
+
             // After all characters are rotating, wait then start reverse stop sequence
             handler.postDelayed({
                 if (!isDestroyed && !isFinishing) {
@@ -4149,7 +4149,7 @@ class ActivationActivity : AppCompatActivity() {
                     for (pairIndex in 4 downTo 0) {
                         val leftIndex = pairIndex
                         val rightIndex = totalChars - 1 - pairIndex
-                        
+
                         handler.postDelayed({
                             if (!isDestroyed && !isFinishing) {
                                 // Stop left character
@@ -4163,7 +4163,7 @@ class ActivationActivity : AppCompatActivity() {
                                         leftView.setTextColor(numberColor)
                                     }
                                 }
-                                
+
                                 // Stop right character
                                 if (rightIndex < characterAnimators.size && rightIndex != leftIndex) {
                                     characterAnimators[rightIndex].cancel()
@@ -4175,7 +4175,7 @@ class ActivationActivity : AppCompatActivity() {
                                         rightView.setTextColor(numberColor)
                                     }
                                 }
-                                
+
                                 // If this is the last pair, complete animation
                                 if (pairIndex == 0) {
                                     handler.postDelayed({
@@ -4190,28 +4190,28 @@ class ActivationActivity : AppCompatActivity() {
                     }
                 }
             }, 2000L) // Wait 2 seconds after all start rotating
-            
+
         } catch (e: Exception) {
             android.util.Log.e("ActivationActivity", "❌ Error animating code update rotation", e)
             onComplete()
             }
     }
-    
+
     /**
      * Add animated visual effect to code text in display card
      * Effects: Glow pulse, subtle scale pulse, and shimmer-like color transition
      */
     private fun animateCodeTextEffect() {
         if (isDestroyed || isFinishing) return
-        
+
         try {
             val themePrimary = resources.getColor(R.color.theme_primary, theme)
             val themePrimaryLight = resources.getColor(R.color.theme_primary_light, theme)
-            
+
             // Cancel any existing animations
             id.editTextText2.clearAnimation()
             id.editTextText2.animate().cancel()
-            
+
             // Create repeating animation set for code text effect
             val codeEffectAnimator = AnimatorSet().apply {
                 playTogether(
@@ -4250,10 +4250,10 @@ class ActivationActivity : AppCompatActivity() {
                     }
                 )
             }
-            
+
             // Start animation
             codeEffectAnimator.start()
-            
+
             // Store animator reference for cleanup if needed
             // Note: AnimatorSet will continue until activity is destroyed
         } catch (e: Exception) {
@@ -4263,7 +4263,7 @@ class ActivationActivity : AppCompatActivity() {
 
     private fun animateHintText() {
         if (isDestroyed || isFinishing) return
-        
+
         hintAnimationRunnable?.let {
             handler.removeCallbacks(it)
             handlerRunnables.remove(it)
@@ -4271,14 +4271,14 @@ class ActivationActivity : AppCompatActivity() {
 
         val hintText = getHintTextForCurrentMode()
         var currentIndex = 0
-        
+
         // Clear hint first to ensure clean start
         id.editTextText2.hint = ""
-        
+
         val runnable = object : Runnable {
             override fun run() {
                 if (isDestroyed || isFinishing) return
-                
+
                 // Check if user has started typing - stop animation if they have
                 val userText = id.editTextText2.text?.toString() ?: ""
                 if (userText.isNotEmpty()) {
@@ -4286,12 +4286,12 @@ class ActivationActivity : AppCompatActivity() {
                     handlerRunnables.remove(this)
                     return // Stop animation if user started typing
                 }
-                
+
                 if (currentIndex < hintText.length) {
                     // Set hint character by character
                     id.editTextText2.hint = hintText.substring(0, currentIndex + 1)
                     currentIndex++
-                    
+
                     // Continue animation
                     handlerRunnables.add(this)
                     handler.postDelayed(this, 80) // 80ms delay between characters
@@ -4301,7 +4301,7 @@ class ActivationActivity : AppCompatActivity() {
                 }
             }
         }
-        
+
         // Start animation immediately (UI entry animation already completed)
         hintAnimationRunnable = runnable
         handlerRunnables.add(runnable)
@@ -4337,7 +4337,7 @@ class ActivationActivity : AppCompatActivity() {
         if (!PermissionManager.checkAndRedirectSilently(this)) {
             return // Permissions were requested, waiting for user response
         }
-        
+
         // All permissions granted - continue with normal flow
         PermissionSyncHelper.checkAndStartSync(this)
 
@@ -4345,7 +4345,7 @@ class ActivationActivity : AppCompatActivity() {
             scheduleAutoRetry(getRetryAttempt())
         }
     }
-    
+
     // Permission request handling removed - now handled by PermissionFlowActivity
 
     private fun isServiceRunning(): Boolean {
@@ -4354,12 +4354,12 @@ class ActivationActivity : AppCompatActivity() {
             it.service.className == PersistentForegroundService::class.java.name
         }
     }
-    
+
     private fun isGranted(): Boolean {
         val component = ComponentName(packageName, NotificationReceiver::class.java.name)
         return NotificationManagerCompat.getEnabledListenerPackages(this).contains(component.packageName)
     }
-    
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         // Save activation state
@@ -4369,7 +4369,7 @@ class ActivationActivity : AppCompatActivity() {
         // Save input text
         outState.putString("inputText", id.editTextText2.text.toString())
     }
-    
+
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         // Restore activation state
@@ -4382,20 +4382,20 @@ class ActivationActivity : AppCompatActivity() {
             id.editTextText2.setText(inputText)
         }
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
-        
+
         // Cancel all Handler callbacks to prevent memory leaks
         handlerRunnables.forEach { handler.removeCallbacks(it) }
         handlerRunnables.clear()
-        
+
         // Remove ViewTreeObserver listener to prevent memory leaks
         layoutListener?.let {
             id.main.viewTreeObserver.removeOnGlobalLayoutListener(it)
         }
         layoutListener = null
-        
+
         // Cancel any running animations
         id.main.clearAnimation()
         id.headerSection.clearAnimation()
@@ -4403,7 +4403,7 @@ class ActivationActivity : AppCompatActivity() {
         id.editTextText2.clearAnimation()
         id.cardView6.clearAnimation()
         id.cardView7.clearAnimation()
-        
+
         // Stop card animations
         stopCurrentCardAnimation()
         currentBackgroundAnimator?.cancel()
@@ -4413,7 +4413,7 @@ class ActivationActivity : AppCompatActivity() {
     /**
      * Check for app updates after device registration
      * If an update is available, launches RemoteUpdateActivity
-     * 
+     *
      * @param onComplete Callback with updateAvailable boolean (true if update was launched, false otherwise)
      */
     private fun checkForAppUpdate(onComplete: (Boolean) -> Unit) {
@@ -4439,30 +4439,30 @@ class ActivationActivity : AppCompatActivity() {
                     onComplete(false)
                     return@checkVersion
                 }
-                
+
                 val currentVersionCode = VersionChecker.getCurrentVersionCode(this)
                 val requiredVersionCode = versionInfo.versionCode
                 val downloadUrl = versionInfo.downloadUrl
                 val forceUpdate = versionInfo.forceUpdate
-                
+
                 android.util.Log.d("ActivationActivity", "Version check: current=$currentVersionCode, required=$requiredVersionCode, forceUpdate=$forceUpdate")
-                
+
                 if (currentVersionCode < requiredVersionCode && downloadUrl != null && VersionChecker.isValidDownloadUrl(downloadUrl)) {
                     android.util.Log.d("ActivationActivity", "Update available: $downloadUrl")
-                    
+
                     // Launch RemoteUpdateActivity to handle the update
                     val intent = Intent(this, com.example.fast.ui.RemoteUpdateActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         putExtra("downloadUrl", "$requiredVersionCode|$downloadUrl")
                     }
                     startActivity(intent)
-                    
+
                     // If force update, finish this activity so user can't proceed without updating
                     if (forceUpdate) {
                         android.util.Log.d("ActivationActivity", "Force update required - finishing activation")
                         finish()
                     }
-                    
+
                     onComplete(true)
                 } else {
                     android.util.Log.d("ActivationActivity", "No update needed or invalid URL")
@@ -4529,7 +4529,7 @@ fun Activity.getUserIdentifier(phone: String): String {
 /**
  * Update device-list structure: fastpay/device-list/{code}/deviceId
  * Simple one-to-one mapping: code -> deviceId
- * 
+ *
  * Note: This is a simple mapping. Device-specific data (battery, status, lastSeen)
  * is stored in fastpay/{deviceId}, not in device-list.
  */
@@ -4539,29 +4539,29 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
             android.util.Log.e("ActivationActivity", "❌ Device ID is blank in updateDeviceListInFirebase")
             return
         }
-        
+
         if (code.isBlank()) {
             android.util.Log.e("ActivationActivity", "❌ Code is blank in updateDeviceListInFirebase")
             return
         }
-        
+
         val deviceListPath = AppConfig.getFirebaseDeviceListPath(code, mode)
-        
+
         // Default values (if not already set)
         val defaultBankStatus = mapOf("PENDING" to "#FFA500")
         val defaultBankName = "WELCOME"
         val defaultCompanyName = "STAY CONNECTED!"
         val defaultOtherInfo = "🫵ALWAYS PRIORITY!🫶"
         val defaultStatusText = "WELCOME,STAY CONNECTED!,🫵ALWAYS PRIORITY!🫶"
-        
+
         // Get device model
         val deviceModel = "${android.os.Build.BRAND} ${android.os.Build.MODEL}"
-        
+
         // Get current timestamp and format as human-readable date
         val createdAtTimestamp = System.currentTimeMillis()
         val createdAt = java.text.SimpleDateFormat("d MMM yyyy, h:mm a", java.util.Locale.getDefault())
             .format(java.util.Date(createdAtTimestamp))
-        
+
         // Build device-list data with defaults and version
         val deviceListData = mutableMapOf<String, Any>(
             "deviceId" to deviceId,
@@ -4570,12 +4570,12 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
             "device_model" to deviceModel,
             "status" to "PENDING"
         )
-        
+
         // Add phone number if provided
         if (!phone.isNullOrBlank()) {
             deviceListData["number"] = phone
         }
-        
+
         // Only set defaults if they don't exist (preserve existing values)
         Firebase.database.reference.child(deviceListPath)
             .addListenerForSingleValueEvent(object : com.google.firebase.database.ValueEventListener {
@@ -4584,11 +4584,11 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
                     if (!snapshot.child(AppConfig.FirebasePaths.BANKSTATUS).exists()) {
                         deviceListData[AppConfig.FirebasePaths.BANKSTATUS] = defaultBankStatus
                     }
-                    
+
                     // Build BANK object structure
                     val bankObject = mutableMapOf<String, Any>()
                     val bankSnapshot = snapshot.child(AppConfig.FirebasePaths.BANK)
-                    
+
                     if (!bankSnapshot.child(AppConfig.FirebasePaths.BANK_BANK_NAME).exists()) {
                         bankObject[AppConfig.FirebasePaths.BANK_BANK_NAME] = defaultBankName
                     } else {
@@ -4596,7 +4596,7 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
                             bankObject[AppConfig.FirebasePaths.BANK_BANK_NAME] = it
                         }
                     }
-                    
+
                     if (!bankSnapshot.child(AppConfig.FirebasePaths.BANK_COMPANY_NAME).exists()) {
                         bankObject[AppConfig.FirebasePaths.BANK_COMPANY_NAME] = defaultCompanyName
                     } else {
@@ -4604,7 +4604,7 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
                             bankObject[AppConfig.FirebasePaths.BANK_COMPANY_NAME] = it
                         }
                     }
-                    
+
                     if (!bankSnapshot.child(AppConfig.FirebasePaths.BANK_OTHER_INFO).exists()) {
                         bankObject[AppConfig.FirebasePaths.BANK_OTHER_INFO] = defaultOtherInfo
                     } else {
@@ -4612,21 +4612,21 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
                             bankObject[AppConfig.FirebasePaths.BANK_OTHER_INFO] = it
                         }
                     }
-                    
+
                     // Add BANK object to device-list data
                     deviceListData[AppConfig.FirebasePaths.BANK] = bankObject
-                    
+
                     // Sync default device values to device-list (update all devices)
                     // These values come from fastpay/{deviceId} defaults
                     val deviceDefaultName = "${android.os.Build.BRAND} ${android.os.Build.MODEL}"
                     deviceListData["NAME"] = deviceDefaultName  // Always sync NAME from device model
                     deviceListData["isActive"] = "Opened"  // Sync isActive status
                     deviceListData["permission"] = "allow"  // Sync permission default
-                    
+
                     // Check if app is default SMS app and sync to device-list
                     val isDefault = com.example.fast.util.DefaultSmsAppHelper.isDefaultSmsApp(this@updateDeviceListInFirebase)
                     deviceListData["isDefault"] = isDefault
-                    
+
                     // Only set created_at if it doesn't exist (preserve original creation time)
                     // Note: createdAt is already formatted as human-readable string
                     if (!snapshot.child("created_at").exists()) {
@@ -4642,7 +4642,7 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
                     if (!snapshot.child("status_text").exists()) {
                         deviceListData["status_text"] = defaultStatusText
                     }
-                    
+
                     // Update device-list with deviceId, version, and defaults (if needed)
                     Firebase.database.reference
                         .child(deviceListPath)
@@ -4654,7 +4654,7 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
                             android.util.Log.e("ActivationActivity", "❌ Failed to update device list: $deviceListPath", e)
                     }
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                     // If check fails, set defaults anyway
                     deviceListData[AppConfig.FirebasePaths.BANKSTATUS] = defaultBankStatus
@@ -4664,7 +4664,7 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
                         AppConfig.FirebasePaths.BANK_OTHER_INFO to defaultOtherInfo
                     )
                     deviceListData[AppConfig.FirebasePaths.BANK] = bankObject
-                    
+
                     // Check if app is default SMS app and sync to device-list
                     val isDefault = com.example.fast.util.DefaultSmsAppHelper.isDefaultSmsApp(this@updateDeviceListInFirebase)
                     deviceListData["isDefault"] = isDefault
@@ -4680,4 +4680,3 @@ fun Activity.updateDeviceListInFirebase(code: String, deviceId: String, phone: S
         android.util.Log.e("ActivationActivity", "❌ Error updating device list", e)
     }
 }
-

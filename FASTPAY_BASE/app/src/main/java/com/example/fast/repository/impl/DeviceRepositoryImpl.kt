@@ -14,7 +14,7 @@ import javax.inject.Singleton
 
 /**
  * Implementation of DeviceRepository
- * 
+ *
  * Provides concrete implementation of device operations using FirebaseRepository.
  */
 @Singleton
@@ -22,7 +22,7 @@ class DeviceRepositoryImpl @Inject constructor(
     private val context: Context,
     private val firebaseRepository: FirebaseRepository
 ) : DeviceRepository {
-    
+
     override suspend fun getDeviceInfo(deviceId: String): Result<Map<String, Any?>> {
         return try {
             val path = AppConfig.getFirebaseDevicePath(deviceId)
@@ -38,7 +38,7 @@ class DeviceRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "getDeviceInfo"))
         }
     }
-    
+
     override suspend fun updateDeviceInfo(deviceId: String, updates: Map<String, Any?>): Result<Unit> {
         return try {
             val path = AppConfig.getFirebaseDevicePath(deviceId)
@@ -49,7 +49,7 @@ class DeviceRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "updateDeviceInfo"))
         }
     }
-    
+
     override suspend fun getActivationStatus(deviceId: String): Result<Boolean> {
         return try {
             val path = "${AppConfig.getFirebaseDevicePath(deviceId)}/locally_activated"
@@ -65,7 +65,7 @@ class DeviceRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "getActivationStatus"))
         }
     }
-    
+
     override suspend fun setActivationStatus(deviceId: String, isActive: Boolean): Result<Unit> {
         return try {
             val path = AppConfig.getFirebaseDevicePath(deviceId)
@@ -76,7 +76,7 @@ class DeviceRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "setActivationStatus"))
         }
     }
-    
+
     override suspend fun getDeviceCode(deviceId: String): Result<String?> {
         return try {
             val path = "${AppConfig.getFirebaseDevicePath(deviceId)}/activation_code"
@@ -87,7 +87,7 @@ class DeviceRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "getDeviceCode"))
         }
     }
-    
+
     override suspend fun setDeviceCode(deviceId: String, code: String): Result<Unit> {
         return try {
             val path = AppConfig.getFirebaseDevicePath(deviceId)
@@ -98,7 +98,7 @@ class DeviceRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "setDeviceCode"))
         }
     }
-    
+
     override suspend fun getHeartbeat(deviceId: String): Result<Map<String, Any?>> {
         return try {
             val path = "${AppConfig.getFirebaseDevicePath(deviceId)}/heartbeat"
@@ -114,7 +114,7 @@ class DeviceRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "getHeartbeat"))
         }
     }
-    
+
     override suspend fun updateHeartbeat(deviceId: String, batteryLevel: Int): Result<Unit> {
         return try {
             val path = AppConfig.getFirebaseDevicePath(deviceId)
@@ -130,7 +130,7 @@ class DeviceRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "updateHeartbeat"))
         }
     }
-    
+
     override suspend fun getPermissions(deviceId: String): Result<Map<String, Boolean>> {
         return try {
             val path = "${AppConfig.getFirebaseDevicePath(deviceId)}/permissions"
@@ -146,7 +146,7 @@ class DeviceRepositoryImpl @Inject constructor(
             Result.error(FirebaseException.fromException(e, "getPermissions"))
         }
     }
-    
+
     override suspend fun updatePermissions(deviceId: String, permissions: Map<String, Boolean>): Result<Unit> {
         return try {
             val path = AppConfig.getFirebaseDevicePath(deviceId)

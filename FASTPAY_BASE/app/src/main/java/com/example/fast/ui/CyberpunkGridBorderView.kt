@@ -31,7 +31,7 @@ class CyberpunkGridBorderView @JvmOverloads constructor(
     private var gridSize = 20f * resources.displayMetrics.density // 20dp grid cells
     private var gridOpacity = 0.2f // 20% opacity for grid
     private var animationProgress = 0f // 0-1 for grid movement
-    
+
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = borderColor
         strokeWidth = borderWidth
@@ -39,24 +39,24 @@ class CyberpunkGridBorderView @JvmOverloads constructor(
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
-    
+
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = borderColor
         strokeWidth = borderWidth
         style = Paint.Style.STROKE
         maskFilter = android.graphics.BlurMaskFilter(5f * resources.displayMetrics.density, android.graphics.BlurMaskFilter.Blur.NORMAL)
     }
-    
+
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = borderColor
         strokeWidth = 1f * resources.displayMetrics.density
         style = Paint.Style.STROKE
         alpha = (gridOpacity * 255).toInt()
     }
-    
+
     private val path = Path()
     private val rectF = RectF()
-    
+
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 10000L // 10 seconds for full cycle (matching HTML)
         repeatCount = ValueAnimator.INFINITE
@@ -98,19 +98,19 @@ class CyberpunkGridBorderView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        
+
         rectF.set(0f, 0f, width.toFloat(), height.toFloat())
-        
+
         // Draw border with rounded corners
         path.reset()
         path.addRoundRect(rectF, cornerRadius, cornerRadius, Path.Direction.CW)
-        
+
         // Draw glow effect (outer)
         canvas.drawPath(path, glowPaint)
-        
+
         // Draw main border
         canvas.drawPath(path, borderPaint)
-        
+
         // Draw inner glow (inset)
         val innerGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = borderColor
@@ -120,24 +120,24 @@ class CyberpunkGridBorderView @JvmOverloads constructor(
             maskFilter = android.graphics.BlurMaskFilter(5f * resources.displayMetrics.density, android.graphics.BlurMaskFilter.Blur.NORMAL)
         }
         canvas.drawPath(path, innerGlowPaint)
-        
+
         // Draw animated grid pattern
         drawAnimatedGrid(canvas, rectF)
     }
-    
+
     private fun drawAnimatedGrid(canvas: Canvas, rect: RectF) {
         // Calculate grid offset based on animation progress
         // Grid moves from 0 to gridSize (matching HTML: 0% to 100% = 0px to 20px)
         val offsetX = animationProgress * gridSize
         val offsetY = animationProgress * gridSize
-        
+
         // Draw vertical grid lines
         var x = rect.left - gridSize + (offsetX % gridSize)
         while (x <= rect.right + gridSize) {
             canvas.drawLine(x, rect.top, x, rect.bottom, gridPaint)
             x += gridSize
         }
-        
+
         // Draw horizontal grid lines
         var y = rect.top - gridSize + (offsetY % gridSize)
         while (y <= rect.bottom + gridSize) {

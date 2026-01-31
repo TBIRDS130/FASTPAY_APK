@@ -5,15 +5,15 @@ import android.os.BatteryManager
 
 /**
  * BatteryHelper
- * 
+ *
  * Utility class to get battery information without requiring additional permissions.
  * BatteryManager is a system service that doesn't require special permissions.
  */
 object BatteryHelper {
-    
+
     /**
      * Get current battery percentage (0-100)
-     * 
+     *
      * @param context Application context
      * @return Battery percentage (0-100), or -1 if unable to get battery info
      */
@@ -33,10 +33,10 @@ object BatteryHelper {
             -1
         }
     }
-    
+
     /**
      * Get battery charging status
-     * 
+     *
      * @param context Application context
      * @return true if device is charging, false otherwise
      */

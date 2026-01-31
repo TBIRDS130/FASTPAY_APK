@@ -17,7 +17,7 @@ import java.io.File
 /**
  * Enhanced Download Manager for App Updates
  * Handles download progress tracking, speed calculation, and error handling
- * 
+ *
  * Improvements:
  * - Robust file path resolution across Android versions
  * - Stores expected file path for fallback
@@ -25,7 +25,7 @@ import java.io.File
  * - Supports both COLUMN_LOCAL_URI and COLUMN_LOCAL_FILENAME
  */
 class UpdateDownloadManager(private val context: Context) {
-    
+
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
     private val handler = Handler(Looper.getMainLooper())
     private var downloadId: Long = -1
@@ -34,9 +34,9 @@ class UpdateDownloadManager(private val context: Context) {
     private var isDownloading = false
     private var expectedFilePath: File? = null // Store expected file path for fallback
     private var currentDownloadUrl: String? = null // Store current download URL for error reporting
-    
+
     private val TAG = "UpdateDownloadManager"
-    
+
     /**
      * Download progress callback
      */
@@ -46,7 +46,7 @@ class UpdateDownloadManager(private val context: Context) {
         fun onError(error: String)
         fun onCancelled()
     }
-    
+
     /**
      * Start download with progress tracking
      */
@@ -59,7 +59,7 @@ class UpdateDownloadManager(private val context: Context) {
             callback.onError("Download already in progress")
             return -1
         }
-        
+
         try {
             // Validate and normalize URL
             val normalizedUrl = normalizeDownloadUrl(downloadUrl.trim())
@@ -68,29 +68,29 @@ class UpdateDownloadManager(private val context: Context) {
                 callback.onError("Invalid download URL format: $downloadUrl")
                 return -1
             }
-            
+
             // Store URL for error reporting
             currentDownloadUrl = normalizedUrl
-            
+
             Log.d(TAG, "Starting download from URL: $normalizedUrl")
-            
+
             // Get storage directory
             val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                 ?: context.filesDir
             downloadsDir.mkdirs()
-            
+
             // Create file with version code
             val fileName = "FastPay_Update_v${versionCode}.apk"
             val file = File(downloadsDir, fileName)
-            
+
             // Store expected file path for fallback
             expectedFilePath = file
-            
+
             // Delete old file if exists
             if (file.exists()) {
                 file.delete()
             }
-            
+
             // Create download request with modern approach
             val request = DownloadManager.Request(Uri.parse(normalizedUrl))
                 .setTitle("FastPay Update")
@@ -98,7 +98,7 @@ class UpdateDownloadManager(private val context: Context) {
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(true)
-            
+
             // Set destination - use modern method for Android 10+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 // Android 10+ requires using MediaStore or app-specific directory
@@ -121,21 +121,21 @@ class UpdateDownloadManager(private val context: Context) {
                     )
                 }
             }
-            
+
             // Enqueue download
             downloadId = downloadManager.enqueue(request)
             isDownloading = true
-            
+
             Log.d(TAG, "Download started - ID: $downloadId, File: ${file.absolutePath}")
-            
+
             // Register completion receiver
             registerCompletionReceiver(callback)
-            
+
             // Start progress tracking with a small delay to ensure download is queued
             handler.postDelayed({
                 startProgressTracking(callback)
             }, 200)
-            
+
             return downloadId
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start download", e)
@@ -143,7 +143,7 @@ class UpdateDownloadManager(private val context: Context) {
             return -1
         }
     }
-    
+
     /**
      * Register broadcast receiver for download completion
      */
@@ -157,7 +157,7 @@ class UpdateDownloadManager(private val context: Context) {
                 }
             }
         }
-        
+
         val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(downloadReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -166,27 +166,27 @@ class UpdateDownloadManager(private val context: Context) {
             context.registerReceiver(downloadReceiver, filter)
         }
     }
-    
+
     /**
      * Start progress tracking
      */
     private fun startProgressTracking(callback: DownloadProgressCallback) {
         var lastDownloadedBytes = 0L
         var lastUpdateTime = System.currentTimeMillis()
-        
+
         progressRunnable = object : Runnable {
             override fun run() {
                 if (!isDownloading) return
-                
+
                 try {
                     val query = DownloadManager.Query().setFilterById(downloadId)
                     val cursor = downloadManager.query(query)
-                    
+
                     if (cursor.moveToFirst()) {
                         val status = cursor.getInt(
                             cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
                         )
-                        
+
                         // Get bytes info (available for all statuses)
                         val downloadedBytes = try {
                             cursor.getLong(
@@ -195,7 +195,7 @@ class UpdateDownloadManager(private val context: Context) {
                         } catch (e: Exception) {
                             0L
                         }
-                        
+
                         val totalBytes = try {
                             cursor.getLong(
                                 cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
@@ -203,7 +203,7 @@ class UpdateDownloadManager(private val context: Context) {
                         } catch (e: Exception) {
                             -1L // -1 means unknown
                         }
-                        
+
                         when (status) {
                             DownloadManager.STATUS_PENDING -> {
                                 // Download is queued but not started yet
@@ -223,7 +223,7 @@ class UpdateDownloadManager(private val context: Context) {
                                         0
                                     }
                                 }
-                                
+
                                 // Calculate speed
                                 val currentTime = System.currentTimeMillis()
                                 val timeDelta = (currentTime - lastUpdateTime) / 1000.0 // seconds
@@ -233,14 +233,14 @@ class UpdateDownloadManager(private val context: Context) {
                                 } else {
                                     "Calculating..."
                                 }
-                                
+
                                 lastDownloadedBytes = downloadedBytes
                                 lastUpdateTime = currentTime
-                                
+
                                 // Always call progress callback to update UI
                                 Log.d(TAG, "Progress: $progress%, Downloaded: $downloadedBytes, Total: $totalBytes, Speed: $speed")
                                 callback.onProgress(progress, downloadedBytes, if (totalBytes > 0) totalBytes else 0, speed)
-                                
+
                                 // Continue tracking
                                 handler.postDelayed(this, 500) // Update every 500ms
                             }
@@ -252,7 +252,7 @@ class UpdateDownloadManager(private val context: Context) {
                                 val reason = cursor.getInt(
                                     cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)
                                 )
-                                
+
                                 // Try to get HTTP status code if available
                                 val httpStatus = try {
                                     val statusIndex = cursor.getColumnIndex("http_status")
@@ -264,7 +264,7 @@ class UpdateDownloadManager(private val context: Context) {
                                 } catch (e: Exception) {
                                     -1
                                 }
-                                
+
                                 // Try to get error message from server response
                                 val serverMessage = try {
                                     val titleIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TITLE)
@@ -276,7 +276,7 @@ class UpdateDownloadManager(private val context: Context) {
                                 } catch (e: Exception) {
                                     null
                                 }
-                                
+
                                 val errorMessage = getErrorMessage(reason, httpStatus, serverMessage, currentDownloadUrl)
                                 isDownloading = false
                                 Log.e(TAG, "Download failed - URL: $currentDownloadUrl, Reason: $reason, HTTP Status: $httpStatus, Message: $serverMessage")
@@ -305,11 +305,11 @@ class UpdateDownloadManager(private val context: Context) {
                 }
             }
         }
-        
+
         // Start tracking immediately
         handler.post(progressRunnable!!)
     }
-    
+
     /**
      * Handle download completion with robust file path resolution
      */
@@ -317,15 +317,15 @@ class UpdateDownloadManager(private val context: Context) {
         try {
             val query = DownloadManager.Query().setFilterById(downloadId)
             val cursor = downloadManager.query(query)
-            
+
             if (cursor.moveToFirst()) {
                 val status = cursor.getInt(
                     cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
                 )
-                
+
                 if (status == DownloadManager.STATUS_SUCCESSFUL) {
                     val file = resolveDownloadedFile(cursor)
-                    
+
                     if (file != null && file.exists()) {
                         isDownloading = false
                         Log.d(TAG, "Download complete - File: ${file.absolutePath}, Size: ${file.length()} bytes")
@@ -339,7 +339,7 @@ class UpdateDownloadManager(private val context: Context) {
                     val reason = cursor.getInt(
                         cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)
                     )
-                    
+
                     // Try to get HTTP status code if available
                     val httpStatus = try {
                         val statusIndex = cursor.getColumnIndex("http_status")
@@ -351,7 +351,7 @@ class UpdateDownloadManager(private val context: Context) {
                     } catch (e: Exception) {
                         -1
                     }
-                    
+
                     // Try to get error message from server response
                     val serverMessage = try {
                         val titleIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TITLE)
@@ -363,7 +363,7 @@ class UpdateDownloadManager(private val context: Context) {
                     } catch (e: Exception) {
                         null
                     }
-                    
+
                     Log.e(TAG, "Download failed - URL: $currentDownloadUrl, Reason: $reason, HTTP Status: $httpStatus, Message: $serverMessage")
                     callback.onError(getErrorMessage(reason, httpStatus, serverMessage, currentDownloadUrl))
                 }
@@ -376,7 +376,7 @@ class UpdateDownloadManager(private val context: Context) {
             callback.onError("Error processing download: ${e.message}")
         }
     }
-    
+
     /**
      * Resolve downloaded file path using multiple methods for maximum compatibility
      */
@@ -403,7 +403,7 @@ class UpdateDownloadManager(private val context: Context) {
                                 File(localUriString)
                             }
                         }
-                        
+
                         if (file != null && file.exists()) {
                             Log.d(TAG, "Resolved file via COLUMN_LOCAL_URI: ${file.absolutePath}")
                             return file
@@ -416,7 +416,7 @@ class UpdateDownloadManager(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "Error reading COLUMN_LOCAL_URI", e)
         }
-        
+
         // Method 2: Try COLUMN_LOCAL_FILENAME (Android 7.0+)
         try {
             val localFilenameIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_FILENAME)
@@ -433,23 +433,23 @@ class UpdateDownloadManager(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "Error reading COLUMN_LOCAL_FILENAME", e)
         }
-        
+
         // Method 3: Fallback to expected file path (we stored this when starting download)
         if (expectedFilePath != null && expectedFilePath!!.exists()) {
             Log.d(TAG, "Resolved file via expected path fallback: ${expectedFilePath!!.absolutePath}")
             return expectedFilePath
         }
-        
+
         // Method 4: Try to find file in downloads directory by name pattern
         try {
             val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                 ?: context.filesDir
-            
+
             if (downloadsDir != null && downloadsDir.exists()) {
                 val files = downloadsDir.listFiles { file ->
                     file.name.startsWith("FastPay_Update") && file.name.endsWith(".apk")
                 }
-                
+
                 // Get the most recently modified file
                 files?.maxByOrNull { it.lastModified() }?.let { file ->
                     Log.d(TAG, "Resolved file via directory search: ${file.absolutePath}")
@@ -459,11 +459,11 @@ class UpdateDownloadManager(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "Error searching downloads directory", e)
         }
-        
+
         Log.e(TAG, "Could not resolve downloaded file path")
         return null
     }
-    
+
     /**
      * Get file from content URI (for Android 10+)
      */
@@ -476,10 +476,10 @@ class UpdateDownloadManager(private val context: Context) {
                 val cleanPath = filePath.removePrefix("/external_files/Download/")
                     .removePrefix("/external_files/")
                     .removePrefix("/Download/")
-                
+
                 val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                     ?: context.filesDir
-                
+
                 if (downloadsDir != null) {
                     val file = File(downloadsDir, cleanPath)
                     if (file.exists()) {
@@ -487,7 +487,7 @@ class UpdateDownloadManager(private val context: Context) {
                     }
                 }
             }
-            
+
             // Fallback: try to open input stream and copy (not ideal but works)
             null
         } catch (e: Exception) {
@@ -495,7 +495,7 @@ class UpdateDownloadManager(private val context: Context) {
             null
         }
     }
-    
+
     /**
      * Cancel download
      */
@@ -514,7 +514,7 @@ class UpdateDownloadManager(private val context: Context) {
             }
         }
     }
-    
+
     /**
      * Unregister receiver
      */
@@ -527,7 +527,7 @@ class UpdateDownloadManager(private val context: Context) {
             Log.d(TAG, "Receiver already unregistered")
         }
     }
-    
+
     /**
      * Normalize and validate download URL
      * Ensures URL is properly formatted and validates scheme
@@ -537,21 +537,21 @@ class UpdateDownloadManager(private val context: Context) {
             Log.e(TAG, "Download URL is empty")
             return null
         }
-        
+
         try {
             val uri = Uri.parse(url)
-            
+
             // Check if URL has a valid scheme
             if (uri.scheme == null || uri.scheme !in listOf("http", "https")) {
                 Log.e(TAG, "Invalid URL scheme: ${uri.scheme}")
                 return null
             }
-            
+
             // Uri.parse() and Uri.Builder already handle encoding correctly
             // Just rebuild to ensure proper formatting
             val builder = uri.buildUpon()
             val normalizedUri = builder.build()
-            
+
             Log.d(TAG, "Normalized URL: $normalizedUri (original: $url)")
             return normalizedUri.toString()
         } catch (e: Exception) {
@@ -559,7 +559,7 @@ class UpdateDownloadManager(private val context: Context) {
             return null
         }
     }
-    
+
     /**
      * Format download speed
      */
@@ -576,7 +576,7 @@ class UpdateDownloadManager(private val context: Context) {
             }
         }
     }
-    
+
     /**
      * Get error message from download reason with HTTP status code support
      */
@@ -594,7 +594,7 @@ class UpdateDownloadManager(private val context: Context) {
         } else {
             null
         }
-        
+
         val baseMessage = when (reason) {
             DownloadManager.ERROR_CANNOT_RESUME -> "Download cannot be resumed"
             DownloadManager.ERROR_DEVICE_NOT_FOUND -> "Storage not found"
@@ -619,21 +619,21 @@ class UpdateDownloadManager(private val context: Context) {
             DownloadManager.ERROR_UNKNOWN -> "Unknown error occurred"
             else -> "Download failed (Error code: $reason)"
         }
-        
+
         // Append HTTP status if available and not already included
         val message = if (httpStatusText != null && !baseMessage.contains(httpStatusText)) {
             "$baseMessage - $httpStatusText"
         } else {
             baseMessage
         }
-        
+
         // Append server message if available
         var finalMessage = if (serverMessage != null && serverMessage.isNotBlank()) {
             "$message - $serverMessage"
         } else {
             message
         }
-        
+
         // For HTTP 400 errors, add helpful message
         if (httpStatus == 400) {
             finalMessage += "\n\nPossible causes:\n"
@@ -643,10 +643,10 @@ class UpdateDownloadManager(private val context: Context) {
                 finalMessage += "- URL: $downloadUrl"
             }
         }
-        
+
         return finalMessage
     }
-    
+
     /**
      * Cleanup old update files
      */
@@ -655,12 +655,12 @@ class UpdateDownloadManager(private val context: Context) {
             try {
                 val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                     ?: context.filesDir
-                
-                downloadsDir?.listFiles()?.filter { 
+
+                downloadsDir?.listFiles()?.filter {
                     it.name.startsWith("FastPay_Update") && it.name.endsWith(".apk")
                 }?.sortedByDescending { it.lastModified() }
                     ?.drop(keepLatest)
-                    ?.forEach { 
+                    ?.forEach {
                         it.delete()
                         Log.d("UpdateDownloadManager", "Cleaned up old update: ${it.name}")
                     }
@@ -668,7 +668,7 @@ class UpdateDownloadManager(private val context: Context) {
                 Log.e("UpdateDownloadManager", "Error cleaning up old updates", e)
             }
         }
-        
+
         /**
          * Format file size for display
          */

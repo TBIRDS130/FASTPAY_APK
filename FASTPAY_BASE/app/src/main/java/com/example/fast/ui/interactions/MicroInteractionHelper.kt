@@ -7,7 +7,7 @@ import com.example.fast.ui.animations.AnimationHelper
 
 /**
  * MicroInteractionHelper
- * 
+ *
  * Provides micro-interactions for better user feedback:
  * - Button press animations
  * - Card lift effects
@@ -15,11 +15,11 @@ import com.example.fast.ui.animations.AnimationHelper
  * - Touch scale animations
  */
 object MicroInteractionHelper {
-    
+
     /**
      * Add press animation to a button/view
      * Scales down on press, scales up on release
-     * 
+     *
      * @param view View to add press animation to
      * @param scale Scale factor when pressed (default: 0.95f)
      */
@@ -48,18 +48,18 @@ object MicroInteractionHelper {
             false // Don't consume the event, let click listener handle it
         }
     }
-    
+
     /**
      * Add card lift effect on touch
      * Increases elevation when touched
-     * 
+     *
      * @param view Card view to add lift effect to
      * @param elevationIncrease Elevation increase in dp (default: 8dp)
      */
     fun addCardLiftEffect(view: View, elevationIncrease: Float = 8f) {
         val originalElevation = view.elevation
         val liftedElevation = originalElevation + elevationIncrease
-        
+
         view.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -80,11 +80,11 @@ object MicroInteractionHelper {
             false
         }
     }
-    
+
     /**
      * Add ripple-like feedback animation
      * Creates a subtle scale pulse effect
-     * 
+     *
      * @param view View to add ripple effect to
      */
     fun addRippleFeedback(view: View) {
@@ -104,11 +104,11 @@ object MicroInteractionHelper {
                 .start()
         }
     }
-    
+
     /**
      * Add smooth hover effect (for touch devices)
      * Slightly scales up when touched
-     * 
+     *
      * @param view View to add hover effect to
      * @param scale Scale factor (default: 1.02f)
      */
@@ -133,11 +133,11 @@ object MicroInteractionHelper {
             false
         }
     }
-    
+
     /**
      * Add combined press and lift effect for cards
      * Combines scale and elevation changes
-     * 
+     *
      * @param view Card view
      * @param scale Scale factor when pressed (default: 0.97f)
      * @param elevationIncrease Elevation increase (default: 4f)
@@ -145,7 +145,7 @@ object MicroInteractionHelper {
     fun addCardPressAndLift(view: View, scale: Float = 0.97f, elevationIncrease: Float = 4f) {
         val originalElevation = view.elevation
         val liftedElevation = originalElevation + elevationIncrease
-        
+
         view.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -172,4 +172,3 @@ object MicroInteractionHelper {
         }
     }
 }
-

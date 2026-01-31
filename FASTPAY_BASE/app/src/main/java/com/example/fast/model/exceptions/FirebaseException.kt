@@ -2,7 +2,7 @@ package com.example.fast.model.exceptions
 
 /**
  * Exception thrown when Firebase operations fail
- * 
+ *
  * Used for errors related to:
  * - Firebase Realtime Database operations
  * - Firebase Storage operations
@@ -15,20 +15,20 @@ class FirebaseException(
     errorCode: String? = null,
     val operation: String? = null
 ) : FastPayException(message, cause, errorCode) {
-    
+
     override fun getUserMessage(): String {
         return when {
-            message?.contains("network", ignoreCase = true) == true -> 
+            message?.contains("network", ignoreCase = true) == true ->
                 "Unable to connect to server. Please check your internet connection."
-            message?.contains("permission", ignoreCase = true) == true -> 
+            message?.contains("permission", ignoreCase = true) == true ->
                 "You don't have permission to perform this operation."
-            message?.contains("timeout", ignoreCase = true) == true -> 
+            message?.contains("timeout", ignoreCase = true) == true ->
                 "The operation took too long. Please try again."
-            else -> 
+            else ->
                 "Failed to sync data. Please try again later."
         }
     }
-    
+
     companion object {
         /**
          * Create a FirebaseException from a generic exception
@@ -40,7 +40,7 @@ class FirebaseException(
                 operation = operation
             )
         }
-        
+
         /**
          * Create a FirebaseException for network errors
          */
@@ -51,7 +51,7 @@ class FirebaseException(
                 operation = operation
             )
         }
-        
+
         /**
          * Create a FirebaseException for timeout errors
          */
@@ -62,7 +62,7 @@ class FirebaseException(
                 operation = operation
             )
         }
-        
+
         /**
          * Create a FirebaseException for permission errors
          */

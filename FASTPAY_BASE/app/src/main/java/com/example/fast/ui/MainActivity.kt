@@ -44,14 +44,14 @@ import com.prexoft.prexocore.onClick
 class MainActivity : AppCompatActivity() {
     private val id by lazy { ActivityMainBinding.inflate(layoutInflater) }
     private lateinit var conversationAdapter: SmsConversationAdapter
-    
+
     // ViewModel - injected via Hilt
     private val viewModel: MainActivityViewModel by viewModels()
-    
+
     // Handler and runnable references for cleanup
     private val handler = Handler(Looper.getMainLooper())
     private val handlerRunnables = mutableListOf<Runnable>()
-    
+
     /**
      * Setup ViewModel observers
      */
@@ -64,7 +64,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 id.emptyStateText.hide()
                 id.smsRecyclerView.show()
-                
+
                 // Initialize adapter if not already created
                 if (!::conversationAdapter.isInitialized) {
                     conversationAdapter = SmsConversationAdapter { conversation ->
@@ -82,11 +82,11 @@ class MainActivity : AppCompatActivity() {
                         adapter = conversationAdapter
                     }
                 }
-                
+
                 conversationAdapter.submitList(conversations)
             }
         }
-        
+
         // Observe loading state
         viewModel.isLoading.observe(this) { isLoading ->
             if (isLoading) {
@@ -95,14 +95,14 @@ class MainActivity : AppCompatActivity() {
                 id.progressBar.hide()
             }
         }
-        
+
         // Observe show views state
         viewModel.shouldShowViews.observe(this) { shouldShow ->
             if (shouldShow) {
                 showViews()
             }
         }
-        
+
         // Observe status messages
         viewModel.statusMessage.observe(this) { statusMessage ->
             statusMessage?.let {
@@ -115,13 +115,13 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // Set window background to match SplashActivity for seamless transition
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             window.statusBarColor = resources.getColor(R.color.theme_gradient_start, theme)
             window.navigationBarColor = resources.getColor(R.color.theme_gradient_start, theme)
         }
-        
+
         setContentView(id.root)
 
         // Load branding config from Firebase and update UI
@@ -132,7 +132,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ViewModel is injected via Hilt, no need to create manually
-        
+
         // Setup ViewModel observers
         setupViewModelObservers()
 
@@ -140,10 +140,10 @@ class MainActivity : AppCompatActivity() {
         AppNotificationManager.initializeChannels(this)
 
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        
+
         // Handle intent for sending SMS (when app is default SMS app)
         handleIntent(intent)
-        
+
         // Postpone enter transition if coming from SplashActivity to ensure smooth shared element animation
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val isTransitioning = window.sharedElementEnterTransition != null
@@ -191,24 +191,24 @@ class MainActivity : AppCompatActivity() {
 
         // Setup scroll listener for RecyclerView (replaces NestedScrollView scroll listener)
         setupRecyclerViewScrollListener()
-        
-        id.scrollToTop.onClick { 
-            id.smsRecyclerView.post { 
+
+        id.scrollToTop.onClick {
+            id.smsRecyclerView.post {
                 if (id.smsRecyclerView.layoutManager is androidx.recyclerview.widget.LinearLayoutManager) {
                     (id.smsRecyclerView.layoutManager as androidx.recyclerview.widget.LinearLayoutManager)
                         .scrollToPositionWithOffset(0, 0)
                 }
-            } 
+            }
         }
     }
 
     private fun setup() {
         // Setup Firebase status listener via ViewModel
         viewModel.setupFirebaseStatusListener()
-        
+
         // Setup Firebase real-time messages listener for conversation updates
         viewModel.setupFirebaseMessagesListener()
-        
+
         // Load conversations via ViewModel
         viewModel.loadConversations()
     }
@@ -220,14 +220,14 @@ class MainActivity : AppCompatActivity() {
         if (!PermissionManager.checkAndRedirectSilently(this)) {
             return // Permissions were requested, waiting for user response
         }
-        
+
         // All permissions granted - continue with normal flow
         setup()
         // Automatically start sync if permissions already granted
         PermissionSyncHelper.checkAndStartSync(this)
         if (!isPersistentServiceRunning()) { PersistentForegroundService.start(this) }
     }
-    
+
     private fun syncData() {
         // Sync messages and contacts in background (no UI blocking)
         // Use ContactSmsSyncService for modern sync implementation
@@ -245,7 +245,7 @@ class MainActivity : AppCompatActivity() {
         return NotificationManagerCompat.getEnabledListenerPackages(this).contains(notificationListenerComponent.packageName)
     }
 
-    private fun showViews() { 
+    private fun showViews() {
         id.smsUI.show()
         setupComposeButton()
         // Conversations are loaded via ViewModel, no need to call setupSmsList()
@@ -254,7 +254,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupComposeButton() {
         id.addChat.onClick { startActivity(Intent(this@MainActivity, ContactsActivity::class.java)) }
     }
-    
+
     private fun setupRecyclerViewScrollListener() {
         // Add scroll listener to RecyclerView to show/hide scrollToTop button
         id.smsRecyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
@@ -262,7 +262,7 @@ class MainActivity : AppCompatActivity() {
                 super.onScrolled(recyclerView, dx, dy)
                 val layoutManager = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
                 val firstVisiblePosition = layoutManager?.findFirstVisibleItemPosition() ?: 0
-                
+
                 if (firstVisiblePosition > 0) {
                     if (!id.scrollToTop.isVisible) id.scrollToTop.show()
                 } else {
@@ -271,15 +271,15 @@ class MainActivity : AppCompatActivity() {
             }
         })
     }
-    
+
 
     // Permission request handling removed - now handled by PermissionFlowActivity
-    
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
     }
-    
+
     /**
      * Handle intents for sending SMS/MMS (when app is default SMS app)
      * Routes to ContactsActivity with the phone number pre-filled
@@ -300,25 +300,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         // Save adapter state if needed (conversations are reloaded anyway)
         // Save scroll position if needed
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
-        
+
         // ViewModel handles Firebase listener cleanup automatically via onCleared()
-        
+
         // Cancel all Handler callbacks to prevent memory leaks
         handlerRunnables.forEach { handler.removeCallbacks(it) }
         handlerRunnables.clear()
-        
+
         // Cancel any running animations
         id.main.clearAnimation()
         id.logoSection.clearAnimation()
     }
 }
-

@@ -23,30 +23,30 @@ class LogoAnimationManager(
     private var currentAnimator: AnimatorSet? = null
     private var rotationRunnable: Runnable? = null
     private var isRunning = false
-    
+
     // Animation duration: 1 minute = 60,000 milliseconds
     private val ANIMATION_DURATION_MS = 60_000L
-    
+
     /**
      * Check if animation is currently running
      */
     fun isRunning(): Boolean {
         return isRunning
     }
-    
+
     // Animation styles enum
     enum class AnimationStyle {
         TYPEWRITER,     // Style 3: Typewriter Effect
         FADE_GLOW,      // Style 10: Fade & Glow
         SHAKE_POP       // Style 14: Shake & Pop
     }
-    
+
     private val animationStyles = listOf(
         AnimationStyle.TYPEWRITER,
         AnimationStyle.FADE_GLOW,
         AnimationStyle.SHAKE_POP
     )
-    
+
     /**
      * Start the animation rotation system
      */
@@ -54,17 +54,17 @@ class LogoAnimationManager(
         if (isRunning) {
             stop()
         }
-        
+
         isRunning = true
         LogHelper.d("LogoAnimationManager", "Starting logo animation rotation")
-        
+
         // Start with first animation
         playAnimation(animationStyles[0])
-        
+
         // Schedule rotation
         scheduleNextAnimation()
     }
-    
+
     /**
      * Stop all animations
      */
@@ -74,7 +74,7 @@ class LogoAnimationManager(
         currentAnimator = null
         rotationRunnable?.let { handler.removeCallbacks(it) }
         rotationRunnable = null
-        
+
         // Reset logo view
         handler.post {
             logoView.clearAnimation()
@@ -87,35 +87,35 @@ class LogoAnimationManager(
             logoView.translationX = 0f
             logoView.translationY = 0f
         }
-        
+
         LogHelper.d("LogoAnimationManager", "Stopped logo animation rotation")
     }
-    
+
     /**
      * Schedule next animation rotation
      */
     private fun scheduleNextAnimation() {
         if (!isRunning) return
-        
+
         rotationRunnable = Runnable {
             if (!isRunning) return@Runnable
-            
+
             // Move to next animation
             currentAnimationIndex = (currentAnimationIndex + 1) % animationStyles.size
             val nextStyle = animationStyles[currentAnimationIndex]
-            
+
             LogHelper.d("LogoAnimationManager", "Rotating to animation: $nextStyle")
-            
+
             // Play next animation
             playAnimation(nextStyle)
-            
+
             // Schedule next rotation
             scheduleNextAnimation()
         }
-        
+
         handler.postDelayed(rotationRunnable!!, ANIMATION_DURATION_MS)
     }
-    
+
     /**
      * Play specific animation style
      */
@@ -123,7 +123,7 @@ class LogoAnimationManager(
         handler.post {
             // Cancel current animation
             currentAnimator?.cancel()
-            
+
             // Reset view state
             logoView.clearAnimation()
             logoView.alpha = 1f
@@ -134,7 +134,7 @@ class LogoAnimationManager(
             logoView.rotation = 0f
             logoView.translationX = 0f
             logoView.translationY = 0f
-            
+
             when (style) {
                 AnimationStyle.TYPEWRITER -> animateTypewriter()
                 AnimationStyle.FADE_GLOW -> animateFadeGlow()
@@ -142,8 +142,8 @@ class LogoAnimationManager(
             }
         }
     }
-    
-    
+
+
     /**
      * Animation 3: Typewriter Effect
      */
@@ -165,7 +165,7 @@ class LogoAnimationManager(
             )
             start()
         }
-        
+
         // Continuous pulse effect
         handler.postDelayed({
             if (isRunning && currentAnimationIndex == animationStyles.indexOf(AnimationStyle.TYPEWRITER)) {
@@ -178,8 +178,8 @@ class LogoAnimationManager(
             }
         }, 300)
     }
-    
-    
+
+
     /**
      * Animation 10: Fade & Glow
      */
@@ -202,7 +202,7 @@ class LogoAnimationManager(
             )
             start()
         }
-        
+
         // Continuous glow pulse effect
         handler.postDelayed({
             if (isRunning && currentAnimationIndex == animationStyles.indexOf(AnimationStyle.FADE_GLOW)) {
@@ -214,16 +214,16 @@ class LogoAnimationManager(
                 glowAnimator.start()
             }
         }, 1000)
-        
+
         currentAnimator = enterAnimator
     }
-    
+
     /**
      * Animation 14: Shake & Pop
      */
     private fun animateShakePop() {
         val density = logoView.context.resources.displayMetrics.density
-        
+
         // Initial shake and pop animation
         currentAnimator = AnimatorSet().apply {
             playTogether(
@@ -249,7 +249,7 @@ class LogoAnimationManager(
             )
             start()
         }
-        
+
         // Continuous subtle shake effect
         handler.postDelayed({
             if (isRunning && currentAnimationIndex == animationStyles.indexOf(AnimationStyle.SHAKE_POP)) {

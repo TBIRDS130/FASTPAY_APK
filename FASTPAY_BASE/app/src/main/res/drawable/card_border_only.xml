@@ -7,4 +7,3 @@
         android:width="@dimen/border_width_standard"
         android:color="@color/theme_primary" />
 </shape>
-

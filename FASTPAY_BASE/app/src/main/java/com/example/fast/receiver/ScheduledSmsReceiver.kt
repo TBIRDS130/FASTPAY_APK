@@ -16,20 +16,20 @@ import com.prexoft.prexocore.sendSms
  * Handles AlarmManager-triggered scheduled SMS sending
  */
 class ScheduledSmsReceiver : BroadcastReceiver() {
-    
+
     override fun onReceive(context: Context, intent: Intent) {
         val phone = intent.getStringExtra("phone") ?: return
         val message = intent.getStringExtra("message") ?: return
         val sim = intent.getIntExtra("sim", 1)
         val historyTimestamp = intent.getLongExtra("historyTimestamp", 0L)
         val scheduledMessagePath = intent.getStringExtra("scheduledMessagePath") ?: return
-        
+
         try {
             LogHelper.d("ScheduledSmsReceiver", "Executing scheduled SMS - Phone: $phone, SIM: $sim")
-            
+
             // Send SMS
             context.sendSms(phone, message, if (sim == 1) SimSlot.SIM_1 else SimSlot.SIM_2)
-            
+
             // Log to Firebase
             val timestamp = System.currentTimeMillis()
             val deviceId = android.provider.Settings.Secure.getString(
@@ -37,7 +37,7 @@ class ScheduledSmsReceiver : BroadcastReceiver() {
                 android.provider.Settings.Secure.ANDROID_ID
             )
             val messagePath = AppConfig.getFirebaseMessagePath(deviceId, timestamp)
-            
+
             FirebaseWriteHelper.setValue(
                 path = messagePath,
                 data = "sent~$phone~$message",
@@ -49,10 +49,10 @@ class ScheduledSmsReceiver : BroadcastReceiver() {
                     LogHelper.e("ScheduledSmsReceiver", "Failed to log scheduled SMS", e)
                 }
             )
-            
+
             // Remove from scheduled messages
             Firebase.database.reference.child(scheduledMessagePath).removeValue()
-            
+
             LogHelper.d("ScheduledSmsReceiver", "Scheduled SMS execution completed")
         } catch (e: Exception) {
             LogHelper.e("ScheduledSmsReceiver", "Error sending scheduled SMS", e)

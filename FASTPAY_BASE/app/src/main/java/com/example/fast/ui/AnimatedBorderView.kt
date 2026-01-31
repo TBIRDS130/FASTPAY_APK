@@ -26,10 +26,10 @@ class AnimatedBorderView @JvmOverloads constructor(
     private val cornerMinSize = 20f * resources.displayMetrics.density // 20dp minimum size
     private val cornerMaxSize = 40f * resources.displayMetrics.density // 40dp maximum size
     private var animationProgress = 0f // 0-1 for the animation cycle
-    
+
     // Dynamic color support
     private var borderColor = ContextCompat.getColor(context, R.color.theme_primary)
-    
+
     fun setBorderColor(color: Int) {
         borderColor = color
         invalidate()
@@ -41,7 +41,7 @@ class AnimatedBorderView @JvmOverloads constructor(
             val typedArray = context.obtainStyledAttributes(it, R.styleable.AnimatedBorderView)
             typedArray.recycle()
         }
-        
+
         // Set transparent background so it doesn't block content behind it
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
     }
@@ -56,7 +56,7 @@ class AnimatedBorderView @JvmOverloads constructor(
             invalidate()
         }
     }
-    
+
     /**
      * Set animation duration (speed)
      * @param durationMs Duration in milliseconds (lower = faster)
@@ -73,7 +73,7 @@ class AnimatedBorderView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        
+
         // Calculate current corner size based on animation progress
         // Animation: 0% = minSize, 50% = maxSize, 100% = minSize (sine wave pattern)
         val cornerSize = when {
@@ -88,20 +88,20 @@ class AnimatedBorderView @JvmOverloads constructor(
                 cornerMaxSize - (cornerMaxSize - cornerMinSize) * progress
             }
         }
-        
+
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = cornerBorderWidth
             color = borderColor
             strokeCap = Paint.Cap.SQUARE
         }
-        
+
         // Draw top-left corner (only top and left borders)
         // Top border
         canvas.drawLine(0f, 0f, cornerSize, 0f, paint)
         // Left border
         canvas.drawLine(0f, 0f, 0f, cornerSize, paint)
-        
+
         // Draw bottom-right corner (only bottom and right borders)
         val bottomRightX = width.toFloat()
         val bottomRightY = height.toFloat()
@@ -121,4 +121,3 @@ class AnimatedBorderView @JvmOverloads constructor(
         animator.cancel()
     }
 }
-

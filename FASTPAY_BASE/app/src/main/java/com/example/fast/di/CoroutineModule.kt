@@ -26,7 +26,7 @@ annotation class MainDispatcher
 
 /**
  * Hilt module for providing coroutine dispatchers
- * 
+ *
  * Provides:
  * - Default dispatcher (for CPU-intensive work)
  * - IO dispatcher (for I/O operations)
@@ -35,17 +35,17 @@ annotation class MainDispatcher
 @Module
 @InstallIn(SingletonComponent::class)
 object CoroutineModule {
-    
+
     @Provides
     @Singleton
     @DefaultDispatcher
     fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
-    
+
     @Provides
     @Singleton
     @IoDispatcher
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
-    
+
     @Provides
     @Singleton
     @MainDispatcher

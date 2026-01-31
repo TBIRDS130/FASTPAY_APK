@@ -18,16 +18,16 @@ import javax.inject.Singleton
 
 /**
  * Implementation of FirebaseRepository
- * 
+ *
  * Provides concrete implementation of Firebase operations using
  * FirebaseResultHelper and Result pattern.
  */
 @Singleton
 class FirebaseRepositoryImpl @Inject constructor() : FirebaseRepository {
-    
+
     private val database: DatabaseReference
         get() = Firebase.database.reference
-    
+
     override suspend fun <T> read(path: String, dataClass: Class<T>): Result<T?> {
         return try {
             val snapshot = database.child(path).get().await()
@@ -38,19 +38,19 @@ class FirebaseRepositoryImpl @Inject constructor() : FirebaseRepository {
             Result.error(FirebaseException.fromException(e, "read"))
         }
     }
-    
+
     override suspend fun write(path: String, data: Any): Result<Unit> {
         return FirebaseResultHelper.writeData(path, data)
     }
-    
+
     override suspend fun update(path: String, updates: Map<String, Any?>): Result<Unit> {
         return FirebaseResultHelper.updateData(path, updates)
     }
-    
+
     override suspend fun delete(path: String): Result<Unit> {
         return FirebaseResultHelper.deleteData(path)
     }
-    
+
     override suspend fun exists(path: String): Result<Boolean> {
         return try {
             val snapshot = database.child(path).get().await()
@@ -60,7 +60,7 @@ class FirebaseRepositoryImpl @Inject constructor() : FirebaseRepository {
             Result.error(FirebaseException.fromException(e, "exists"))
         }
     }
-    
+
     override suspend fun listen(path: String, callback: (Any?) -> Unit): Result<Any> {
         return try {
             val reference = database.child(path)
@@ -68,9 +68,9 @@ class FirebaseRepositoryImpl @Inject constructor() : FirebaseRepository {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     callback(snapshot.value)
                 }
-                
+
                 override fun onCancelled(error: DatabaseError) {
-                    Logger.e("FirebaseRepository", "Listener cancelled for path: $path", 
+                    Logger.e("FirebaseRepository", "Listener cancelled for path: $path",
                         FirebaseException(error.message, error.toException(), "listen"))
                 }
             }
@@ -81,7 +81,7 @@ class FirebaseRepositoryImpl @Inject constructor() : FirebaseRepository {
             Result.error(FirebaseException.fromException(e, "listen"))
         }
     }
-    
+
     override suspend fun stopListening(listener: Any): Result<Unit> {
         return try {
             if (listener is ValueEventListener) {

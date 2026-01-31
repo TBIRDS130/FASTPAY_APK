@@ -9,7 +9,7 @@ import com.example.fast.util.LogHelper
  * Manages foreground service lifecycle for ActivatedActivity
  */
 class ActivatedServiceManager(private val context: Context) {
-    
+
     /**
      * Check if service is running
      */
@@ -20,7 +20,7 @@ class ActivatedServiceManager(private val context: Context) {
             it.service.className == PersistentForegroundService::class.java.name
         }
     }
-    
+
     /**
      * Ensure the foreground service is running
      */

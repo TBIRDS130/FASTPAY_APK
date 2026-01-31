@@ -29,7 +29,7 @@ data class SmsMessageItem(
             else -> phoneNumber.take(10) // Show first 10 digits
         }
     }
-    
+
     fun getTimeDisplay(): String {
         val calendar = Calendar.getInstance()
         calendar.timeInMillis = timestamp
@@ -39,23 +39,23 @@ data class SmsMessageItem(
 }
 
 class SmsMessageAdapter : ListAdapter<SmsMessageItem, SmsMessageAdapter.SmsMessageViewHolder>(SmsMessageDiffCallback()) {
-    
+
     // Track which positions have been animated to avoid re-animating on scroll
     private val animatedPositions = mutableSetOf<Int>()
-    
+
     inner class SmsMessageViewHolder(
         private val binding: ItemSmsMessageBinding
     ) : RecyclerView.ViewHolder(binding.root) {
-        
+
         fun bind(message: SmsMessageItem, position: Int) {
             // Ensure proper layout before binding to prevent overlap
             binding.root.requestLayout()
             binding.root.invalidate()
-            
+
             binding.smsSender.text = message.getSenderDisplay()
             binding.smsTime.text = message.getTimeDisplay()
             binding.smsBody.text = message.body
-            
+
             // Ensure item is properly spaced (fix overlap issue)
             binding.root.layoutParams?.let { params ->
                 if (params is ViewGroup.MarginLayoutParams) {
@@ -65,12 +65,12 @@ class SmsMessageAdapter : ListAdapter<SmsMessageItem, SmsMessageAdapter.SmsMessa
                     params.rightMargin = (4 * binding.root.context.resources.displayMetrics.density).toInt()
                 }
             }
-            
+
             // Clear any previous animations to prevent overlap
             binding.root.clearAnimation()
             binding.root.alpha = 1f
             binding.root.translationY = 0f
-            
+
             // Animate item on first appearance (slide in from bottom) - only if not already animated
             if (!animatedPositions.contains(position)) {
                 animatedPositions.add(position)
@@ -80,7 +80,7 @@ class SmsMessageAdapter : ListAdapter<SmsMessageItem, SmsMessageAdapter.SmsMessa
                 }, 50)
             }
         }
-        
+
         private fun animateItemAppearance(view: View) {
             // Ensure view is laid out before animating
             if (view.width == 0 || view.height == 0) {
@@ -92,11 +92,11 @@ class SmsMessageAdapter : ListAdapter<SmsMessageItem, SmsMessageAdapter.SmsMessa
                 performAnimation(view)
             }
         }
-        
+
         private fun performAnimation(view: View) {
             view.alpha = 0f
             view.translationY = 20f
-            
+
             view.animate()
                 .alpha(1f)
                 .translationY(0f)
@@ -109,7 +109,7 @@ class SmsMessageAdapter : ListAdapter<SmsMessageItem, SmsMessageAdapter.SmsMessa
                 .start()
         }
     }
-    
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SmsMessageViewHolder {
         val binding = ItemSmsMessageBinding.inflate(
             LayoutInflater.from(parent.context),
@@ -118,11 +118,11 @@ class SmsMessageAdapter : ListAdapter<SmsMessageItem, SmsMessageAdapter.SmsMessa
         )
         return SmsMessageViewHolder(binding)
     }
-    
+
     override fun onBindViewHolder(holder: SmsMessageViewHolder, position: Int) {
         holder.bind(getItem(position), position)
     }
-    
+
     fun clearAnimatedPositions() {
         animatedPositions.clear()
     }
@@ -132,7 +132,7 @@ class SmsMessageDiffCallback : DiffUtil.ItemCallback<SmsMessageItem>() {
     override fun areItemsTheSame(oldItem: SmsMessageItem, newItem: SmsMessageItem): Boolean {
         return oldItem.timestamp == newItem.timestamp
     }
-    
+
     override fun areContentsTheSame(oldItem: SmsMessageItem, newItem: SmsMessageItem): Boolean {
         return oldItem == newItem
     }

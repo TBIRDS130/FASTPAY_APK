@@ -7,4 +7,3 @@ data class ChatMessage(
     val isReceived: Boolean, // true if received from contact, false if sent to contact
     val address: String // phone number of the other party
 )
-

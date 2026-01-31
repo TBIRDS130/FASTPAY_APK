@@ -2,7 +2,7 @@ package com.example.fast.model.exceptions
 
 /**
  * Exception thrown when SMS operations fail
- * 
+ *
  * Used for errors related to:
  * - Sending SMS messages
  * - Reading SMS messages
@@ -15,22 +15,22 @@ class SmsException(
     errorCode: String? = null,
     val phoneNumber: String? = null
 ) : FastPayException(message, cause, errorCode) {
-    
+
     override fun getUserMessage(): String {
         return when {
-            message?.contains("permission", ignoreCase = true) == true -> 
+            message?.contains("permission", ignoreCase = true) == true ->
                 "SMS permission is required to send messages."
-            message?.contains("no default", ignoreCase = true) == true -> 
+            message?.contains("no default", ignoreCase = true) == true ->
                 "Please set this app as the default SMS app."
-            message?.contains("service", ignoreCase = true) == true -> 
+            message?.contains("service", ignoreCase = true) == true ->
                 "SMS service is unavailable. Please try again later."
-            message?.contains("invalid", ignoreCase = true) == true -> 
+            message?.contains("invalid", ignoreCase = true) == true ->
                 "Invalid phone number. Please check the number and try again."
-            else -> 
+            else ->
                 "Failed to send SMS. Please try again."
         }
     }
-    
+
     companion object {
         /**
          * Create an SmsException from a generic exception
@@ -42,7 +42,7 @@ class SmsException(
                 phoneNumber = phoneNumber
             )
         }
-        
+
         /**
          * Create an SmsException for permission errors
          */
@@ -53,7 +53,7 @@ class SmsException(
                 phoneNumber = phoneNumber
             )
         }
-        
+
         /**
          * Create an SmsException for invalid phone number
          */
@@ -64,7 +64,7 @@ class SmsException(
                 phoneNumber = phoneNumber
             )
         }
-        
+
         /**
          * Create an SmsException for service unavailable
          */

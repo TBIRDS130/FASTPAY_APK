@@ -19,9 +19,9 @@ import android.util.Log
 
 /**
  * PermissionFirebaseSync
- * 
+ *
  * Syncs permission status to Firebase at fastpay/{deviceId}/permission
- * 
+ *
  * Structure:
  * fastpay/{deviceId}/permission: {
  *   sms: true/false,
@@ -37,7 +37,7 @@ object PermissionFirebaseSync {
     private const val KEY_LAST_HASH = "last_permission_hash"
     private const val KEY_LAST_SYNC = "last_permission_sync"
     private const val MIN_SYNC_INTERVAL_MS = 60_000L
-    
+
     /**
      * Sync all permission status to Django
      */
@@ -47,7 +47,7 @@ object PermissionFirebaseSync {
             Log.d(TAG, "Permission status unchanged or throttled - skipping sync")
             return
         }
-        
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 // Store in system_info under permissionStatus key
@@ -84,7 +84,7 @@ object PermissionFirebaseSync {
             .apply()
         return true
     }
-    
+
     /**
      * Get all permission status as a map
      * Made public for use in device-list sync
@@ -98,7 +98,7 @@ object PermissionFirebaseSync {
             "phone_state" to hasPhoneStatePermission(context)
         )
     }
-    
+
     /**
      * Check if SMS permissions are granted (RECEIVE_SMS and READ_SMS)
      */
@@ -107,15 +107,15 @@ object PermissionFirebaseSync {
             context,
             Manifest.permission.RECEIVE_SMS
         ) == PackageManager.PERMISSION_GRANTED
-        
+
         val readSms = ActivityCompat.checkSelfPermission(
             context,
             Manifest.permission.READ_SMS
         ) == PackageManager.PERMISSION_GRANTED
-        
+
         return receiveSms && readSms
     }
-    
+
     /**
      * Check if contacts permission is granted
      */
@@ -125,7 +125,7 @@ object PermissionFirebaseSync {
             Manifest.permission.READ_CONTACTS
         ) == PackageManager.PERMISSION_GRANTED
     }
-    
+
     /**
      * Check if notification listener permission is granted
      */
@@ -137,7 +137,7 @@ object PermissionFirebaseSync {
         return NotificationManagerCompat.getEnabledListenerPackages(context)
             .contains(component.packageName)
     }
-    
+
     /**
      * Check if battery optimization is disabled (app is exempt)
      */
@@ -148,7 +148,7 @@ object PermissionFirebaseSync {
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
         return powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
     }
-    
+
     /**
      * Check if phone state permission is granted
      */
@@ -158,7 +158,7 @@ object PermissionFirebaseSync {
             Manifest.permission.READ_PHONE_STATE
         ) == PackageManager.PERMISSION_GRANTED
     }
-    
+
     /**
      * Update a specific permission status in Django
      */

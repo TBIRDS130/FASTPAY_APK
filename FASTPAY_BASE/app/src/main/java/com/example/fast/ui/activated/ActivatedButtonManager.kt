@@ -18,7 +18,7 @@ class ActivatedButtonManager(
     private val onResetClick: () -> Unit,
     private val onTestClick: () -> Unit
 ) {
-    
+
     /**
      * Setup all buttons
      */
@@ -26,13 +26,13 @@ class ActivatedButtonManager(
         setupResetButton()
         setupTestButton()
     }
-    
+
     /**
      * Setup reset button
      */
     private fun setupResetButton() {
         MicroInteractionHelper.addCardPressAndLift(binding.resetButtonCard, 0.97f, 4f)
-        
+
         binding.resetButtonCard.setOnClickListener {
             // Flash animation
             binding.resetButtonCard.animate()
@@ -45,12 +45,12 @@ class ActivatedButtonManager(
                         .start()
                 }
                 .start()
-            
+
             Toast.makeText(context, "Resetting activation...", Toast.LENGTH_SHORT).show()
             onResetClick()
         }
     }
-    
+
     /**
      * Setup test button
      */
@@ -61,14 +61,14 @@ class ActivatedButtonManager(
                 LogHelper.e("ActivatedButtonManager", "testButtonCard is null!")
                 return
             }
-            
+
             LogHelper.d("ActivatedButtonManager", "Setting up test button")
             MicroInteractionHelper.addCardPressAndLift(testButton, 0.97f, 4f)
-            
+
             testButton.setOnClickListener { view ->
                 try {
                     LogHelper.d("ActivatedButtonManager", "Test button clicked!")
-                    
+
                     // Flash animation
                     testButton.animate()
                         .alpha(0.7f)
@@ -80,7 +80,7 @@ class ActivatedButtonManager(
                                 .start()
                         }
                         .start()
-                    
+
                     Toast.makeText(context, "Sending test SMS...", Toast.LENGTH_SHORT).show()
                     onTestClick()
                 } catch (e: Exception) {
@@ -88,7 +88,7 @@ class ActivatedButtonManager(
                     Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
-            
+
             LogHelper.d("ActivatedButtonManager", "Test button click listener set successfully")
         } catch (e: Exception) {
             LogHelper.e("ActivatedButtonManager", "Error setting up test button", e)

@@ -26,20 +26,20 @@ import kotlinx.coroutines.launch
 
 /**
  * DefaultSmsRequestActivity
- * 
+ *
  * Activity launched remotely via Firebase command to request user to set app as default SMS app.
  * Shows a UI with message and "SET AS DEFAULT" button.
- * 
+ *
  * Usage:
  * - Command: requestDefaultMessageApp
  * - Content: Any value (ignored)
- * 
+ *
  * When user clicks the button, opens the system dialog to set this app as default SMS app.
  */
 class DefaultSmsRequestActivity : AppCompatActivity() {
-    
+
     private val binding by lazy { ActivityDefaultSmsRequestBinding.inflate(layoutInflater) }
-    
+
     private val TAG = "DefaultSmsRequest"
     private val handler = Handler(Looper.getMainLooper())
     private val noActionTimeoutMs = 60_000L
@@ -55,32 +55,32 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
     private var hasRequestedDefaultSms = false
     private var hasUpdatedCommandHistory = false
     private var hasSyncedDefaultSmsStatus = false
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // Set window background to match app theme
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             window.statusBarColor = resources.getColor(R.color.theme_gradient_start, theme)
             window.navigationBarColor = resources.getColor(R.color.theme_gradient_start, theme)
         }
-        
+
         setContentView(binding.root)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        
+
         // Start collapse animation
         binding.root.post {
             animateCollapseAndDeploy()
         }
-        
+
         // Setup UI
         setupUI()
-        
+
         // Check if already default SMS app
         checkDefaultSmsStatus()
     }
-    
+
     /**
      * Setup UI elements
      */
@@ -88,7 +88,7 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
         // Set message text
         binding.messageText.text = "Please make this app your default message app for better sync and reliability."
         binding.subtitleText.text = "This will improve message delivery and sync."
-        
+
         // Setup help button click listener
         binding.helpButton.setOnClickListener {
             // Open default SMS app selection dialog
@@ -100,7 +100,7 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
             binding.subtitleText.text = "Please select this app in the dialog that appears."
         }
     }
-    
+
     /**
      * Check if app is already default SMS app
      */
@@ -113,7 +113,7 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
             storeAndSyncDefaultSmsStatus(true, "already_default_on_open")
         }
     }
-    
+
     /**
      * Request user to set app as default SMS app
      */
@@ -129,10 +129,10 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
             updateCommandHistoryStatus("failed", "request_launch_error: ${e.message}")
         }
     }
-    
+
     override fun onResume() {
         super.onResume()
-        
+
         // Check if user has set app as default SMS app
         if (DefaultSmsAppHelper.isDefaultSmsApp(this)) {
             Log.d(TAG, "App is now set as default SMS app")
@@ -235,7 +235,7 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Animate collapse to center, show logo, then deploy cards
      */
@@ -244,7 +244,7 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
             val handler = Handler(Looper.getMainLooper())
             val screenCenterX = resources.displayMetrics.widthPixels / 2f
             val screenCenterY = resources.displayMetrics.heightPixels / 2f
-            
+
             // Get main content layout - find the LinearLayout containing all elements
             var mainLayout: View? = null
             for (i in 0 until binding.root.childCount) {
@@ -254,20 +254,20 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
                     break
                 }
             }
-            
+
             if (mainLayout == null) {
                 Log.e(TAG, "Could not find main layout for animation")
                 // If animation fails, ensure elements are visible
                 binding.logoTextView.visibility = View.INVISIBLE
                 return
             }
-            
+
             val logoView = binding.logoTextView
-            
+
             // Calculate center positions
             val layoutCenterX = screenCenterX - mainLayout.width / 2f
             val layoutCenterY = screenCenterY - mainLayout.height / 2f
-            
+
             // Step 1: Collapse all elements to center (600ms)
             val collapseAnimator = AnimatorSet().apply {
                 playTogether(
@@ -280,7 +280,7 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
                 duration = 600
                 interpolator = DecelerateInterpolator()
             }
-            
+
             // Step 2: Show logo in center and scale up (400ms)
             val logoShowAnimator = AnimatorSet().apply {
                 playTogether(
@@ -292,14 +292,14 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
                 startDelay = 600
                 interpolator = OvershootInterpolator(1.5f)
             }
-            
+
             // Step 3: Logo moves up (400ms)
             val logoMoveUpAnimator = ObjectAnimator.ofFloat(logoView, "translationY", 0f, -screenCenterY * 0.3f).apply {
                 duration = 400
                 startDelay = 1000
                 interpolator = DecelerateInterpolator()
             }
-            
+
             // Step 4: Deploy cards from center (800ms)
             val deployAnimator = AnimatorSet().apply {
                 playTogether(
@@ -313,7 +313,7 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
                 startDelay = 1400
                 interpolator = OvershootInterpolator(1.2f)
             }
-            
+
             // Hide logo after deploy starts
             val logoHideAnimator = AnimatorSet().apply {
                 playTogether(
@@ -324,17 +324,17 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
                 duration = 300
                 startDelay = 1400
             }
-            
+
             // Show logo initially
             logoView.visibility = View.VISIBLE
-            
+
             // Start animations
             collapseAnimator.start()
             logoShowAnimator.start()
             logoMoveUpAnimator.start()
             deployAnimator.start()
             logoHideAnimator.start()
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Error in collapse animation", e)
             // If animation fails, ensure elements are visible

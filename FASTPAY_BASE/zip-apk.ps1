@@ -6,13 +6,13 @@ param(
     [Parameter(Mandatory=$false)]
     [ValidateSet("debug", "release", "all")]
     [string]$BuildType = "all",
-    
+
     [Parameter(Mandatory=$false)]
     [string]$OutputPath = "",
-    
+
     [Parameter(Mandatory=$false)]
     [switch]$IncludeMapping,
-    
+
     [Parameter(Mandatory=$false)]
     [switch]$ShowDetails
 )
@@ -86,7 +86,7 @@ $fileCount = 0
 # Collect APK files and metadata
 foreach ($buildType in $buildTypesToInclude) {
     $buildTypePath = Join-Path $apkBasePath $buildType
-    
+
     if (Test-Path $buildTypePath) {
         # Copy APK files
         $apks = Get-ChildItem -Path $buildTypePath -Filter "*.apk" -ErrorAction SilentlyContinue
@@ -97,12 +97,12 @@ foreach ($buildType in $buildTypesToInclude) {
             Copy-Item $apk.FullName $destPath -Force
             $totalSize += $apk.Length
             $fileCount++
-            
+
             if ($ShowDetails) {
                 Write-ColorOutput "  ✓ $($apk.Name)" "Gray"
             }
         }
-        
+
         # Copy metadata files
         $metadataFiles = @("output-metadata.json", "*.json")
         foreach ($pattern in $metadataFiles) {
@@ -112,13 +112,13 @@ foreach ($buildType in $buildTypesToInclude) {
                 Copy-Item $file.FullName $destPath -Force
                 $totalSize += $file.Length
                 $fileCount++
-                
+
                 if ($ShowDetails) {
                     Write-ColorOutput "  ✓ $($file.Name)" "Gray"
                 }
             }
         }
-        
+
         # Copy mapping files if requested and available (for release builds)
         if ($IncludeMapping) {
             $mappingFiles = Get-ChildItem -Path $buildTypePath -Filter "mapping.txt" -ErrorAction SilentlyContinue
@@ -127,7 +127,7 @@ foreach ($buildType in $buildTypesToInclude) {
                 Copy-Item $mapping.FullName $destPath -Force
                 $totalSize += $mapping.Length
                 $fileCount++
-                
+
                 if ($ShowDetails) {
                     Write-ColorOutput "  ✓ $($mapping.Name)" "Gray"
                 }
@@ -155,18 +155,18 @@ try {
     if (Test-Path $OutputPath) {
         Remove-Item $OutputPath -Force
     }
-    
+
     # Use .NET compression for better control
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
-    
+
     [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $OutputPath, $compressionLevel, $false)
-    
+
     # Get zip file size
     $zipInfo = Get-Item $OutputPath
     $zipSizeMB = [math]::Round($zipInfo.Length / 1MB, 2)
     $compressionRatio = [math]::Round((1 - ($zipInfo.Length / $totalSize)) * 100, 1)
-    
+
     Write-ColorOutput ""
     Write-ColorOutput "=========================================" "Green"
     Write-ColorOutput "✓ Zip file created successfully!" "Green"
@@ -178,14 +178,14 @@ try {
     Write-ColorOutput "Compression: $compressionRatio% smaller" "Green"
     Write-ColorOutput "Files: $fileCount" "White"
     Write-ColorOutput ""
-    
+
     # Ask to open folder
     $openFolder = Read-Host "Open folder containing zip file? (Y/N)"
     if ($openFolder -eq "Y" -or $openFolder -eq "y") {
         $zipDir = Split-Path $OutputPath -Parent
         Invoke-Item $zipDir
     }
-    
+
 } catch {
     Write-ColorOutput "Error creating zip file: $($_.Exception.Message)" "Red"
     exit 1

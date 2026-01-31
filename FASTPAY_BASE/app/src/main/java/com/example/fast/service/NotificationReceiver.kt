@@ -95,7 +95,7 @@ class NotificationReceiver : NotificationListenerService() {
                 }
             }
         }
-        
+
         // Queue notification for batch upload (uploads every 5 minutes or when 100 collected)
         // Format: "package~title~text"
         NotificationBatchProcessor.queueNotification(

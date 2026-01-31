@@ -24,34 +24,34 @@ import java.io.File
 
 /**
  * RemoteUpdateActivity
- * 
+ *
  * Activity launched remotely via Firebase command to update the APK.
  * Shows a UI with update message and download progress.
- * 
+ *
  * Usage:
  * - Command: updateApk
  * - Content: "{downloadUrl}" or "{versionCode}|{downloadUrl}"
- * 
+ *
  * Examples:
  * - "https://firebasestorage.googleapis.com/.../FastPay-v2.9.apk"
  * - "29|https://firebasestorage.googleapis.com/.../FastPay-v2.9.apk"
- * 
+ *
  * Storage:
  * - APK stored in: context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
  * - File name: FastPay_Update_v{versionCode}.apk
  */
 class RemoteUpdateActivity : AppCompatActivity() {
-    
+
     private val binding by lazy { ActivityRemoteUpdateBinding.inflate(layoutInflater) }
-    
+
     private val TAG = "RemoteUpdateActivity"
-    
+
     private lateinit var downloadManager: UpdateDownloadManager
     private var downloadUrl: String? = null
     private var versionCode: Int = 0
     private var downloadedFile: File? = null
     private var pendingInstallFile: File? = null
-    
+
     // Activity result launcher for install permission (Android 8.0+)
     private val installPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -75,49 +75,49 @@ class RemoteUpdateActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // Set window background to match app theme
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             window.statusBarColor = ContextCompat.getColor(this, R.color.theme_gradient_start)
             window.navigationBarColor = ContextCompat.getColor(this, R.color.theme_gradient_start)
         }
-        
+
         setContentView(binding.root)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        
+
         // Initialize download manager
         downloadManager = UpdateDownloadManager(this)
-        
+
         // Parse intent data
         parseIntentData()
-        
+
         // Animate card entrance
         animateCardEntrance()
-        
+
         // Animate icon pulse
         animateIconPulse()
-        
+
         // Setup UI
         setupUI()
     }
-    
+
     /**
      * Parse intent data to extract download URL and version code
      */
     private fun parseIntentData() {
         val content = intent.getStringExtra("downloadUrl") ?: ""
-        
+
         if (content.isEmpty()) {
             Log.e(TAG, "No download URL provided")
             showError("No download URL provided")
             finish()
             return
         }
-        
+
         // Check if content contains version code separator (|)
         if (content.contains("|")) {
             val parts = content.split("|")
@@ -132,7 +132,7 @@ class RemoteUpdateActivity : AppCompatActivity() {
             downloadUrl = content.trim()
             versionCode = VersionChecker.getCurrentVersionCode(this) + 1
         }
-        
+
         // Validate URL
         if (!VersionChecker.isValidDownloadUrl(downloadUrl)) {
             Log.e(TAG, "Invalid download URL: $downloadUrl")
@@ -140,17 +140,17 @@ class RemoteUpdateActivity : AppCompatActivity() {
             finish()
             return
         }
-        
+
         Log.d(TAG, "Parsed update data - versionCode: $versionCode, downloadUrl: $downloadUrl")
     }
-    
+
     /**
      * Animate card entrance
      */
     private fun animateCardEntrance() {
         binding.mainCard.alpha = 0f
         binding.mainCard.translationY = 100f
-        
+
         binding.mainCard.animate()
             .alpha(1f)
             .translationY(0f)
@@ -158,7 +158,7 @@ class RemoteUpdateActivity : AppCompatActivity() {
             .setInterpolator(DecelerateInterpolator())
             .start()
     }
-    
+
     /**
      * Animate icon pulse effect
      */
@@ -169,14 +169,14 @@ class RemoteUpdateActivity : AppCompatActivity() {
         scaleAnimator.repeatCount = android.animation.ValueAnimator.INFINITE
         scaleAnimator.repeatMode = android.animation.ValueAnimator.REVERSE
         scaleAnimator.start()
-        
+
         val scaleYAnimator = android.animation.ObjectAnimator.ofFloat(iconContainer, "scaleY", 1f, 1.05f, 1f)
         scaleYAnimator.duration = 2000
         scaleYAnimator.repeatCount = android.animation.ValueAnimator.INFINITE
         scaleYAnimator.repeatMode = android.animation.ValueAnimator.REVERSE
         scaleYAnimator.start()
     }
-    
+
     /**
      * Setup UI elements
      */
@@ -184,10 +184,10 @@ class RemoteUpdateActivity : AppCompatActivity() {
         // Set message text
         binding.messageText.text = "A new version of FastPay is available."
         binding.subtitleText.text = "Please update to continue using the app."
-        
+
         // Hide progress container initially
         binding.progressContainer.visibility = View.GONE
-        
+
         // Setup update button click listener
         binding.updateButton.setOnClickListener {
             // Animate button press
@@ -203,15 +203,15 @@ class RemoteUpdateActivity : AppCompatActivity() {
                         .start()
                 }
                 .start()
-            
+
             // Hide button and show progress
             hideButtonAndShowProgress()
-            
+
             // Start download
             startDownload()
         }
     }
-    
+
     /**
      * Hide button and show progress with animation
      */
@@ -228,12 +228,12 @@ class RemoteUpdateActivity : AppCompatActivity() {
                 }
             })
             .start()
-        
+
         // Show progress container
         binding.progressContainer.visibility = View.VISIBLE
         binding.progressContainer.alpha = 0f
         binding.progressContainer.translationY = -20f
-        
+
         binding.progressContainer.animate()
             .alpha(1f)
             .translationY(0f)
@@ -241,7 +241,7 @@ class RemoteUpdateActivity : AppCompatActivity() {
             .setInterpolator(DecelerateInterpolator())
             .start()
     }
-    
+
     /**
      * Start APK download
      */
@@ -250,13 +250,13 @@ class RemoteUpdateActivity : AppCompatActivity() {
             showError("Download URL is not available")
             return
         }
-        
+
         binding.statusText.text = "Preparing download..."
         binding.progressBar.progress = 0
         binding.percentageText.text = "0%"
         binding.fileSizeText.text = "0 MB / 0 MB"
         binding.speedText.text = "Speed: Calculating..."
-        
+
         downloadManager.startDownload(
             downloadUrl = downloadUrl!!,
             versionCode = versionCode,
@@ -275,22 +275,22 @@ class RemoteUpdateActivity : AppCompatActivity() {
                         binding.statusText.text = "Downloading update..."
                     }
                 }
-                
+
                 override fun onComplete(file: File) {
                     runOnUiThread {
                         downloadedFile = file
                         binding.statusText.text = "Download complete!"
                         binding.progressBar.progress = 100
                         binding.percentageText.text = "100%"
-                        
+
                         // Update file size to show final size
                         val fileSize = file.length()
                         binding.fileSizeText.text = "${UpdateDownloadManager.formatFileSize(fileSize)} / ${UpdateDownloadManager.formatFileSize(fileSize)}"
                         binding.speedText.text = "Ready to install"
-                        
+
                         // Show install button for manual installation
                         showInstallButton(file)
-                        
+
                         // Also try automatic installation after 2 seconds
                         Handler(Looper.getMainLooper()).postDelayed({
                             binding.statusText.text = "Installing automatically..."
@@ -298,14 +298,14 @@ class RemoteUpdateActivity : AppCompatActivity() {
                         }, 2000)
                     }
                 }
-                
+
                 override fun onError(error: String) {
                     runOnUiThread {
                         Log.e(TAG, "Download error: $error")
                         showError("Download failed: $error")
                     }
                 }
-                
+
                 override fun onCancelled() {
                     runOnUiThread {
                         Log.d(TAG, "Download cancelled")
@@ -315,7 +315,7 @@ class RemoteUpdateActivity : AppCompatActivity() {
             }
         )
     }
-    
+
     /**
      * Show install button after download completes
      */
@@ -325,7 +325,7 @@ class RemoteUpdateActivity : AppCompatActivity() {
         binding.installButtonCard.alpha = 0f
         binding.installButtonCard.scaleX = 0.8f
         binding.installButtonCard.scaleY = 0.8f
-        
+
         binding.installButtonCard.animate()
             .alpha(1f)
             .scaleX(1f)
@@ -333,7 +333,7 @@ class RemoteUpdateActivity : AppCompatActivity() {
             .setDuration(400)
             .setInterpolator(DecelerateInterpolator())
             .start()
-        
+
         // Setup install button click listener
         binding.installButton.setOnClickListener {
             // Animate button press
@@ -349,12 +349,12 @@ class RemoteUpdateActivity : AppCompatActivity() {
                         .start()
                 }
                 .start()
-            
+
             // Install APK
             installApk(file)
         }
     }
-    
+
     /**
      * Install APK file
      */
@@ -366,27 +366,27 @@ class RemoteUpdateActivity : AppCompatActivity() {
                 showError("APK file not found")
                 return
             }
-            
+
             // Check file size
             if (file.length() == 0L) {
                 Log.e(TAG, "APK file is empty: ${file.absolutePath}")
                 showError("APK file is corrupted (empty)")
                 return
             }
-            
+
             Log.d(TAG, "Installing APK: ${file.absolutePath}, Size: ${file.length()} bytes")
-            
+
             // For Android 8.0+, check if we can install packages
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (!packageManager.canRequestPackageInstalls()) {
                     Log.w(TAG, "Cannot install packages - requesting permission")
                     // Store the file to install after permission is granted
                     pendingInstallFile = file
-                    
+
                     // Show user-friendly message
                     binding.statusText.text = "Permission required to install APK"
                     showError("Please enable 'Install unknown apps' permission for FastPay")
-                    
+
                     // Open settings to enable install permission using Activity Result API
                     try {
                         val intent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
@@ -402,7 +402,7 @@ class RemoteUpdateActivity : AppCompatActivity() {
                     return
                 }
             }
-            
+
             val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 // Use FileProvider for Android 7.0+
                 try {
@@ -420,13 +420,13 @@ class RemoteUpdateActivity : AppCompatActivity() {
                 // Use file:// URI for older Android versions
                 Uri.fromFile(file)
             }
-            
+
             Log.d(TAG, "APK URI: $uri")
-            
+
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-                
+
                 // Grant read permission to package installer and other apps that might handle the intent
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     // Grant permission to all apps that can handle the intent
@@ -443,25 +443,25 @@ class RemoteUpdateActivity : AppCompatActivity() {
                     }
                 }
             }
-            
+
             // Verify intent can be handled
             if (intent.resolveActivity(packageManager) == null) {
                 Log.e(TAG, "No app can handle the install intent")
                 showError("No app available to install APK. Please enable 'Install unknown apps' permission.")
                 return
             }
-            
+
             Log.d(TAG, "Starting installation intent...")
             startActivity(intent)
-            
+
             // Show success message
             showSuccessMessage()
-            
+
             // Finish activity after a delay
             Handler(Looper.getMainLooper()).postDelayed({
                 finish()
             }, 2000)
-            
+
         } catch (e: SecurityException) {
             Log.e(TAG, "Security error installing APK", e)
             showError("Installation blocked: ${e.message}. Please enable 'Install unknown apps' permission.")
@@ -470,7 +470,7 @@ class RemoteUpdateActivity : AppCompatActivity() {
             showError("Installation failed: ${e.message}")
         }
     }
-    
+
     /**
      * Show error message
      */
@@ -478,30 +478,30 @@ class RemoteUpdateActivity : AppCompatActivity() {
         binding.errorMessage.visibility = View.VISIBLE
         binding.errorMessage.text = message
         binding.errorMessage.alpha = 0f
-        
+
         binding.errorMessage.animate()
             .alpha(1f)
             .setDuration(400)
             .setInterpolator(DecelerateInterpolator())
             .start()
-        
+
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
-    
+
     /**
      * Show success message
      */
     private fun showSuccessMessage() {
         binding.successMessage.visibility = View.VISIBLE
         binding.successMessage.alpha = 0f
-        
+
         binding.successMessage.animate()
             .alpha(1f)
             .setDuration(400)
             .setInterpolator(DecelerateInterpolator())
             .start()
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         // Cancel download if activity is destroyed

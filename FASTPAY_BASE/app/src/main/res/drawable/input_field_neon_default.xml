@@ -4,15 +4,15 @@
     <!-- Modern Cyberpunk Input Field - Default State -->
     <!-- Dark semi-transparent background -->
     <solid android:color="#0D000000" />
-    
+
     <!-- Rounded corners -->
     <corners android:radius="12dp" />
-    
+
     <!-- Neon green border with subtle glow -->
     <stroke
         android:width="2dp"
         android:color="#00ff88" />
-    
+
     <!-- Inner padding -->
     <padding
         android:left="4dp"

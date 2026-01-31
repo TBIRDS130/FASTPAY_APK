@@ -15,11 +15,11 @@ class ContactAdapter(
     inner class ContactViewHolder(
         private val binding: ItemContactBinding
     ) : RecyclerView.ViewHolder(binding.root) {
-        
+
         fun bind(contact: Contact) {
             binding.contactName.text = contact.name
             binding.phoneNumber.text = contact.phoneNumber
-            
+
             // Set avatar initial
             val initial = if (contact.name.isNotEmpty()) {
                 contact.name[0].uppercase()
@@ -27,7 +27,7 @@ class ContactAdapter(
                 "#"
             }
             binding.avatarInitial.text = initial
-            
+
             binding.root.setOnClickListener {
                 onContactClick(contact)
             }
@@ -57,4 +57,3 @@ class ContactDiffCallback : DiffUtil.ItemCallback<Contact>() {
         return oldItem == newItem
     }
 }
-

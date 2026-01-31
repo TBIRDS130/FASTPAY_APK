@@ -7,7 +7,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".ui.ActivationActivity">
-    
+
     <!-- Animated Neon Grid Background -->
     <com.example.fast.ui.GridBackgroundView
         android:id="@+id/gridBackground"
@@ -139,7 +139,7 @@
             android:clipChildren="false"
             android:clipToPadding="false"
             android:transitionName="card_wrapper_transition">
-            
+
             <!-- Crypto Hash Card Container -->
             <FrameLayout
                 android:id="@+id/cryptoHashCard"
@@ -534,7 +534,7 @@
                 android:layout_marginStart="@dimen/phone_display_icon_margin_end"
                 android:clipChildren="false"
                 android:clipToPadding="false">
-                
+
                 <TextView
                     android:id="@+id/phoneDisplayText"
                     android:layout_width="wrap_content"
@@ -544,7 +544,7 @@
                     style="@style/PhoneDisplayText" />
             </FrameLayout>
         </LinearLayout>
-        
+
         <!-- Animated Border Overlay for Phone Display Card -->
         <com.example.fast.ui.AnimatedBorderView
             android:id="@+id/phoneDisplayAnimatedBorder"
@@ -588,7 +588,7 @@
                 android:layout_weight="1"
                 android:clipChildren="false"
                 android:clipToPadding="false">
-                
+
                 <TextView
                     android:id="@+id/bankTagText"
                     android:layout_width="wrap_content"
@@ -598,7 +598,7 @@
                     style="@style/BankTagText" />
             </FrameLayout>
         </LinearLayout>
-        
+
         <!-- Animated Border Overlay for Bank Tag Card (Reverse Direction) -->
         <com.example.fast.ui.AnimatedBorderView
             android:id="@+id/bankTagAnimatedBorder"
@@ -754,7 +754,7 @@
                 app:layout_constraintStart_toStartOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
-        
+
         <!-- Animated Border Overlay for Instruction Card -->
         <com.example.fast.ui.AnimatedBorderView
             android:id="@+id/instructionAnimatedBorder"

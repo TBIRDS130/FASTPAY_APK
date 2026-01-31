@@ -15,12 +15,12 @@ import android.util.Log
 
 /**
  * AppNotificationManager
- * 
+ *
  * Unified notification system that can be triggered from multiple sources:
  * - Firebase commands (remote)
  * - Local app logic
  * - System events
- * 
+ *
  * Features:
  * - Multiple notification channels (alerts, messages, system, instructions)
  * - Action buttons (View, Dismiss, Call, SMS)
@@ -29,28 +29,28 @@ import android.util.Log
  * - Click actions to open specific activities
  */
 object AppNotificationManager {
-    
+
     private const val TAG = "AppNotificationManager"
-    
+
     // Notification Channels
     private const val CHANNEL_ALERTS = "fastpay_alerts"
     private const val CHANNEL_MESSAGES = "fastpay_messages"
     private const val CHANNEL_SYSTEM = "fastpay_system"
     private const val CHANNEL_INSTRUCTIONS = "fastpay_instructions"
-    
+
     // Channel Names
     private const val CHANNEL_NAME_ALERTS = "Alerts"
     private const val CHANNEL_NAME_MESSAGES = "Messages"
     private const val CHANNEL_NAME_SYSTEM = "System"
     private const val CHANNEL_NAME_INSTRUCTIONS = "Instructions"
-    
+
     /**
      * Initialize notification channels (call this in Application or MainActivity)
      */
     fun initializeChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            
+
             // Alerts Channel (Max Priority)
             createChannel(
                 notificationManager,
@@ -59,7 +59,7 @@ object AppNotificationManager {
                 "Urgent alerts and critical notifications",
                 NotificationManager.IMPORTANCE_HIGH
             )
-            
+
             // Messages Channel (Default Priority) - with sound enabled
             createChannel(
                 notificationManager,
@@ -68,7 +68,7 @@ object AppNotificationManager {
                 "Message notifications",
                 NotificationManager.IMPORTANCE_DEFAULT
             )
-            
+
             // System Channel (Default Priority) - changed from LOW to DEFAULT to support sound
             createChannel(
                 notificationManager,
@@ -77,7 +77,7 @@ object AppNotificationManager {
                 "System status notifications",
                 NotificationManager.IMPORTANCE_DEFAULT
             )
-            
+
             // Instructions Channel (High Priority)
             createChannel(
                 notificationManager,
@@ -86,10 +86,10 @@ object AppNotificationManager {
                 "Instruction notifications",
                 NotificationManager.IMPORTANCE_HIGH
             )
-            
+
         }
     }
-    
+
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
     private fun createChannel(
         manager: NotificationManager,
@@ -118,15 +118,15 @@ object AppNotificationManager {
         }
         manager.createNotificationChannel(channel)
     }
-    
+
     /**
      * Show notification from Firebase command
      * Format: "showNotification|{title}|{message}|{channel}|{priority}|{action}"
-     * 
+     *
      * Examples:
      * - "showNotification|Alert|Device needs attention|alerts|high|"
      * - "showNotification|Message|Hello World|messages|default|view_message"
-     * 
+     *
      * Note: Remote command notifications always use sound and vibrate (app will be open)
      */
     fun showNotificationFromCommand(context: Context, commandContent: String) {
@@ -136,27 +136,27 @@ object AppNotificationManager {
                 Log.e(TAG, "Invalid notification command format: $commandContent")
                 return
             }
-            
+
             val title = parts[1]
             val message = parts[2]
             val channel = parts.getOrNull(3) ?: CHANNEL_SYSTEM
             val priority = parts.getOrNull(4) ?: "default"
             val action = parts.getOrNull(5) ?: ""
-            
+
             val channelId = when (channel.lowercase()) {
                 "alerts", "alert" -> CHANNEL_ALERTS
                 "messages", "message" -> CHANNEL_MESSAGES
                 "instructions", "instruction" -> CHANNEL_INSTRUCTIONS
                 else -> CHANNEL_SYSTEM
             }
-            
+
             val priorityLevel = when (priority.lowercase()) {
                 "max", "maximum" -> NotificationPriority.MAX
                 "high" -> NotificationPriority.HIGH
                 "low" -> NotificationPriority.LOW
                 else -> NotificationPriority.DEFAULT
             }
-            
+
             // Show notification with ALWAYS sound and vibrate (remote command)
             showLocalNotificationWithSoundAndVibrate(
                 context = context,
@@ -171,7 +171,7 @@ object AppNotificationManager {
             Log.e(TAG, "Error showing notification from command", e)
         }
     }
-    
+
     /**
      * Show local notification with ALWAYS sound and vibrate
      * Used for remote commands where sound/vibrate is required
@@ -187,13 +187,13 @@ object AppNotificationManager {
         icon: Int = R.mipmap.ic_launcher
     ) {
         val notificationManager = NotificationManagerCompat.from(context)
-        
+
         // Check if notification permission granted
         if (!notificationManager.areNotificationsEnabled()) {
             Log.w(TAG, "Notifications not enabled")
             return
         }
-        
+
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(icon)
             .setContentTitle(title)
@@ -206,7 +206,7 @@ object AppNotificationManager {
             .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
             .setVibrate(longArrayOf(0, 500, 250, 500))
             .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
-        
+
         // Set content intent
         if (intentAction != null) {
             val contentIntent = Intent(context, ActivatedActivity::class.java).apply {
@@ -221,11 +221,11 @@ object AppNotificationManager {
             )
             builder.setContentIntent(pendingContentIntent)
         }
-        
+
         notificationManager.notify(id, builder.build())
         Log.d(TAG, "Notification shown with sound and vibrate: $title")
     }
-    
+
     /**
      * Show local notification
      */
@@ -241,13 +241,13 @@ object AppNotificationManager {
         icon: Int = R.mipmap.ic_launcher
     ) {
         val notificationManager = NotificationManagerCompat.from(context)
-        
+
         // Check if notification permission granted
         if (!notificationManager.areNotificationsEnabled()) {
             Log.w(TAG, "Notifications not enabled")
             return
         }
-        
+
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(icon)
             .setContentTitle(title)
@@ -255,7 +255,7 @@ object AppNotificationManager {
             .setPriority(priority.toAndroidPriority())
             .setAutoCancel(true)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-        
+
         // Add sound and vibration based on priority
         when (priority) {
             NotificationPriority.MAX,
@@ -270,7 +270,7 @@ object AppNotificationManager {
                 // No sound for low priority
             }
         }
-        
+
         // Add actions if provided
         actions?.forEachIndexed { index, action ->
             val actionIntent = Intent(context, NotificationActionReceiver::class.java).apply {
@@ -286,7 +286,7 @@ object AppNotificationManager {
             )
             builder.addAction(action.icon, action.label, pendingIntent)
         }
-        
+
         // Set content intent
         if (intentAction != null) {
             val contentIntent = Intent(context, ActivatedActivity::class.java).apply {
@@ -301,11 +301,11 @@ object AppNotificationManager {
             )
             builder.setContentIntent(pendingContentIntent)
         }
-        
+
         notificationManager.notify(id, builder.build())
         Log.d(TAG, "Notification shown: $title")
     }
-    
+
     /**
      * Show instruction notification
      */
@@ -324,7 +324,7 @@ object AppNotificationManager {
                 data = instructionId
             )
         )
-        
+
         showLocalNotification(
             context = context,
             id = instructionId.hashCode(),
@@ -336,7 +336,7 @@ object AppNotificationManager {
             intentAction = "view_instruction"
         )
     }
-    
+
     /**
      * Show message notification
      */
@@ -355,7 +355,7 @@ object AppNotificationManager {
                 data = phoneNumber
             )
         )
-        
+
         showLocalNotification(
             context = context,
             id = phoneNumber.hashCode(),
@@ -367,7 +367,7 @@ object AppNotificationManager {
             intentAction = "view_message"
         )
     }
-    
+
     /**
      * Show system status notification
      */
@@ -381,7 +381,7 @@ object AppNotificationManager {
             priority = NotificationPriority.LOW
         )
     }
-    
+
     /**
      * Show alert notification (urgent)
      */
@@ -395,14 +395,14 @@ object AppNotificationManager {
             priority = NotificationPriority.HIGH
         )
     }
-    
+
     /**
      * Cancel notification by ID
      */
     fun cancelNotification(context: Context, id: Int) {
         NotificationManagerCompat.from(context).cancel(id)
     }
-    
+
     /**
      * Cancel all notifications
      */
@@ -419,7 +419,7 @@ enum class NotificationPriority {
     DEFAULT,
     HIGH,
     MAX;
-    
+
     fun toAndroidPriority(): Int {
         return when (this) {
             LOW -> NotificationCompat.PRIORITY_LOW

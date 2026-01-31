@@ -224,14 +224,14 @@ class SwipeableCardsAdapter(
             val messageDate = Calendar.getInstance().apply {
                 timeInMillis = timestamp
             }
-            
+
             val today = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0)
                 set(Calendar.MINUTE, 0)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }
-            
+
             val messageDateOnly = Calendar.getInstance().apply {
                 timeInMillis = timestamp
                 set(Calendar.HOUR_OF_DAY, 0)
@@ -239,10 +239,10 @@ class SwipeableCardsAdapter(
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }
-            
+
             val currentYear = now.get(Calendar.YEAR)
             val messageYear = messageDate.get(Calendar.YEAR)
-            
+
             return when {
                 // Today - show time in 24hr format
                 messageDateOnly.timeInMillis == today.timeInMillis -> {

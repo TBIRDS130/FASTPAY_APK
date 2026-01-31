@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    
+
     <!-- Background layer - Dark with slight glow -->
     <item>
         <shape android:shape="rectangle">
@@ -8,7 +8,7 @@
             <corners android:radius="12dp" />
         </shape>
     </item>
-    
+
     <!-- Outer glow layer - Bright neon glow -->
     <item android:left="0dp" android:top="0dp" android:right="0dp" android:bottom="0dp">
         <shape android:shape="rectangle">
@@ -19,7 +19,7 @@
                 android:color="#40ff88" />
         </shape>
     </item>
-    
+
     <!-- Main border - Bright neon green -->
     <item android:left="2dp" android:top="2dp" android:right="2dp" android:bottom="2dp">
         <shape android:shape="rectangle">
@@ -30,7 +30,7 @@
                 android:color="#00ff88" />
         </shape>
     </item>
-    
+
     <!-- Inner glow effect -->
     <item android:left="4dp" android:top="4dp" android:right="4dp" android:bottom="4dp">
         <shape android:shape="rectangle">
@@ -41,5 +41,5 @@
                 android:color="#20ffffff" />
         </shape>
     </item>
-    
+
 </layer-list>

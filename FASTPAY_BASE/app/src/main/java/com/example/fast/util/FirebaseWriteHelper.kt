@@ -5,11 +5,11 @@ import com.google.firebase.database.database
 
 /**
  * FirebaseWriteHelper
- * 
+ *
  * Unified utility for writing data to Firebase Realtime Database.
  * Supports both lightweight heartbeat path and main device path writes
  * without compromising functionality.
- * 
+ *
  * Features:
  * - Consistent error handling and logging
  * - Support for both setValue() and updateChildren() operations
@@ -17,7 +17,7 @@ import com.google.firebase.database.database
  * - Tag-based logging for better debugging
  */
 object FirebaseWriteHelper {
-    
+
     /**
      * Write mode for Firebase operations
      */
@@ -27,10 +27,10 @@ object FirebaseWriteHelper {
         /** Update only specified fields (updateChildren) */
         UPDATE
     }
-    
+
     /**
      * Write data to Firebase at the specified path
-     * 
+     *
      * @param path Firebase path (e.g., "hertbit/{deviceId}" or "fastpay/{deviceId}")
      * @param data Data to write (Map, String, Number, Boolean, etc.)
      * @param mode Write mode: SET (setValue) or UPDATE (updateChildren)
@@ -53,9 +53,9 @@ object FirebaseWriteHelper {
                 WriteMode.UPDATE -> "updateChildren"
             }
             FirebaseCallTracker.trackWrite(path, method, data)
-            
+
             val ref = Firebase.database.reference.child(path)
-            
+
             val task = when (mode) {
                 WriteMode.SET -> ref.setValue(data)
                 WriteMode.UPDATE -> {
@@ -71,7 +71,7 @@ object FirebaseWriteHelper {
                     }
                 }
             }
-            
+
             task.addOnSuccessListener {
                 LogHelper.d(tag, "Successfully wrote to path: $path (mode: $mode)")
                 FirebaseCallTracker.updateCallResponse(path = path, success = true)
@@ -87,10 +87,10 @@ object FirebaseWriteHelper {
             onFailure?.invoke(e)
         }
     }
-    
+
     /**
      * Write data to Firebase using setValue (replaces entire node)
-     * 
+     *
      * Convenience method for SET mode writes
      */
     fun setValue(
@@ -102,12 +102,12 @@ object FirebaseWriteHelper {
     ) {
         write(path, data, WriteMode.SET, tag, onSuccess, onFailure)
     }
-    
+
     /**
      * Update data in Firebase using updateChildren (updates only specified fields)
-     * 
+     *
      * Convenience method for UPDATE mode writes
-     * 
+     *
      * @param path Firebase path
      * @param updates Map of field paths to values to update
      */
@@ -120,14 +120,14 @@ object FirebaseWriteHelper {
     ) {
         write(path, updates, WriteMode.UPDATE, tag, onSuccess, onFailure)
     }
-    
+
     /**
      * Write heartbeat data to both lightweight path and main device path
-     * 
+     *
      * This method handles the dual-path write strategy:
      * - Lightweight heartbeat path: Written every heartbeat interval
      * - Main device path: Written less frequently for backward compatibility
-     * 
+     *
      * @param deviceId Device ID
      * @param timestamp Current timestamp
      * @param batteryPercentage Battery percentage (optional, only written if changed significantly)
@@ -151,19 +151,19 @@ object FirebaseWriteHelper {
         // Prepare lightweight heartbeat data
         val heartbeatPath = "hertbit/$deviceId"
         val heartbeatData = mutableMapOf<String, Any>("t" to timestamp)
-        
+
         // Only include battery if it changed significantly (±1%) or first time
         val shouldWriteBattery = batteryPercentage >= 0 && (
-            lastBatteryPercentage < 0 || 
+            lastBatteryPercentage < 0 ||
             kotlin.math.abs(batteryPercentage - lastBatteryPercentage) >= 1
         )
-        
+
         var updatedBatteryPercentage = lastBatteryPercentage
         if (shouldWriteBattery) {
             heartbeatData["b"] = batteryPercentage
             updatedBatteryPercentage = batteryPercentage
         }
-        
+
         // Write to lightweight heartbeat path (always)
         setValue(
             path = heartbeatPath,
@@ -177,7 +177,7 @@ object FirebaseWriteHelper {
                 LogHelper.e(tag, "Failed to update heartbeat path", e)
             }
         )
-        
+
         // Write to main device path (if needed for backward compatibility)
         if (shouldUpdateMain) {
             val devicePath = "fastpay/$deviceId"
@@ -185,7 +185,7 @@ object FirebaseWriteHelper {
             if (batteryPercentage >= 0) {
                 deviceUpdates["batteryPercentage"] = batteryPercentage
             }
-            
+
             updateChildren(
                 path = devicePath,
                 updates = deviceUpdates,
@@ -199,7 +199,7 @@ object FirebaseWriteHelper {
                 }
             )
         }
-        
+
         return updatedBatteryPercentage
     }
 }

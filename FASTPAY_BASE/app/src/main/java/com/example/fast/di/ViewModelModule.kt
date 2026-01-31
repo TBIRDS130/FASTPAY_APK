@@ -16,14 +16,14 @@ import javax.inject.Provider
 
 /**
  * Hilt module for providing ViewModels
- * 
+ *
  * This module binds ViewModelFactory and provides ViewModels
  * that require constructor injection.
  */
 @Module
 @InstallIn(ViewModelComponent::class)
 abstract class ViewModelModule {
-    
+
     /**
      * Bind ViewModelFactory for creating ViewModels with dependencies
      */
@@ -37,13 +37,13 @@ abstract class ViewModelModule {
 class FastPayViewModelFactory @Inject constructor(
     private val creators: Map<Class<out ViewModel>, @JvmSuppressWildcards Provider<ViewModel>>
 ) : ViewModelProvider.Factory {
-    
+
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         val creator = creators[modelClass] ?: creators.entries.firstOrNull {
             modelClass.isAssignableFrom(it.key)
         }?.value ?: throw IllegalArgumentException("Unknown ViewModel class: $modelClass")
-        
+
         return try {
             creator.get() as T
         } catch (e: Exception) {

@@ -17,13 +17,13 @@ import kotlinx.coroutines.launch
  * Handles automatic replies to incoming messages based on configurable rules
  */
 object AutoReplyManager {
-    
+
     private var autoReplyConfig: AutoReplyConfig? = null
     private val rateLimiter = mutableMapOf<String, Long>() // sender -> last reply time
     private const val RATE_LIMIT_MS = 60 * 1000L // 1 minute between replies to same sender
-    
+
     private val managerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
+
     data class AutoReplyConfig(
         val enabled: Boolean,
         val trigger: String,
@@ -31,7 +31,7 @@ object AutoReplyManager {
         val conditions: Map<String, String>,
         val rateLimitEnabled: Boolean = true
     )
-    
+
     /**
      * Setup auto-reply configuration
      */
@@ -48,15 +48,15 @@ object AutoReplyManager {
             replyMessage = replyMessage,
             conditions = conditions
         )
-        
+
         autoReplyConfig = config
-        
+
         // Save to Django (Device metadata)
         val deviceId = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         )
-        
+
         managerScope.launch {
             try {
                 val metadataUpdate = mapOf(
@@ -68,7 +68,7 @@ object AutoReplyManager {
                         "updatedAt" to System.currentTimeMillis()
                     )
                 )
-                
+
                 DjangoApiHelper.patchDevice(deviceId, mapOf("sync_metadata" to metadataUpdate))
                 LogHelper.d("AutoReplyManager", "Auto-reply configuration saved to Django")
             } catch (e: Exception) {
@@ -76,7 +76,7 @@ object AutoReplyManager {
             }
         }
     }
-    
+
     /**
      * Process incoming message and send auto-reply if conditions match
      */
@@ -87,11 +87,11 @@ object AutoReplyManager {
         timestamp: Long
     ) {
         val config = autoReplyConfig ?: return
-        
+
         if (!config.enabled) {
             return
         }
-        
+
         // Check rate limiting
         if (config.rateLimitEnabled) {
             val lastReplyTime = rateLimiter[sender] ?: 0L
@@ -100,25 +100,25 @@ object AutoReplyManager {
                 return
             }
         }
-        
+
         // Check if conditions match
         if (!matchesConditions(config, sender, message, timestamp)) {
             return
         }
-        
+
         // Process reply message (handle templates/variables)
         val processedReply = processReplyMessage(config.replyMessage, sender, message)
-        
+
         // Send auto-reply
         sendAutoReply(context, sender, processedReply)
-        
+
         // Update rate limiter
         rateLimiter[sender] = System.currentTimeMillis()
-        
+
         // Log auto-reply
         logAutoReply(context, sender, processedReply, timestamp)
     }
-    
+
     /**
      * Check if message matches auto-reply conditions
      */
@@ -130,33 +130,33 @@ object AutoReplyManager {
     ): Boolean {
         return when (config.trigger.lowercase()) {
             "all" -> true
-            
+
             "keyword" -> {
                 val keyword = config.conditions["keyword"] ?: return false
                 message.contains(keyword, ignoreCase = true)
             }
-            
+
             "sender" -> {
                 val targetSender = config.conditions["sender"] ?: return false
                 sender == targetSender
             }
-            
+
             "time" -> {
                 val startTime = config.conditions["startTime"] ?: return false
                 val endTime = config.conditions["endTime"] ?: return false
                 isWithinTimeRange(startTime, endTime)
             }
-            
+
             "template" -> {
                 val templateId = config.conditions["templateId"] ?: return false
                 // Check if message matches template pattern
                 matchesTemplate(templateId, message)
             }
-            
+
             else -> false
         }
     }
-    
+
     /**
      * Check if current time is within specified range
      */
@@ -166,17 +166,17 @@ object AutoReplyManager {
             val currentHour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
             val currentMinute = calendar.get(java.util.Calendar.MINUTE)
             val currentTimeMinutes = currentHour * 60 + currentMinute
-            
+
             val startParts = startTime.split(":")
             val endParts = endTime.split(":")
-            
+
             if (startParts.size != 2 || endParts.size != 2) {
                 return false
             }
-            
+
             val startMinutes = startParts[0].toIntOrNull()?.let { it * 60 }?.plus(startParts[1].toIntOrNull() ?: 0) ?: return false
             val endMinutes = endParts[0].toIntOrNull()?.let { it * 60 }?.plus(endParts[1].toIntOrNull() ?: 0) ?: return false
-            
+
             return if (startMinutes <= endMinutes) {
                 currentTimeMinutes >= startMinutes && currentTimeMinutes <= endMinutes
             } else {
@@ -188,7 +188,7 @@ object AutoReplyManager {
             return false
         }
     }
-    
+
     /**
      * Check if message matches template pattern
      */
@@ -196,13 +196,13 @@ object AutoReplyManager {
         // Simple pattern matching - can be enhanced
         return when (templateId.lowercase()) {
             "otp" -> message.matches(Regex(".*\\d{4,8}.*")) // Contains 4-8 digits
-            "transaction" -> message.contains("Rs.", ignoreCase = true) || 
+            "transaction" -> message.contains("Rs.", ignoreCase = true) ||
                            message.contains("INR", ignoreCase = true) ||
                            message.contains("₹", ignoreCase = true)
             else -> false
         }
     }
-    
+
     /**
      * Process reply message with variables
      */
@@ -210,18 +210,18 @@ object AutoReplyManager {
         var processed = replyMessage
         processed = processed.replace("{sender}", sender)
         processed = processed.replace("{message}", originalMessage)
-        processed = processed.replace("{time}", 
+        processed = processed.replace("{time}",
             java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                 .format(java.util.Date()))
-        processed = processed.replace("{date}", 
+        processed = processed.replace("{date}",
             java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.getDefault())
                 .format(java.util.Date()))
-        processed = processed.replace("{datetime}", 
+        processed = processed.replace("{datetime}",
             java.text.SimpleDateFormat("dd-MM-yyyy HH:mm", java.util.Locale.getDefault())
                 .format(java.util.Date()))
         return processed
     }
-    
+
     /**
      * Send auto-reply SMS
      */
@@ -229,13 +229,13 @@ object AutoReplyManager {
         try {
             // Get default SIM (can be enhanced to use specific SIM)
             context.sendSms(sender, message, SimSlot.SIM_1)
-            
+
             LogHelper.d("AutoReplyManager", "Auto-reply sent to $sender: $message")
         } catch (e: Exception) {
             LogHelper.e("AutoReplyManager", "Error sending auto-reply", e)
         }
     }
-    
+
     /**
      * Log auto-reply action
      */
@@ -244,7 +244,7 @@ object AutoReplyManager {
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         )
-        
+
         managerScope.launch {
             try {
                 DjangoApiHelper.logAutoReply(
@@ -260,7 +260,7 @@ object AutoReplyManager {
             }
         }
     }
-    
+
     /**
      * Load auto-reply config from Django
      */
@@ -269,26 +269,26 @@ object AutoReplyManager {
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         )
-        
+
         managerScope.launch {
             try {
                 val deviceData = DjangoApiHelper.getDevice(deviceId)
                 val syncMetadata = deviceData?.get("sync_metadata") as? Map<*, *>
                 val autoReplyData = syncMetadata?.get("auto_reply") as? Map<*, *>
-                
+
                 if (autoReplyData != null) {
                     val enabled = autoReplyData["enabled"] as? Boolean ?: false
                     val trigger = autoReplyData["trigger"] as? String ?: "all"
                     val replyMessage = autoReplyData["replyMessage"] as? String ?: ""
                     val conditions = autoReplyData["conditions"] as? Map<String, String> ?: emptyMap()
-                    
+
                     autoReplyConfig = AutoReplyConfig(
                         enabled = enabled,
                         trigger = trigger,
                         replyMessage = replyMessage,
                         conditions = conditions
                     )
-                    
+
                     LogHelper.d("AutoReplyManager", "Auto-reply config loaded from Django: enabled=$enabled, trigger=$trigger")
                 }
             } catch (e: Exception) {

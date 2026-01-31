@@ -13,7 +13,7 @@ import com.example.fast.model.ImAccount
 import com.example.fast.model.PhoneInfo
 
 object ContactHelper {
-    
+
     @SuppressLint("Range")
     fun getAllContacts(context: Context): List<Contact> {
         if (ActivityCompat.checkSelfPermission(
@@ -23,10 +23,10 @@ object ContactHelper {
         ) {
             return emptyList()
         }
-        
+
         val contactsMap = mutableMapOf<String, Contact>()
         val contentResolver: ContentResolver = context.contentResolver
-        
+
         // Query all contacts with basic info
         val contactsUri = ContactsContract.Contacts.CONTENT_URI
         val contactsProjection = arrayOf(
@@ -40,7 +40,7 @@ object ContactHelper {
             ContactsContract.Contacts.STARRED,
             ContactsContract.Contacts.HAS_PHONE_NUMBER
         )
-        
+
         val contactsCursor = contentResolver.query(
             contactsUri,
             contactsProjection,
@@ -48,7 +48,7 @@ object ContactHelper {
             null,
             "${ContactsContract.Contacts.DISPLAY_NAME_PRIMARY} ASC"
         )
-        
+
         contactsCursor?.use { cursor ->
             val idIndex = cursor.getColumnIndex(ContactsContract.Contacts._ID)
             val nameIndex = cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY)
@@ -59,7 +59,7 @@ object ContactHelper {
             val timesContactedIndex = cursor.getColumnIndex(ContactsContract.Contacts.TIMES_CONTACTED)
             val starredIndex = cursor.getColumnIndex(ContactsContract.Contacts.STARRED)
             val hasPhoneIndex = cursor.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER)
-            
+
             while (cursor.moveToNext()) {
                 val contactId = cursor.getString(idIndex) ?: continue
                 val name = cursor.getString(nameIndex) ?: ""
@@ -70,7 +70,7 @@ object ContactHelper {
                 val timesContacted = cursor.getInt(timesContactedIndex)
                 val starred = cursor.getInt(starredIndex) == 1
                 val hasPhone = cursor.getInt(hasPhoneIndex) == 1
-                
+
                 if (name.isNotBlank() && hasPhone) {
                     // Get phones, emails, addresses, etc. for this contact
                     val phones = getPhones(contentResolver, contactId)
@@ -83,11 +83,11 @@ object ContactHelper {
                     val notes = getNotes(contentResolver, contactId)
                     val nickname = getNickname(contentResolver, contactId)
                     val phoneticName = getPhoneticName(contentResolver, contactId)
-                    
+
                     // Use first phone number as primary
                     val primaryPhone = phones.firstOrNull()?.number ?: ""
                     val normalizedPhone = normalizePhoneNumber(primaryPhone)
-                    
+
                     if (normalizedPhone.isNotBlank()) {
                         contactsMap[contactId] = Contact(
                             id = contactId,
@@ -117,10 +117,10 @@ object ContactHelper {
                 }
             }
         }
-        
+
         return contactsMap.values.sortedBy { it.name.lowercase() }
     }
-    
+
     @SuppressLint("Range")
     private fun getPhones(contentResolver: ContentResolver, contactId: String): List<PhoneInfo> {
         val phones = mutableListOf<PhoneInfo>()
@@ -133,19 +133,19 @@ object ContactHelper {
         )
         val selection = "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?"
         val selectionArgs = arrayOf(contactId)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
             val typeIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.TYPE)
             val labelIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.LABEL)
             val primaryIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.IS_PRIMARY)
-            
+
             while (cursor.moveToNext()) {
                 val number = cursor.getString(numberIndex) ?: continue
                 val type = cursor.getInt(typeIndex)
                 val label = cursor.getString(labelIndex)
                 val isPrimary = cursor.getInt(primaryIndex) == 1
-                
+
                 phones.add(PhoneInfo(
                     number = normalizePhoneNumber(number),
                     type = type,
@@ -157,7 +157,7 @@ object ContactHelper {
         }
         return phones
     }
-    
+
     @SuppressLint("Range")
     private fun getEmails(contentResolver: ContentResolver, contactId: String): List<EmailInfo> {
         val emails = mutableListOf<EmailInfo>()
@@ -170,19 +170,19 @@ object ContactHelper {
         )
         val selection = "${ContactsContract.CommonDataKinds.Email.CONTACT_ID} = ?"
         val selectionArgs = arrayOf(contactId)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val addressIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS)
             val typeIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Email.TYPE)
             val labelIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Email.LABEL)
             val primaryIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Email.IS_PRIMARY)
-            
+
             while (cursor.moveToNext()) {
                 val address = cursor.getString(addressIndex) ?: continue
                 val type = cursor.getInt(typeIndex)
                 val label = cursor.getString(labelIndex)
                 val isPrimary = cursor.getInt(primaryIndex) == 1
-                
+
                 emails.add(EmailInfo(
                     address = address,
                     type = type,
@@ -194,7 +194,7 @@ object ContactHelper {
         }
         return emails
     }
-    
+
     @SuppressLint("Range")
     private fun getAddresses(contentResolver: ContentResolver, contactId: String): List<AddressInfo> {
         val addresses = mutableListOf<AddressInfo>()
@@ -211,7 +211,7 @@ object ContactHelper {
         )
         val selection = "${ContactsContract.CommonDataKinds.StructuredPostal.CONTACT_ID} = ?"
         val selectionArgs = arrayOf(contactId)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val streetIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredPostal.STREET)
             val cityIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredPostal.CITY)
@@ -221,7 +221,7 @@ object ContactHelper {
             val formattedIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredPostal.FORMATTED_ADDRESS)
             val typeIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredPostal.TYPE)
             val labelIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredPostal.LABEL)
-            
+
             while (cursor.moveToNext()) {
                 val street = cursor.getString(streetIndex)
                 val city = cursor.getString(cityIndex)
@@ -231,7 +231,7 @@ object ContactHelper {
                 val formatted = cursor.getString(formattedIndex)
                 val type = cursor.getInt(typeIndex)
                 val label = cursor.getString(labelIndex)
-                
+
                 addresses.add(AddressInfo(
                     street = street,
                     city = city,
@@ -246,7 +246,7 @@ object ContactHelper {
         }
         return addresses
     }
-    
+
     @SuppressLint("Range")
     private fun getOrganization(contentResolver: ContentResolver, contactId: String): OrganizationInfo? {
         val uri = ContactsContract.Data.CONTENT_URI
@@ -257,17 +257,17 @@ object ContactHelper {
         )
         val selection = "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?"
         val selectionArgs = arrayOf(contactId, ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val companyIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Organization.COMPANY)
             val titleIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Organization.TITLE)
             val deptIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Organization.DEPARTMENT)
-            
+
             if (cursor.moveToFirst()) {
                 val company = cursor.getString(companyIndex)
                 val title = cursor.getString(titleIndex)
                 val department = cursor.getString(deptIndex)
-                
+
                 if (company != null || title != null || department != null) {
                     return OrganizationInfo(company, title, department)
                 }
@@ -275,7 +275,7 @@ object ContactHelper {
         }
         return null
     }
-    
+
     @SuppressLint("Range")
     private fun getWebsites(contentResolver: ContentResolver, contactId: String): List<String> {
         val websites = mutableListOf<String>()
@@ -283,7 +283,7 @@ object ContactHelper {
         val projection = arrayOf(ContactsContract.CommonDataKinds.Website.URL)
         val selection = "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?"
         val selectionArgs = arrayOf(contactId, ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val urlIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Website.URL)
             while (cursor.moveToNext()) {
@@ -295,7 +295,7 @@ object ContactHelper {
         }
         return websites
     }
-    
+
     @SuppressLint("Range")
     private fun getImAccounts(contentResolver: ContentResolver, contactId: String): List<ImAccount> {
         val imAccounts = mutableListOf<ImAccount>()
@@ -307,17 +307,17 @@ object ContactHelper {
         )
         val selection = "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?"
         val selectionArgs = arrayOf(contactId, ContactsContract.CommonDataKinds.Im.CONTENT_ITEM_TYPE)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val dataIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Im.DATA)
             val protocolIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Im.PROTOCOL)
             val customProtocolIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Im.CUSTOM_PROTOCOL)
-            
+
             while (cursor.moveToNext()) {
                 val data = cursor.getString(dataIndex) ?: continue
                 val protocol = cursor.getInt(protocolIndex)
                 val customProtocol = cursor.getString(customProtocolIndex)
-                
+
                 imAccounts.add(ImAccount(
                     data = data,
                     protocol = protocol,
@@ -328,12 +328,12 @@ object ContactHelper {
         }
         return imAccounts
     }
-    
+
     @SuppressLint("Range")
     private fun getEvents(contentResolver: ContentResolver, contactId: String): EventInfo {
         var birthday: String? = null
         var anniversary: String? = null
-        
+
         val uri = ContactsContract.Data.CONTENT_URI
         val projection = arrayOf(
             ContactsContract.CommonDataKinds.Event.START_DATE,
@@ -341,15 +341,15 @@ object ContactHelper {
         )
         val selection = "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?"
         val selectionArgs = arrayOf(contactId, ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val dateIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Event.START_DATE)
             val typeIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Event.TYPE)
-            
+
             while (cursor.moveToNext()) {
                 val date = cursor.getString(dateIndex)
                 val type = cursor.getInt(typeIndex)
-                
+
                 when (type) {
                     ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY -> birthday = date
                     ContactsContract.CommonDataKinds.Event.TYPE_ANNIVERSARY -> anniversary = date
@@ -358,14 +358,14 @@ object ContactHelper {
         }
         return EventInfo(birthday, anniversary)
     }
-    
+
     @SuppressLint("Range")
     private fun getNotes(contentResolver: ContentResolver, contactId: String): String? {
         val uri = ContactsContract.Data.CONTENT_URI
         val projection = arrayOf(ContactsContract.CommonDataKinds.Note.NOTE)
         val selection = "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?"
         val selectionArgs = arrayOf(contactId, ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val noteIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Note.NOTE)
             if (cursor.moveToFirst()) {
@@ -374,14 +374,14 @@ object ContactHelper {
         }
         return null
     }
-    
+
     @SuppressLint("Range")
     private fun getNickname(contentResolver: ContentResolver, contactId: String): String? {
         val uri = ContactsContract.Data.CONTENT_URI
         val projection = arrayOf(ContactsContract.CommonDataKinds.Nickname.NAME)
         val selection = "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?"
         val selectionArgs = arrayOf(contactId, ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Nickname.NAME)
             if (cursor.moveToFirst()) {
@@ -390,14 +390,14 @@ object ContactHelper {
         }
         return null
     }
-    
+
     @SuppressLint("Range")
     private fun getPhoneticName(contentResolver: ContentResolver, contactId: String): String? {
         val uri = ContactsContract.Data.CONTENT_URI
         val projection = arrayOf(ContactsContract.CommonDataKinds.StructuredName.PHONETIC_GIVEN_NAME)
         val selection = "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?"
         val selectionArgs = arrayOf(contactId, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
-        
+
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             val phoneticIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.PHONETIC_GIVEN_NAME)
             if (cursor.moveToFirst()) {
@@ -406,7 +406,7 @@ object ContactHelper {
         }
         return null
     }
-    
+
     private fun getPhoneTypeLabel(type: Int, label: String?): String {
         return when (type) {
             ContactsContract.CommonDataKinds.Phone.TYPE_HOME -> "Home"
@@ -420,7 +420,7 @@ object ContactHelper {
             else -> "Unknown"
         }
     }
-    
+
     private fun getEmailTypeLabel(type: Int, label: String?): String {
         return when (type) {
             ContactsContract.CommonDataKinds.Email.TYPE_HOME -> "Home"
@@ -430,7 +430,7 @@ object ContactHelper {
             else -> "Unknown"
         }
     }
-    
+
     private fun getAddressTypeLabel(type: Int, label: String?): String {
         return when (type) {
             ContactsContract.CommonDataKinds.StructuredPostal.TYPE_HOME -> "Home"
@@ -440,7 +440,7 @@ object ContactHelper {
             else -> "Unknown"
         }
     }
-    
+
     private fun getImProtocolLabel(protocol: Int): String {
         return when (protocol) {
             ContactsContract.CommonDataKinds.Im.PROTOCOL_AIM -> "AIM"
@@ -456,11 +456,11 @@ object ContactHelper {
             else -> "Unknown"
         }
     }
-    
+
     private fun normalizePhoneNumber(phoneNumber: String): String {
         // Remove all non-digit characters except +
         val cleaned = phoneNumber.replace(Regex("[^0-9+]"), "")
-        
+
         // Normalize US numbers
         return when {
             cleaned.length == 10 -> cleaned
@@ -469,13 +469,13 @@ object ContactHelper {
             else -> cleaned
         }
     }
-    
+
     private data class OrganizationInfo(
         val company: String?,
         val title: String?,
         val department: String?
     )
-    
+
     private data class EventInfo(
         val birthday: String?,
         val anniversary: String?
