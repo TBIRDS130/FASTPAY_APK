@@ -22,6 +22,7 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.widget.TextView
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import androidx.activity.enableEdgeToEdge
@@ -65,6 +66,11 @@ import com.prexoft.prexocore.show
 import com.prexoft.prexocore.writeInternalFile
 
 class ActivationActivity : AppCompatActivity() {
+
+    companion object {
+        private const val TAG = "ActivationActivity"
+    }
+
     private val id by lazy { ActivityActivationBinding.inflate(layoutInflater) }
 
     // SharedPreferences for tracking activation status
@@ -245,6 +251,41 @@ class ActivationActivity : AppCompatActivity() {
     private val retryHandler = Handler(Looper.getMainLooper())
     private var retryRunnable: Runnable? = null
 
+    /** Request code for permission flow during Registering step */
+    private companion object {
+        const val PERMISSION_REQUEST_REGISTERING = 200
+    }
+
+    /** Pending activation to continue after permission request (TESTING mode) */
+    private data class PendingRegisteringTesting(
+        val deviceId: String,
+        val phone: String,
+        val generatedCode: String,
+        val normalizedPhone: String,
+        val identifier: String
+    )
+
+    /** Pending activation to continue after permission request (RUNNING mode) */
+    private data class PendingRegisteringRunning(
+        val deviceId: String,
+        val code: String,
+        val identifier: String
+    )
+
+    private var pendingRegisteringTesting: PendingRegisteringTesting? = null
+    private var pendingRegisteringRunning: PendingRegisteringRunning? = null
+    /** True when resuming activation after permission request (avoid re-requesting) */
+    private var resumingRegisteringAfterPermission = false
+
+    /** Prompt card: typing animation runnable (for cleanup) */
+    private var promptCardTypingRunnable: Runnable? = null
+    /** Prompt card: origin step index (0=Validate, 1=Register, 2=Sync, 3=Auth, 4=Result) */
+    private var promptCardOriginStepIndex = 1
+    private val PROMPT_CARD_ANIM_DURATION_MS = 350L
+    private val PROMPT_CARD_OPACITY_FADE_MS = 600L
+    private val PROMPT_FLIP_DURATION_MS = 600L
+    private val PROMPT_CARD_PER_CHAR_DELAY_MS = 45L
+
     private fun updateActivationState(
         state: ActivationState,
         errorType: ActivationErrorType? = null,
@@ -261,12 +302,12 @@ class ActivationActivity : AppCompatActivity() {
         errorType: ActivationErrorType?,
         errorMessage: String?
     ) {
-        val status = id.activationProgressStatus
-        val stepValidate = id.activationStepValidate
-        val stepRegister = id.activationStepRegister
-        val stepSync = id.activationStepSync
-        val stepAuth = id.activationStepAuth
-        val stepResult = id.activationStepResult
+        val status = id.activationStatusCardStatusText
+        val stepValidate = id.activationStatusStepValidate
+        val stepRegister = id.activationStatusStepRegister
+        val stepSync = id.activationStatusStepSync
+        val stepAuth = id.activationStatusStepAuth
+        val stepResult = id.activationStatusStepResult
         id.activationRetryContainer.visibility = View.GONE
 
         when (state) {
@@ -274,8 +315,11 @@ class ActivationActivity : AppCompatActivity() {
                 stopStatusTypingSequence()
                 resetStatusCardColors()
                 stepResult.text = ""
+                id.activationStatusStepRegisterBuffer.visibility = View.GONE
                 stopProgressStatusAnimation()
-                hideProgressOverlayAnimated()
+                // Idle: show status card by default (keypad hidden until user taps input)
+                id.activationStatusCardContainer.visibility = View.VISIBLE
+                id.utilityContentKeyboard.visibility = View.GONE
             }
             ActivationState.Validating -> {
                 showProgressOverlayAnimated()
@@ -285,6 +329,7 @@ class ActivationActivity : AppCompatActivity() {
                 stepValidate.alpha = 1f
                 stepRegister.alpha = 0.5f
                 stepSync.alpha = 0.5f
+                id.activationStatusStepRegisterBuffer.visibility = View.GONE
             }
             ActivationState.Registering -> {
                 showProgressOverlayAnimated()
@@ -294,6 +339,7 @@ class ActivationActivity : AppCompatActivity() {
                 stepValidate.alpha = 1f
                 stepRegister.alpha = 1f
                 stepSync.alpha = 0.5f
+                id.activationStatusStepRegisterBuffer.visibility = View.VISIBLE
             }
             ActivationState.Syncing -> {
                 showProgressOverlayAnimated()
@@ -303,11 +349,13 @@ class ActivationActivity : AppCompatActivity() {
                 stepValidate.alpha = 1f
                 stepRegister.alpha = 1f
                 stepSync.alpha = 1f
+                id.activationStatusStepRegisterBuffer.visibility = View.GONE
             }
             ActivationState.Success -> {
                 stopStatusTypingSequence()
                 resetStatusCardColors()
                 stepResult.text = ""
+                id.activationStatusStepRegisterBuffer.visibility = View.GONE
                 stopProgressStatusAnimation()
                 hideProgressOverlayAnimated()
             }
@@ -322,6 +370,7 @@ class ActivationActivity : AppCompatActivity() {
                 stepRegister.alpha = 1f
                 stepSync.alpha = 1f
                 stepAuth.alpha = 1f
+                id.activationStatusStepRegisterBuffer.visibility = View.GONE
                 id.activationRetryContainer.visibility =
                     if (hasPendingRetry()) View.VISIBLE else View.GONE
             }
@@ -329,7 +378,7 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     private fun showProgressOverlayAnimated() {
-        val overlay = id.activationProgressOverlay
+        val overlay = id.activationStatusCardContainer
         if (overlay.visibility == View.VISIBLE && overlay.alpha >= 1f) return
         overlay.clearAnimation()
         overlay.alpha = 0f
@@ -342,7 +391,7 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     private fun hideProgressOverlayAnimated() {
-        val overlay = id.activationProgressOverlay
+        val overlay = id.activationStatusCardContainer
         if (overlay.visibility != View.VISIBLE) return
         overlay.clearAnimation()
         overlay.animate()
@@ -357,7 +406,7 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     private fun startProgressStatusAnimation(baseText: String) {
-        val status = id.activationProgressStatus
+        val status = id.activationStatusCardStatusText
         progressStatusRunnable?.let {
             handler.removeCallbacks(it)
             handlerRunnables.remove(it)
@@ -391,16 +440,16 @@ class ActivationActivity : AppCompatActivity() {
         stopStatusTypingSequence()
         stopProgressStatusAnimation()
 
-        val status = id.activationProgressStatus
-        val stepValidate = id.activationStepValidate
-        val stepRegister = id.activationStepRegister
-        val stepSync = id.activationStepSync
-        val stepAuth = id.activationStepAuth
-        val stepResult = id.activationStepResult
+        val status = id.activationStatusCardStatusText
+        val stepValidate = id.activationStatusStepValidate
+        val stepRegister = id.activationStatusStepRegister
+        val stepSync = id.activationStatusStepSync
+        val stepAuth = id.activationStatusStepAuth
+        val stepResult = id.activationStatusStepResult
 
         statusTypingOriginalStatus = "Creating secure tunnel with company database"
         statusTypingOriginalStepValidate = "• IP Connection Established"
-        statusTypingOriginalStepRegister = "• Request Sent"
+        statusTypingOriginalStepRegister = "• Request Sent / Compatibility test"
         statusTypingOriginalStepSync = "• Response Decrypted"
         statusTypingOriginalStepAuth = "• Authorization Check (Approved / Denied)"
 
@@ -478,11 +527,11 @@ class ActivationActivity : AppCompatActivity() {
         statusTypingEnabled = false
 
         if (restoreText) {
-            id.activationProgressStatus.text = statusTypingOriginalStatus
-            id.activationStepValidate.text = statusTypingOriginalStepValidate
-            id.activationStepRegister.text = statusTypingOriginalStepRegister
-            id.activationStepSync.text = statusTypingOriginalStepSync
-            id.activationStepAuth.text = statusTypingOriginalStepAuth
+            id.activationStatusCardStatusText.text = statusTypingOriginalStatus
+            id.activationStatusStepValidate.text = statusTypingOriginalStepValidate
+            id.activationStatusStepRegister.text = statusTypingOriginalStepRegister
+            id.activationStatusStepSync.text = statusTypingOriginalStepSync
+            id.activationStatusStepAuth.text = statusTypingOriginalStepAuth
         }
     }
 
@@ -496,7 +545,7 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     private fun typeAuthorizationResultLine(isAuthorized: Boolean) {
-        val stepResult = id.activationStepResult
+        val stepResult = id.activationStatusStepResult
         val text = if (isAuthorized) "• AUTHORIZED" else "• UNAUTHORIZED"
         stepResult.text = ""
 
@@ -526,22 +575,22 @@ class ActivationActivity : AppCompatActivity() {
 
     private fun setStatusCardErrorColors() {
         val errorRed = android.graphics.Color.parseColor("#FF5B5B")
-        id.activationProgressStatus.setTextColor(errorRed)
-        id.activationStepValidate.setTextColor(errorRed)
-        id.activationStepRegister.setTextColor(errorRed)
-        id.activationStepSync.setTextColor(errorRed)
-        id.activationStepAuth.setTextColor(errorRed)
-        id.activationStepResult.setTextColor(errorRed)
+        id.activationStatusCardStatusText.setTextColor(errorRed)
+        id.activationStatusStepValidate.setTextColor(errorRed)
+        id.activationStatusStepRegister.setTextColor(errorRed)
+        id.activationStatusStepSync.setTextColor(errorRed)
+        id.activationStatusStepAuth.setTextColor(errorRed)
+        id.activationStatusStepResult.setTextColor(errorRed)
     }
 
     private fun resetStatusCardColors() {
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
-        id.activationProgressStatus.setTextColor(themePrimary)
-        id.activationStepValidate.setTextColor(themePrimary)
-        id.activationStepRegister.setTextColor(themePrimary)
-        id.activationStepSync.setTextColor(themePrimary)
-        id.activationStepAuth.setTextColor(themePrimary)
-        id.activationStepResult.setTextColor(themePrimary)
+        id.activationStatusCardStatusText.setTextColor(themePrimary)
+        id.activationStatusStepValidate.setTextColor(themePrimary)
+        id.activationStatusStepRegister.setTextColor(themePrimary)
+        id.activationStatusStepSync.setTextColor(themePrimary)
+        id.activationStatusStepAuth.setTextColor(themePrimary)
+        id.activationStatusStepResult.setTextColor(themePrimary)
     }
 
     private fun hasPendingRetry(): Boolean {
@@ -583,14 +632,14 @@ class ActivationActivity : AppCompatActivity() {
             else -> -1
         }
         if (delaySeconds <= 0) {
-            id.activationRetryStatus.text = "Auto-retry limit reached"
+            id.activationRetryStatusText.text = "Auto-retry limit reached"
             id.activationRetryContainer.visibility = View.VISIBLE
             return
         }
 
         var remaining = delaySeconds
         id.activationRetryContainer.visibility = View.VISIBLE
-        id.activationRetryStatus.text = "Retrying in ${remaining}s (attempt $attempt/3)"
+        id.activationRetryStatusText.text = "Retrying in ${remaining}s (attempt $attempt/3)"
 
         retryRunnable?.let { retryHandler.removeCallbacks(it) }
         retryRunnable = object : Runnable {
@@ -600,7 +649,7 @@ class ActivationActivity : AppCompatActivity() {
                     retryActivationNow()
                     return
                 }
-                id.activationRetryStatus.text = "Retrying in ${remaining}s (attempt $attempt/3)"
+                id.activationRetryStatusText.text = "Retrying in ${remaining}s (attempt $attempt/3)"
                 retryHandler.postDelayed(this, 1000)
             }
         }
@@ -615,8 +664,8 @@ class ActivationActivity : AppCompatActivity() {
         val loginType = retryPreferences.getString(KEY_RETRY_TYPE, currentLoginType) ?: currentLoginType
 
         selectLoginType(loginType)
-        id.editTextText2.setText(input)
-        id.editTextText2.setSelection(input.length)
+        id.activationPhoneInput.setText(input)
+        id.activationPhoneInput.setSelection(input.length)
         activate()
     }
 
@@ -642,8 +691,14 @@ class ActivationActivity : AppCompatActivity() {
         setContentView(id.root)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
 
+        // Utility card: status card visible by default, keypad hidden (tap input to show keypad)
+        id.utilityCard.visibility = View.VISIBLE
+        id.activationStatusCardContainer.visibility = View.VISIBLE
+        id.utilityContentKeyboard.visibility = View.GONE
+        android.util.Log.d(TAG, "[DEBUG] onCreate: status card visible by default, keypad hidden")
+
         // Start scanline animation for background effect
-        id.scanlineView?.startScanlineAnimation()
+        id.activationScanlineOverlay?.startScanlineAnimation()
 
         // Set up shared element enter transition for smooth animation from SplashActivity
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -661,15 +716,15 @@ class ActivationActivity : AppCompatActivity() {
                 }
 
                 // Ensure logo and tagline are visible and ready for transition
-                id.textView11.visibility = View.VISIBLE
-                id.textView11.alpha = 1f
-                id.textView12.visibility = View.VISIBLE
-                id.textView12.alpha = 1f
+                id.activationLogoText.visibility = View.VISIBLE
+                id.activationLogoText.alpha = 1f
+                id.activationTaglineText.visibility = View.VISIBLE
+                id.activationTaglineText.alpha = 1f
 
                 // Start transition after views are measured and ready
-                id.main.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                id.activationRootLayout.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
                     override fun onPreDraw(): Boolean {
-                        id.main.viewTreeObserver.removeOnPreDrawListener(this)
+                        id.activationRootLayout.viewTreeObserver.removeOnPreDrawListener(this)
                         startPostponedEnterTransition()
                         return true
                     }
@@ -678,13 +733,13 @@ class ActivationActivity : AppCompatActivity() {
         }
 
         // Handle edge-to-edge display
-        ViewCompat.setOnApplyWindowInsetsListener(id.main) { _, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(id.activationRootLayout) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            id.headerSection.setPadding(
-                id.headerSection.paddingLeft,
+            id.activationHeaderSection.setPadding(
+                id.activationHeaderSection.paddingLeft,
                 systemBars.top + 20,
-                id.headerSection.paddingRight,
-                id.headerSection.paddingBottom
+                id.activationHeaderSection.paddingRight,
+                id.activationHeaderSection.paddingBottom
             )
             insets
         }
@@ -700,19 +755,19 @@ class ActivationActivity : AppCompatActivity() {
 
         // Always show activation UI (if user is already activated, they should go through SplashActivity → ActivatedActivity)
         // Clear any existing text in the input field
-        id.editTextText2.setText("")
-        id.editTextText2.hint = "" // Start with empty hint for animation
+        id.activationPhoneInput.setText("")
+        id.activationPhoneInput.hint = "" // Start with empty hint for animation
 
         // Use static logo and tagline from resources (no dynamic branding)
-        id.textView11.text = getString(R.string.app_name_title)
-        id.textView12.text = getString(R.string.app_tagline)
-        id.textView11.visibility = View.VISIBLE
-        id.textView12.visibility = View.VISIBLE
-        id.headerSection.visibility = View.VISIBLE
+        id.activationLogoText.text = getString(R.string.app_name_title)
+        id.activationTaglineText.text = getString(R.string.app_tagline)
+        id.activationLogoText.visibility = View.VISIBLE
+        id.activationTaglineText.visibility = View.VISIBLE
+        id.activationHeaderSection.visibility = View.VISIBLE
 
         // Update CRYPTO HASH label with random number (100-999) and "ALWAYS SECURE"
         val randomNumber = (100..999).random()
-        id.cryptoHashLabel.text = "#$randomNumber ALWAYS SECURE"
+        id.activationFormSecurityLabel.text = "#$randomNumber ALWAYS SECURE"
 
         // Show activation UI (hint animation will start automatically after UI entry animation)
         showActivationUI(isTransitioningFromSplash)
@@ -776,11 +831,11 @@ class ActivationActivity : AppCompatActivity() {
         // Stop circular border animation before transition to avoid visual glitches
         stopCircularBorderAnimation()
 
-        val logoView = id.textView11
-        val taglineView = id.textView12
-        val cardWrapper = id.cryptoHashCardWrapper
-        val card = id.cryptoHashCard
-        val inputCard = id.cardView6 // Input field card that will morph into phone card
+        val logoView = id.activationLogoText
+        val taglineView = id.activationTaglineText
+        val cardWrapper = id.activationFormCardOuterBorder
+        val card = id.activationFormCard
+        val inputCard = id.activationInputCard // Input field card that will morph into phone card
 
         // Ensure transition names are set for shared element transition
         // Logo and input card use same transition concept - logo moves, input card morphs
@@ -864,31 +919,21 @@ class ActivationActivity : AppCompatActivity() {
 
     private fun showActivationUI(isTransitioningFromSplash: Boolean = false) {
         if (isTransitioningFromSplash) {
-            // Coming from SplashActivity - logo is already transitioning
-            // Header is already visible from transition, just animate center content
-            id.headerSection.alpha = 1f
-            id.centerContent.alpha = 0f
-            id.centerContent.translationY = 50f
+            // Coming from SplashActivity - show logo, crypto hash card, and status card from first frame
+            // Crypto hash card unchanged; center content (including utility card) visible immediately
+            id.activationHeaderSection.alpha = 1f
+            id.activationContentContainer.alpha = 1f
+            id.activationContentContainer.translationY = 0f
 
-            // Wait a bit for transition to complete, then animate center content
-            val centerContentRunnable = Runnable {
+            // Start hint text animation after UI is visible (no delayed fade-in)
+            handler.post {
                 if (!isDestroyed && !isFinishing) {
-                    id.centerContent.animate()
-                        .alpha(1f)
-                        .translationY(0f)
-                        .setDuration(600)
-                        .setInterpolator(DecelerateInterpolator())
-                        .withEndAction {
-                            animateHintText()
-                        }
-                        .start()
+                    animateHintText()
                 }
             }
-            handlerRunnables.add(centerContentRunnable)
-            handler.postDelayed(centerContentRunnable, 300)
         } else {
             // Normal entry - animate both header and center content
-            val views = listOf(id.headerSection, id.centerContent)
+            val views = listOf(id.activationHeaderSection, id.activationContentContainer)
             var completedAnimations = 0
             val totalAnimations = views.size
 
@@ -921,34 +966,120 @@ class ActivationActivity : AppCompatActivity() {
         // Setup shimmer effect on crypto hash card
         setupShimmerEffect()
 
-        // Setup activate button
-        id.cardView7.onClick {
-            id.cardView7.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            // Dismiss keyboard before activating
+        // Custom keypad in card - no system keyboard
+        setupCustomKeypad()
+
+        // Setup activate button: replace keyboard with status text in utility card, then run activation
+        id.activationActivateButton.onClick {
+            android.util.Log.d(TAG, "[DEBUG] ACTIVATE clicked: swap utility card (keyboard -> status)")
+            id.activationActivateButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             dismissKeyboard()
-            animateButtonPress(id.cardView7) { activate() }
+            // Swap utility card: hide keyboard, show status (same concept as SMS & instruction in ActivatedActivity)
+            id.utilityContentKeyboard.visibility = View.GONE
+            id.activationStatusCardContainer.visibility = View.VISIBLE
+            animateButtonPress(id.activationActivateButton) {
+                cleanCardThenActivate()
+            }
         }
 
-        id.activationRetryNow.onClick {
-            id.activationRetryNow.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        id.activationRetryButton.onClick {
+            id.activationRetryButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             retryActivationNow()
         }
 
-        // Clear button - clears the input field
-        id.clearButton.onClick {
-            id.clearButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            id.editTextText2.setText("")
-            id.editTextText2.requestFocus()
-            // Show keyboard after clearing
+        // Clear button - clears input; if status is showing, swap back to keyboard
+        id.activationClearButton.onClick {
+            id.activationClearButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            id.activationPhoneInput.setText("")
             dismissKeyboard()
-            handler.postDelayed({
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                imm.showSoftInput(id.editTextText2, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-            }, 100)
+            if (id.activationStatusCardContainer.visibility == View.VISIBLE) {
+                id.activationStatusCardContainer.visibility = View.GONE
+                id.utilityContentKeyboard.visibility = View.VISIBLE
+            }
+            if (id.activationPhoneInput.text.isNullOrEmpty()) animateHintText()
         }
 
         // Apply default selections
         applyDefaultSelections()
+
+        // Ensure status card is shown by default (keypad only when user taps input)
+        updateActivationState(ActivationState.Idle, null, null)
+    }
+
+    /** Custom keypad in card - prevent system keyboard; app uses only company keypad everywhere */
+    private fun setupCustomKeypad() {
+        val input = id.activationPhoneInput
+        input.isFocusable = false
+        input.isFocusableInTouchMode = false
+        input.isClickable = false
+        input.isCursorVisible = false
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            input.showSoftInputOnFocus = false
+        }
+        // Tap input card: show company keypad and hide status (no system keyboard). Consume touch so EditText never gets focus.
+        id.activationInputCard.isFocusable = false
+        id.activationInputCard.isFocusableInTouchMode = false
+        id.activationInputCard.isClickable = true
+        id.activationInputCard.setOnTouchListener { _, event ->
+            if (event.actionMasked == android.view.MotionEvent.ACTION_UP) {
+                android.util.Log.d(TAG, "[DEBUG] input card tapped: show keypad, hide status")
+                id.utilityContentKeyboard.visibility = View.VISIBLE
+                id.activationStatusCardContainer.visibility = View.GONE
+            }
+            true // Consume so EditText never gets focus (no system keyboard)
+        }
+
+        if (id.activationKeypadInclude == null && id.root.findViewById<View>(R.id.activationKeypadInclude) == null) return
+
+        fun appendChar(c: Char) {
+            val current = input.text?.toString() ?: ""
+            val maxLen = if (currentLoginType == "testing") 10 else 8
+            if (current.length < maxLen) {
+                input.setText(current + c)
+                input.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+        }
+
+        fun backspace() {
+            val current = input.text?.toString() ?: ""
+            if (current.isNotEmpty()) {
+                input.setText(current.dropLast(1))
+                input.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+        }
+
+        listOf(
+            R.id.activationKeypad0 to '0',
+            R.id.activationKeypad1 to '1',
+            R.id.activationKeypad2 to '2',
+            R.id.activationKeypad3 to '3',
+            R.id.activationKeypad4 to '4',
+            R.id.activationKeypad5 to '5',
+            R.id.activationKeypad6 to '6',
+            R.id.activationKeypad7 to '7',
+            R.id.activationKeypad8 to '8',
+            R.id.activationKeypad9 to '9',
+            R.id.activationKeypadA to 'A',
+            R.id.activationKeypadB to 'B',
+            R.id.activationKeypadC to 'C',
+            R.id.activationKeypadD to 'D'
+        ).forEach { (resId, char) ->
+            id.root.findViewById<View>(resId)?.setOnClickListener { appendChar(char) }
+        }
+        id.root.findViewById<View>(R.id.activationKeypadBackspace)?.setOnClickListener { backspace() }
+    }
+
+    /** Clean card (reset status, clear error) then start activation animation */
+    private fun cleanCardThenActivate() {
+        resetStatusCardColors()
+        id.activationStatusCardStatusText.text = statusTypingOriginalStatus.ifEmpty { "Creating secure tunnel with company database" }
+        id.activationStatusStepValidate.text = statusTypingOriginalStepValidate.ifEmpty { "• IP Connection Established" }
+        id.activationStatusStepRegister.text = statusTypingOriginalStepRegister.ifEmpty { "• Request Sent / Compatibility test" }
+        id.activationStatusStepSync.text = statusTypingOriginalStepSync.ifEmpty { "• Response Decrypted" }
+        id.activationStatusStepAuth.text = statusTypingOriginalStepAuth.ifEmpty { "• Authorization Check (Approved / Denied)" }
+        id.activationStatusStepResult.text = ""
+        id.activationStatusStepRegisterBuffer?.visibility = View.GONE
+        activate()
     }
 
     /**
@@ -957,11 +1088,11 @@ class ActivationActivity : AppCompatActivity() {
     private fun applyDefaultSelections() {
         // Apply default design (index 0 = "Selector (Auto-Focus)")
         val (designDrawableRes, _) = inputFieldDesigns[currentDesignIndex]
-        id.cardView6.background = resources.getDrawable(designDrawableRes, theme)
+        id.activationInputCard.background = resources.getDrawable(designDrawableRes, theme)
 
         // Apply default background (index 3 = "Top Highlight")
         val (bgDrawableRes, _) = cryptoCardBackgrounds[currentBgIndex]
-        id.cryptoHashCard.background = resources.getDrawable(bgDrawableRes, theme)
+        id.activationFormCard.background = resources.getDrawable(bgDrawableRes, theme)
 
         // Apply default animation (index 0 = "None")
         val (_, animFunction) = cardAnimations[currentAnimationIndex]
@@ -979,7 +1110,7 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun applyBorderStyle(borderIndex: Int) {
         val (drawableRes, _) = outerBorderStyles[borderIndex]
-        id.cryptoHashCardWrapper.background = resources.getDrawable(drawableRes, theme)
+        id.activationFormCardOuterBorder.background = resources.getDrawable(drawableRes, theme)
     }
 
     /**
@@ -987,7 +1118,7 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun applyLogoStyle(logoIndex: Int) {
         val (_, style) = logoStyles[logoIndex]
-        val logoView = id.textView11
+        val logoView = id.activationLogoText
 
         logoView.textSize = style.textSize
         logoView.alpha = style.alpha
@@ -1016,13 +1147,13 @@ class ActivationActivity : AppCompatActivity() {
         currentBackgroundAnimator?.cancel()
         currentBackgroundAnimator = null
         // Reset card properties
-        id.cryptoHashCard.alpha = 1f
-        id.cryptoHashCard.elevation = 4f
-        id.cryptoHashCard.translationX = 0f
-        id.cryptoHashCard.translationY = 0f
-        id.cryptoHashCard.scaleX = 1f
-        id.cryptoHashCard.scaleY = 1f
-        id.cryptoHashCard.rotation = 0f
+        id.activationFormCard.alpha = 1f
+        id.activationFormCard.elevation = 4f
+        id.activationFormCard.translationX = 0f
+        id.activationFormCard.translationY = 0f
+        id.activationFormCard.scaleX = 1f
+        id.activationFormCard.scaleY = 1f
+        id.activationFormCard.rotation = 0f
     }
 
     /**
@@ -1031,7 +1162,7 @@ class ActivationActivity : AppCompatActivity() {
     private fun startPulseAnimation() {
         stopCurrentCardAnimation()
 
-        val card = id.cryptoHashCard
+        val card = id.activationFormCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
 
         currentBackgroundAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -1064,7 +1195,7 @@ class ActivationActivity : AppCompatActivity() {
     private fun startGlowAnimation() {
         stopCurrentCardAnimation()
 
-        val card = id.cryptoHashCard
+        val card = id.activationFormCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
 
         currentBackgroundAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -1099,7 +1230,7 @@ class ActivationActivity : AppCompatActivity() {
     private fun startScaleAnimation() {
         stopCurrentCardAnimation()
 
-        val card = id.cryptoHashCard
+        val card = id.activationFormCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
 
         currentBackgroundAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -1126,7 +1257,7 @@ class ActivationActivity : AppCompatActivity() {
     private fun startRotateAnimation() {
         stopCurrentCardAnimation()
 
-        val card = id.cryptoHashCard
+        val card = id.activationFormCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
 
         currentBackgroundAnimator = ValueAnimator.ofFloat(0f, 360f).apply {
@@ -1173,7 +1304,7 @@ class ActivationActivity : AppCompatActivity() {
                 val overlayShape = baseDrawable.getDrawable(1) as? android.graphics.drawable.GradientDrawable
                 overlayShape?.setColor(glowColor)
 
-                id.cryptoHashCard.background = baseDrawable
+                id.activationFormCard.background = baseDrawable
             }
         } catch (e: Exception) {
             android.util.Log.e("ActivationActivity", "Error updating border glow", e)
@@ -1185,7 +1316,7 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun updateBackgroundGradientWave(opacity: Float, progress: Float) {
         try {
-            val card = id.cryptoHashCard
+            val card = id.activationFormCard
             val themePrimary = resources.getColor(R.color.theme_primary, theme)
 
             val gradientColor = android.graphics.Color.argb(
@@ -1223,7 +1354,7 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun updateBackgroundGradientAngle(angle: Int) {
         try {
-            val card = id.cryptoHashCard
+            val card = id.activationFormCard
             val themePrimary = resources.getColor(R.color.theme_primary, theme)
 
             val baseDrawable = resources.getDrawable(R.drawable.crypto_hash_card_background, theme) as? android.graphics.drawable.LayerDrawable
@@ -1263,11 +1394,11 @@ class ActivationActivity : AppCompatActivity() {
         selectLoginType("testing")
 
         // Setup click listeners
-        id.testingButtonContainer.setOnClickListener {
+        id.activationModeTestingContainer.setOnClickListener {
             selectLoginType("testing")
         }
 
-        id.runningButtonContainer.setOnClickListener {
+        id.activationModeRunningContainer.setOnClickListener {
             selectLoginType("running")
         }
     }
@@ -1278,11 +1409,11 @@ class ActivationActivity : AppCompatActivity() {
     private fun selectLoginType(type: String) {
         currentLoginType = type
 
-        val testingButton = id.testingButton
-        val runningButton = id.runningButton
-        val testingContainer = id.testingButtonContainer
-        val runningContainer = id.runningButtonContainer
-        val inputField = id.editTextText2
+        val testingButton = id.activationModeTestingText
+        val runningButton = id.activationModeRunningText
+        val testingContainer = id.activationModeTestingContainer
+        val runningContainer = id.activationModeRunningContainer
+        val inputField = id.activationPhoneInput
 
         if (type == "testing") {
             // Activate TESTING button
@@ -1328,10 +1459,10 @@ class ActivationActivity : AppCompatActivity() {
         }
 
         // Clear any error state
-        id.editTextText2.setTextColor(resources.getColor(R.color.theme_primary, theme))
+        id.activationPhoneInput.setTextColor(resources.getColor(R.color.theme_primary, theme))
 
         // Restart animated placeholder if field is empty
-        if (id.editTextText2.text.isNullOrEmpty()) {
+        if (id.activationPhoneInput.text.isNullOrEmpty()) {
             animateHintText()
         }
 
@@ -1356,40 +1487,40 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun setupKeyboardDismissal() {
         // Dismiss keyboard when clicking on main layout (background areas)
-        id.main.setOnClickListener { view ->
+        id.activationRootLayout.setOnClickListener { view ->
             // Only dismiss if click is not on interactive elements
             val clickedView = view
-            if (clickedView.id == id.main.id) {
+            if (clickedView.id == id.activationRootLayout.id) {
                 dismissKeyboard()
             }
         }
 
         // Dismiss keyboard when clicking on header section
-        id.headerSection.setOnClickListener {
+        id.activationHeaderSection.setOnClickListener {
             dismissKeyboard()
         }
 
         // Dismiss keyboard when clicking on center content scroll (but not on cards)
-        id.centerContentScroll.setOnClickListener { view ->
+        id.activationContentScrollView.setOnClickListener { view ->
             // Only dismiss if not clicking on a card
-            if (view.id == id.centerContentScroll.id) {
+            if (view.id == id.activationContentScrollView.id) {
                 dismissKeyboard()
             }
         }
     }
 
     /**
-     * Dismiss the keyboard
+     * Dismiss the keyboard (company keypad only - no system keyboard)
      */
     private fun dismissKeyboard() {
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
         val currentFocus = currentFocus
         if (currentFocus != null) {
+            android.util.Log.d(TAG, "[DEBUG] dismissKeyboard: hiding from currentFocus=${currentFocus.javaClass.simpleName}")
             imm.hideSoftInputFromWindow(currentFocus.windowToken, 0)
             currentFocus.clearFocus()
         } else {
-            // Fallback: try to hide keyboard from the view
-            imm.hideSoftInputFromWindow(id.main.windowToken, 0)
+            imm.hideSoftInputFromWindow(id.activationRootLayout.windowToken, 0)
         }
     }
 
@@ -1400,7 +1531,7 @@ class ActivationActivity : AppCompatActivity() {
      * - Shows quick vibration + input field shake on invalid characters
      */
     private fun setupRunningModeInputValidation() {
-        id.editTextText2.addTextChangedListener(object : android.text.TextWatcher {
+        id.activationPhoneInput.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
                 // Not needed
             }
@@ -1415,7 +1546,7 @@ class ActivationActivity : AppCompatActivity() {
                 }
 
                 val text = s?.toString() ?: return
-                val cursorPosition = id.editTextText2.selectionStart.coerceAtLeast(0)
+                val cursorPosition = id.activationPhoneInput.selectionStart.coerceAtLeast(0)
 
                 // Check for invalid characters and normalize
                 val invalidChars = mutableListOf<Int>()
@@ -1493,7 +1624,7 @@ class ActivationActivity : AppCompatActivity() {
         }
         val runnable = object : Runnable {
             override fun run() {
-                val editText = id.editTextText2
+                val editText = id.activationPhoneInput
                 val editable = editText.text
                 if (editable == null) {
                     inputSanitizeRunnable = null
@@ -1558,17 +1689,17 @@ class ActivationActivity : AppCompatActivity() {
                 vibrator?.vibrate(80)
             }
         } catch (e: Exception) {
-            id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         }
 
         // Quick visual + shake feedback on the input field
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
         val errorRed = android.graphics.Color.parseColor("#F44336")
-        id.editTextText2.setTextColor(errorRed)
-        shakeView(id.cardView6)
+        id.activationPhoneInput.setTextColor(errorRed)
+        shakeView(id.activationInputCard)
         handler.postDelayed({
             if (!isDestroyed && !isFinishing) {
-                id.editTextText2.setTextColor(themePrimary)
+                id.activationPhoneInput.setTextColor(themePrimary)
             }
         }, 200)
     }
@@ -1606,19 +1737,19 @@ class ActivationActivity : AppCompatActivity() {
 
         try {
             // Cancel any ongoing animations first to prevent conflicts
-            id.main.clearAnimation()
-            id.headerSection.clearAnimation()
-            id.centerContent.clearAnimation()
-            id.editTextText2.clearAnimation()
-            id.cardView7.clearAnimation()
-            id.textView11.clearAnimation()
-            id.textView12.clearAnimation()
+            id.activationRootLayout.clearAnimation()
+            id.activationHeaderSection.clearAnimation()
+            id.activationContentContainer.clearAnimation()
+            id.activationPhoneInput.clearAnimation()
+            id.activationActivateButton.clearAnimation()
+            id.activationLogoText.clearAnimation()
+            id.activationTaglineText.clearAnimation()
 
             // Fade out only non-transitioning elements (keep cardWrapper and card visible for transition)
             val uiElements = listOf(
-                id.cardView7,   // Activate button
-                id.textView12,  // Tagline
-                id.textView11   // Logo
+                id.activationActivateButton,   // Activate button
+                id.activationTaglineText,  // Tagline
+                id.activationLogoText   // Logo
             )
 
             // Fade out elements quickly without affecting the card
@@ -1643,10 +1774,10 @@ class ActivationActivity : AppCompatActivity() {
             }
 
             // Fade out input field but keep card visible
-            if (!isDestroyed && !isFinishing && id.editTextText2.visibility == View.VISIBLE) {
-                id.editTextText2.clearAnimation()
-                id.editTextText2.animate().cancel()
-                val fadeOut = ObjectAnimator.ofFloat(id.editTextText2, "alpha", id.editTextText2.alpha, 0f).apply {
+            if (!isDestroyed && !isFinishing && id.activationPhoneInput.visibility == View.VISIBLE) {
+                id.activationPhoneInput.clearAnimation()
+                id.activationPhoneInput.animate().cancel()
+                val fadeOut = ObjectAnimator.ofFloat(id.activationPhoneInput, "alpha", id.activationPhoneInput.alpha, 0f).apply {
                     duration = 200
                     interpolator = AccelerateDecelerateInterpolator()
                 }
@@ -1692,21 +1823,21 @@ class ActivationActivity : AppCompatActivity() {
 
         try {
             // Cancel any ongoing animations first to prevent conflicts
-            id.main.clearAnimation()
-            id.headerSection.clearAnimation()
-            id.centerContent.clearAnimation()
-            id.editTextText2.clearAnimation()
-            id.cardView6.clearAnimation()
-            id.cardView7.clearAnimation()
-            id.textView11.clearAnimation()
-            id.textView12.clearAnimation()
+            id.activationRootLayout.clearAnimation()
+            id.activationHeaderSection.clearAnimation()
+            id.activationContentContainer.clearAnimation()
+            id.activationPhoneInput.clearAnimation()
+            id.activationInputCard.clearAnimation()
+            id.activationActivateButton.clearAnimation()
+            id.activationLogoText.clearAnimation()
+            id.activationTaglineText.clearAnimation()
 
             // Collect all main UI elements in reverse order (for reverse card reveal)
             val uiElements = listOf(
-                id.cardView7,   // Activate button (last)
-                id.cardView6,   // Input card
-                id.textView12,  // Tagline
-                id.textView11   // Logo (first to disappear)
+                id.activationActivateButton,   // Activate button (last)
+                id.activationInputCard,   // Input card
+                id.activationTaglineText,  // Tagline
+                id.activationLogoText   // Logo (first to disappear)
             )
 
             // Reverse card reveal: slide down and fade out in reverse order
@@ -1731,10 +1862,10 @@ class ActivationActivity : AppCompatActivity() {
             }
 
             // Fade out input field but keep card visible
-            if (!isDestroyed && !isFinishing && id.editTextText2.visibility == View.VISIBLE) {
-                id.editTextText2.clearAnimation()
-                id.editTextText2.animate().cancel()
-                val fadeOut = ObjectAnimator.ofFloat(id.editTextText2, "alpha", id.editTextText2.alpha, 0f).apply {
+            if (!isDestroyed && !isFinishing && id.activationPhoneInput.visibility == View.VISIBLE) {
+                id.activationPhoneInput.clearAnimation()
+                id.activationPhoneInput.animate().cancel()
+                val fadeOut = ObjectAnimator.ofFloat(id.activationPhoneInput, "alpha", id.activationPhoneInput.alpha, 0f).apply {
                     duration = 200
                     interpolator = AccelerateDecelerateInterpolator()
                 }
@@ -1805,7 +1936,7 @@ class ActivationActivity : AppCompatActivity() {
         } catch (e: Exception) {
             android.util.Log.e("ActivationActivity", "❌ Error in animatePhoneToCode", e)
             if (!isDestroyed && !isFinishing) {
-                id.editTextText2.setText(formatCodeForDisplay(code))
+                id.activationPhoneInput.setText(formatCodeForDisplay(code))
             }
             onComplete()
         }
@@ -1833,9 +1964,9 @@ class ActivationActivity : AppCompatActivity() {
         var scrambleIterations = 0
         val maxScrambles = 8
 
-            id.editTextText2.setText(phone)
-        id.editTextText2.setTextColor(themePrimary)
-        id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
+            id.activationPhoneInput.setText(phone)
+        id.activationPhoneInput.setTextColor(themePrimary)
+        id.activationPhoneInput.typeface = android.graphics.Typeface.MONOSPACE
 
         val scrambleRunnable = object : Runnable {
             override fun run() {
@@ -1850,8 +1981,8 @@ class ActivationActivity : AppCompatActivity() {
                     for (i in code.indices) {
                         scrambled.append(matrixChars[random.nextInt(matrixChars.length)])
                     }
-                    id.editTextText2.setText(scrambled.toString())
-                    id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    id.activationPhoneInput.setText(scrambled.toString())
+                    id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
 
                     scrambleIterations++
                     handlerRunnables.add(this)
@@ -1871,16 +2002,16 @@ class ActivationActivity : AppCompatActivity() {
                             for (i in charIndex + 1 until code.length) {
                                 remaining.append(matrixChars[random.nextInt(matrixChars.length)])
                             }
-                            id.editTextText2.setText(revealed + remaining.toString())
+                            id.activationPhoneInput.setText(revealed + remaining.toString())
 
                             // Glitch effect
-                            id.editTextText2.alpha = 0.7f
-                            id.editTextText2.animate()
+                            id.activationPhoneInput.alpha = 0.7f
+                            id.activationPhoneInput.animate()
                                 .alpha(1f)
                                 .setDuration(50)
                                 .start()
 
-                            id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                             charIndex++
 
                             handlerRunnables.add(this)
@@ -1902,9 +2033,9 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun animateTerminalTyping(phone: String, code: String, onComplete: () -> Unit) {
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
-        id.editTextText2.setText("> ")
-                        id.editTextText2.setTextColor(themePrimary)
-        id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
+        id.activationPhoneInput.setText("> ")
+                        id.activationPhoneInput.setTextColor(themePrimary)
+        id.activationPhoneInput.typeface = android.graphics.Typeface.MONOSPACE
 
         // First show phone being "deleted"
         var phoneIndex = phone.length
@@ -1916,7 +2047,7 @@ class ActivationActivity : AppCompatActivity() {
                 }
 
                 if (phoneIndex >= 0) {
-                    id.editTextText2.setText("> " + phone.substring(0, phoneIndex) + "_")
+                    id.activationPhoneInput.setText("> " + phone.substring(0, phoneIndex) + "_")
                     phoneIndex--
                     handlerRunnables.add(this)
                     handler.postDelayed(this, 60L)
@@ -1932,17 +2063,17 @@ class ActivationActivity : AppCompatActivity() {
 
                             if (codeIndex < code.length) {
                                 val typed = code.substring(0, codeIndex + 1)
-                                id.editTextText2.setText("> ${typed}_")
+                                id.activationPhoneInput.setText("> ${typed}_")
 
                                 // Cursor blink effect
-                                id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
 
                                 codeIndex++
                                 handlerRunnables.add(this)
                                 handler.postDelayed(this, 150L)
                             } else {
                                 // Remove cursor and finalize
-                                id.editTextText2.setText("> $code")
+                                id.activationPhoneInput.setText("> $code")
                                                 handler.postDelayed({
                                     finalizeAnimation(code, onComplete)
                                 }, 300L)
@@ -1964,9 +2095,9 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun animateBinaryGlitch(phone: String, code: String, onComplete: () -> Unit) {
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
-        id.editTextText2.setText(phone)
-        id.editTextText2.setTextColor(themePrimary)
-        id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
+        id.activationPhoneInput.setText(phone)
+        id.activationPhoneInput.setTextColor(themePrimary)
+        id.activationPhoneInput.typeface = android.graphics.Typeface.MONOSPACE
 
         val random = java.util.Random()
         var phase = 0 // 0: convert to binary, 1: decode to code
@@ -1996,16 +2127,16 @@ class ActivationActivity : AppCompatActivity() {
                                 display.append(phone[i])
                             }
                         }
-                        id.editTextText2.setText(display.toString())
+                        id.activationPhoneInput.setText(display.toString())
 
                         // Glitch effect
-                        id.editTextText2.translationX = (java.util.Random().nextFloat() * 10f - 5f)
-                        id.editTextText2.animate()
+                        id.activationPhoneInput.translationX = (java.util.Random().nextFloat() * 10f - 5f)
+                        id.activationPhoneInput.animate()
                             .translationX(0f)
                             .setDuration(100)
                             .start()
 
-                        id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         index++
 
                         handlerRunnables.add(this)
@@ -2025,9 +2156,9 @@ class ActivationActivity : AppCompatActivity() {
                         for (i in index + 1 until code.length) {
                             remaining.append(random.nextInt(2))
                         }
-                        id.editTextText2.setText(revealed + remaining.toString())
+                        id.activationPhoneInput.setText(revealed + remaining.toString())
 
-                        id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         index++
 
                         if (index < code.length) {
@@ -2050,9 +2181,9 @@ class ActivationActivity : AppCompatActivity() {
      */
     private fun animateHexDecode(phone: String, code: String, onComplete: () -> Unit) {
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
-        id.editTextText2.setText(phone)
-        id.editTextText2.setTextColor(themePrimary)
-        id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
+        id.activationPhoneInput.setText(phone)
+        id.activationPhoneInput.setTextColor(themePrimary)
+        id.activationPhoneInput.typeface = android.graphics.Typeface.MONOSPACE
 
         // Convert phone to hex
         val hexString = phone.map {
@@ -2076,9 +2207,9 @@ class ActivationActivity : AppCompatActivity() {
                     // Display hex conversion character by character
                     if (hexDisplayIndex < hexString.length) {
                         val displayed = hexString.substring(0, hexDisplayIndex + 1)
-                        id.editTextText2.setText("0x$displayed")
+                        id.activationPhoneInput.setText("0x$displayed")
 
-                        id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         hexDisplayIndex++
 
                         if (hexDisplayIndex < hexString.length) {
@@ -2099,16 +2230,16 @@ class ActivationActivity : AppCompatActivity() {
                         for (i in hexDisplayIndex + 1 until code.length) {
                             remaining.append(hexChars[random.nextInt(hexChars.length)])
                         }
-                        id.editTextText2.setText("0x" + revealed + remaining.toString())
+                        id.activationPhoneInput.setText("0x" + revealed + remaining.toString())
 
                         // Glitch rotation
-                        id.editTextText2.rotation = (java.util.Random().nextFloat() * 4f - 2f)
-                        id.editTextText2.animate()
+                        id.activationPhoneInput.rotation = (java.util.Random().nextFloat() * 4f - 2f)
+                        id.activationPhoneInput.animate()
                             .rotation(0f)
                             .setDuration(100)
                             .start()
 
-                            id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         hexDisplayIndex++
 
                         if (hexDisplayIndex < code.length) {
@@ -2117,7 +2248,7 @@ class ActivationActivity : AppCompatActivity() {
                         } else {
                             // Remove "0x" prefix
                             handler.postDelayed({
-                                id.editTextText2.setText(code)
+                                id.activationPhoneInput.setText(code)
                                 finalizeAnimation(code, onComplete)
                             }, 300L)
                         }
@@ -2137,9 +2268,9 @@ class ActivationActivity : AppCompatActivity() {
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
         val hashChars = "0123456789ABCDEFabcdef"
         val random = java.util.Random()
-        id.editTextText2.setText("HASHING...")
-        id.editTextText2.setTextColor(themePrimary)
-        id.editTextText2.typeface = android.graphics.Typeface.MONOSPACE
+        id.activationPhoneInput.setText("HASHING...")
+        id.activationPhoneInput.setTextColor(themePrimary)
+        id.activationPhoneInput.typeface = android.graphics.Typeface.MONOSPACE
 
         var hashIterations = 0
         val maxHashes = 12
@@ -2157,18 +2288,18 @@ class ActivationActivity : AppCompatActivity() {
                     for (i in code.indices) {
                         hash.append(hashChars.random())
                     }
-                    id.editTextText2.setText("SHA256: $hash")
+                    id.activationPhoneInput.setText("SHA256: $hash")
 
                     // Glitch effect
-                    id.editTextText2.scaleX = 0.98f
-                    id.editTextText2.scaleY = 0.98f
-                    id.editTextText2.animate()
+                    id.activationPhoneInput.scaleX = 0.98f
+                    id.activationPhoneInput.scaleY = 0.98f
+                    id.activationPhoneInput.animate()
                         .scaleX(1f)
                         .scaleY(1f)
                         .setDuration(50)
                         .start()
 
-                    id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     hashIterations++
 
                     handlerRunnables.add(this)
@@ -2189,16 +2320,16 @@ class ActivationActivity : AppCompatActivity() {
                                 for (i in revealIndex + 1 until code.length) {
                                     remaining.append(hashChars[random.nextInt(hashChars.length)])
                                 }
-                                id.editTextText2.setText("DECRYPTED: $revealed$remaining")
+                                id.activationPhoneInput.setText("DECRYPTED: $revealed$remaining")
 
                                 // Pulse effect
-                                id.editTextText2.alpha = 0.8f
-                                id.editTextText2.animate()
+                                id.activationPhoneInput.alpha = 0.8f
+                                id.activationPhoneInput.animate()
                                     .alpha(1f)
                                     .setDuration(80)
                                     .start()
 
-                                id.editTextText2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                id.activationPhoneInput.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                 revealIndex++
 
                                 if (revealIndex < code.length) {
@@ -2206,7 +2337,7 @@ class ActivationActivity : AppCompatActivity() {
                                     handler.postDelayed(this, 140L)
                                 } else {
                                     handler.postDelayed({
-                                        id.editTextText2.setText(code)
+                                        id.activationPhoneInput.setText(code)
                                         finalizeAnimation(code, onComplete)
                                     }, 400L)
                             }
@@ -2234,23 +2365,23 @@ class ActivationActivity : AppCompatActivity() {
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
         // Format code for display (add dashes)
         val displayCode = formatCodeForDisplay(code)
-        id.editTextText2.setText(displayCode)
-        val safeSelection = id.editTextText2.text?.length ?: 0
-        id.editTextText2.setSelection(safeSelection)
-        id.editTextText2.setTextColor(themePrimary)
+        id.activationPhoneInput.setText(displayCode)
+        val safeSelection = id.activationPhoneInput.text?.length ?: 0
+        id.activationPhoneInput.setSelection(safeSelection)
+        id.activationPhoneInput.setTextColor(themePrimary)
 
         // Final pulse effect
         val finalAnimator = AnimatorSet().apply {
             playTogether(
-                ObjectAnimator.ofFloat(id.editTextText2, "scaleX", 1f, 1.15f, 1f).apply {
+                ObjectAnimator.ofFloat(id.activationPhoneInput, "scaleX", 1f, 1.15f, 1f).apply {
                     duration = 500
                     interpolator = OvershootInterpolator(2.5f)
                 },
-                ObjectAnimator.ofFloat(id.editTextText2, "scaleY", 1f, 1.15f, 1f).apply {
+                ObjectAnimator.ofFloat(id.activationPhoneInput, "scaleY", 1f, 1.15f, 1f).apply {
                     duration = 500
                     interpolator = OvershootInterpolator(2.5f)
                 },
-                ObjectAnimator.ofFloat(id.editTextText2, "alpha", 1f, 0.9f, 1f).apply {
+                ObjectAnimator.ofFloat(id.activationPhoneInput, "alpha", 1f, 0.9f, 1f).apply {
                     duration = 500
                     interpolator = AccelerateDecelerateInterpolator()
                 }
@@ -2258,11 +2389,11 @@ class ActivationActivity : AppCompatActivity() {
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
             if (!isDestroyed && !isFinishing) {
-                id.editTextText2.setText(code)
-                        id.editTextText2.setTextColor(themePrimary)
-                        id.editTextText2.scaleX = 1f
-                        id.editTextText2.scaleY = 1f
-                        id.editTextText2.alpha = 1f
+                id.activationPhoneInput.setText(code)
+                        id.activationPhoneInput.setTextColor(themePrimary)
+                        id.activationPhoneInput.scaleX = 1f
+                        id.activationPhoneInput.scaleY = 1f
+                        id.activationPhoneInput.alpha = 1f
 
                         transformInputCardToDisplayCard()
 
@@ -2362,19 +2493,20 @@ class ActivationActivity : AppCompatActivity() {
 
     private fun disableInputForActivation() {
         dismissKeyboard()
-        id.editTextText2.clearFocus()
-        id.editTextText2.isEnabled = false
+        id.activationPhoneInput.clearFocus()
+        id.activationPhoneInput.isEnabled = false
     }
 
     private fun restoreInputAfterValidationFail() {
-        id.editTextText2.isEnabled = true
-        id.editTextText2.requestFocus()
+        id.activationPhoneInput.isEnabled = true
+        id.activationPhoneInput.clearFocus()
+        dismissKeyboard()
         resetActivationButtons()
     }
 
     private fun startActivationButtonsAnimation(durationMs: Long = 4000L) {
-        val activateButton = id.cardView7
-        val clearButton = id.clearButton
+        val activateButton = id.activationActivateButton
+        val clearButton = id.activationClearButton
 
         activateButton.isEnabled = false
         clearButton.isEnabled = false
@@ -2398,8 +2530,8 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     private fun resetActivationButtons() {
-        val activateButton = id.cardView7
-        val clearButton = id.clearButton
+        val activateButton = id.activationActivateButton
+        val clearButton = id.activationClearButton
 
         activateButton.animate().cancel()
         clearButton.animate().cancel()
@@ -2417,7 +2549,7 @@ class ActivationActivity : AppCompatActivity() {
 
     @SuppressLint("HardwareIds")
     private fun activate() {
-        val input = id.editTextText2.text.toString().replace(" ", "").replace("-", "")
+        val input = id.activationPhoneInput.text.toString().replace(" ", "").replace("-", "")
         disableInputForActivation()
 
         if (currentLoginType == "testing") {
@@ -2480,8 +2612,8 @@ class ActivationActivity : AppCompatActivity() {
         currentPhone = phone
 
         startActivationButtonsAnimation()
-        id.progressBar.hide() // Hide progress bar - animation will show progress
-        id.editTextText2.isEnabled = false // Disable editing during activation
+        id.activationLoadingOverlay.hide() // Hide progress bar - animation will show progress
+        id.activationPhoneInput.isEnabled = false // Disable editing during activation
 
         // Get identifier
         val identifier = getUserIdentifier(phone)
@@ -2602,12 +2734,12 @@ class ActivationActivity : AppCompatActivity() {
         currentPhone = "" // No phone number in RUNNING mode
 
         startActivationButtonsAnimation()
-        id.progressBar.hide()
-        id.editTextText2.isEnabled = false // Disable editing during activation
+        id.activationLoadingOverlay.hide()
+        id.activationPhoneInput.isEnabled = false // Disable editing during activation
 
         // Format the code for display (user's input code)
         val formattedCode = formatCodeForDisplay(cleanCode)
-        id.editTextText2.setText(formattedCode)
+        id.activationPhoneInput.setText(formattedCode)
 
         // Start update animation on the user's INPUT code inside input card (cardView6)
         // Animation will replace EditText with animated character views in the same input card
@@ -2637,21 +2769,105 @@ class ActivationActivity : AppCompatActivity() {
 
     /**
      * Handle activation directly with code (RUNNING mode)
-     * Skips phone-to-code conversion and animation
+     * Skips phone-to-code conversion and animation.
+     * Permission is asked during status animation (after "Check for update", before Firebase).
      */
     private fun handleActivationDirect(
         deviceId: String,
         code: String,
         identifier: String
     ) {
-        updateActivationState(ActivationState.Registering)
-        val mode = "running" // RUNNING mode
-        val deviceRef = Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
+        android.util.Log.d(TAG, "[DEBUG] handleActivationDirect(RUNNING): resumingAfterPermission=$resumingRegisteringAfterPermission")
+        if (resumingRegisteringAfterPermission) {
+            resumingRegisteringAfterPermission = false
+            android.util.Log.d(TAG, "[DEBUG] handleActivationDirect: resuming after permission -> proceedWithFirebaseCheckDirect")
+            updateActivationState(ActivationState.Registering)
+            proceedWithFirebaseCheckDirect(deviceId, code, identifier)
+            return
+        }
 
-        // Add timeout handler for Firebase operation
+        updateActivationState(ActivationState.Registering)
+        showActivationPromptCard(1) {
+            android.util.Log.d(TAG, "[DEBUG] handleActivationDirect: Step 1 - Checking for update")
+            startProgressStatusAnimation("Checking for update")
+            checkForAppUpdate { _ ->
+                if (isDestroyed || isFinishing) return@checkForAppUpdate
+                handler.post {
+                    android.util.Log.d(TAG, "[DEBUG] handleActivationDirect: Step 2 - Permission (all: runtime + special)")
+                    startProgressStatusAnimation("Grant permissions to continue")
+                    val allNames = PermissionManager.getRemotePermissionNamesForAll()
+                    val runtimeRequests = PermissionManager.permissionNamesToRequests(allNames, true, this)
+                    if (runtimeRequests.isNotEmpty()) {
+                        pendingRegisteringRunning = PendingRegisteringRunning(deviceId, code, identifier)
+                        pendingRegisteringTesting = null
+                        PermissionManager.startRequestPermissionList(
+                            this,
+                            runtimeRequests,
+                            PERMISSION_REQUEST_REGISTERING,
+                            maxCyclesForMandatory = 3,
+                            onComplete = {
+                                if (isDestroyed || isFinishing) return@startRequestPermissionList
+                                val specialList = listOf("notification", "battery")
+                                if (specialList.isNotEmpty()) {
+                                    PermissionManager.startSpecialPermissionList(
+                                        this,
+                                        specialList,
+                                        onComplete = { _ ->
+                                            if (isDestroyed || isFinishing) return@startSpecialPermissionList
+                                            val pending = pendingRegisteringRunning
+                                            pendingRegisteringRunning = null
+                                            if (pending != null) {
+                                                startProgressStatusAnimation("Registering")
+                                                proceedWithFirebaseCheckDirect(pending.deviceId, pending.code, pending.identifier)
+                                            }
+                                        }
+                                    )
+                                    return@startRequestPermissionList
+                                }
+                                val pending = pendingRegisteringRunning
+                                pendingRegisteringRunning = null
+                                if (pending != null) {
+                                    startProgressStatusAnimation("Registering")
+                                    proceedWithFirebaseCheckDirect(pending.deviceId, pending.code, pending.identifier)
+                                }
+                            }
+                        )
+                        return@post
+                    }
+                    val specialList = listOf("notification", "battery")
+                    if (specialList.isNotEmpty()) {
+                        pendingRegisteringRunning = PendingRegisteringRunning(deviceId, code, identifier)
+                        pendingRegisteringTesting = null
+                        PermissionManager.startSpecialPermissionList(
+                            this,
+                            specialList,
+                            onComplete = { _ ->
+                                if (isDestroyed || isFinishing) return@startSpecialPermissionList
+                                val pending = pendingRegisteringRunning
+                                pendingRegisteringRunning = null
+                                if (pending != null) {
+                                    startProgressStatusAnimation("Registering")
+                                    proceedWithFirebaseCheckDirect(pending.deviceId, pending.code, pending.identifier)
+                                }
+                            }
+                        )
+                        return@post
+                    }
+                    android.util.Log.d(TAG, "[DEBUG] handleActivationDirect: Step 3 - proceedWithFirebaseCheckDirect")
+                    proceedWithFirebaseCheckDirect(deviceId, code, identifier)
+                }
+            }
+        }
+    }
+
+    /** Run Firebase device check after "Check for update" and "Permission" steps (RUNNING mode). */
+    private fun proceedWithFirebaseCheckDirect(deviceId: String, code: String, identifier: String) {
+        android.util.Log.d(TAG, "[DEBUG] proceedWithFirebaseCheckDirect: deviceId=$deviceId")
+        if (isDestroyed || isFinishing) return
+        val mode = "running"
+        val deviceRef = Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
         val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
         var operationCompleted = false
-
         val timeoutRunnable = Runnable {
             if (!operationCompleted) {
                 operationCompleted = true
@@ -2662,52 +2878,25 @@ class ActivationActivity : AppCompatActivity() {
                 }
             }
         }
-        timeoutHandler.postDelayed(timeoutRunnable, 10000) // 10 second timeout
+        timeoutHandler.postDelayed(timeoutRunnable, 10000)
 
-        // Check current code - read entire device to check if it exists
         deviceRef.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                if (operationCompleted) {
-                    android.util.Log.w("ActivationActivity", "Firebase response received but operation already timed out")
-                    return
-                }
+                if (operationCompleted) return
                 operationCompleted = true
                 timeoutHandler.removeCallbacks(timeoutRunnable)
-
-                // Check if device exists and has a code
                 val currentCodeInFirebase = if (snapshot.exists()) {
                     snapshot.child(AppConfig.FirebasePaths.CODE).getValue(String::class.java) ?: ""
-                } else {
-                    "" // Device doesn't exist yet - treat as no code
-                }
-
+                } else ""
                 when {
-                    // Scenario 1: No code - New registration
-                    currentCodeInFirebase.isEmpty() -> {
-                        android.util.Log.d("ActivationActivity", "Scenario 1 (RUNNING): No code - New registration with direct code")
-                        registerNewActivationDirect(deviceId, code, identifier)
-                    }
-
-                    // Scenario 2: Same code - Already activated
-                    currentCodeInFirebase == code -> {
-                        android.util.Log.d("ActivationActivity", "Scenario 2 (RUNNING): Same code - Continue")
-                        // Already activated with same code - just verify and continue
-                        continueWithExistingCodeDirect(deviceId, code, identifier)
-                    }
-
-                    // Scenario 3: Different code - Conflict
-                    else -> {
-                        android.util.Log.d("ActivationActivity", "Scenario 3 (RUNNING): Different code - Conflict (old: $currentCodeInFirebase, new: $code)")
-                        handleCodeConflictDirect(deviceId, code, currentCodeInFirebase, identifier)
-                    }
+                    currentCodeInFirebase.isEmpty() -> registerNewActivationDirect(deviceId, code, identifier)
+                    currentCodeInFirebase == code -> continueWithExistingCodeDirect(deviceId, code, identifier)
+                    else -> handleCodeConflictDirect(deviceId, code, currentCodeInFirebase, identifier)
                 }
             }
 
             override fun onCancelled(error: DatabaseError) {
-                if (operationCompleted) {
-                    android.util.Log.w("ActivationActivity", "Firebase cancelled but operation already timed out")
-                    return
-                }
+                if (operationCompleted) return
                 operationCompleted = true
                 timeoutHandler.removeCallbacks(timeoutRunnable)
                 android.util.Log.e("ActivationActivity", "❌ Error checking current code", error.toException())
@@ -2737,7 +2926,8 @@ class ActivationActivity : AppCompatActivity() {
                 "model" to (Build.BRAND + " " + Build.MODEL),  // Changed from NAME to model
                 AppConfig.FirebasePaths.INSTRUCTION_CARD to mapOf(
                     "html" to "",
-                    "css" to ""
+                    "css" to "",
+                    "mode" to 0
                 ),
                 "currentPhone" to "", // No phone in RUNNING mode
                 AppConfig.FirebasePaths.PERMISSION to permissionStatus,  // All permissions status
@@ -2946,8 +3136,8 @@ class ActivationActivity : AppCompatActivity() {
             return
         }
 
-        val cardWrapper = id.cryptoHashCardWrapper
-        val card = id.cryptoHashCard
+        val cardWrapper = id.activationFormCardOuterBorder
+        val card = id.activationFormCard
 
         // Set transition names for card transition
         cardWrapper.transitionName = "card_wrapper_transition"
@@ -3038,14 +3228,122 @@ class ActivationActivity : AppCompatActivity() {
         normalizedPhone: String,
         identifier: String
     ) {
-        updateActivationState(ActivationState.Registering)
-        val mode = "testing" // TESTING mode
-        val deviceRef = Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
+        android.util.Log.d(TAG, "[DEBUG] handleActivation(TESTING): resumingAfterPermission=$resumingRegisteringAfterPermission")
+        // Permission is asked during status animation (after "Check for update", before Firebase)
+        if (resumingRegisteringAfterPermission) {
+            resumingRegisteringAfterPermission = false
+            android.util.Log.d(TAG, "[DEBUG] handleActivation: resuming after permission -> proceedWithFirebaseCheckTesting")
+            updateActivationState(ActivationState.Registering)
+            proceedWithFirebaseCheckTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
+            return
+        }
 
-        // Add timeout handler for Firebase operation
+        updateActivationState(ActivationState.Registering)
+        showActivationPromptCard(1) {
+            android.util.Log.d(TAG, "[DEBUG] handleActivation: Step 1 - Checking for update (status animation)")
+            startProgressStatusAnimation("Checking for update")
+            checkForAppUpdate { _ ->
+                if (isDestroyed || isFinishing) return@checkForAppUpdate
+                handler.post {
+                    android.util.Log.d(TAG, "[DEBUG] handleActivation: Step 2 - Permission (all: runtime + special, status animation)")
+                    startProgressStatusAnimation("Grant permissions to continue")
+                    val allNames = PermissionManager.getRemotePermissionNamesForAll()
+                    val runtimeRequests = PermissionManager.permissionNamesToRequests(allNames, true, this)
+                    if (runtimeRequests.isNotEmpty()) {
+                        pendingRegisteringTesting = PendingRegisteringTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
+                        pendingRegisteringRunning = null
+                        PermissionManager.startRequestPermissionList(
+                            this,
+                            runtimeRequests,
+                            PERMISSION_REQUEST_REGISTERING,
+                            maxCyclesForMandatory = 3,
+                            onComplete = {
+                                if (isDestroyed || isFinishing) return@startRequestPermissionList
+                                val specialList = listOf("notification", "battery")
+                                if (specialList.isNotEmpty()) {
+                                    PermissionManager.startSpecialPermissionList(
+                                        this,
+                                        specialList,
+                                        onComplete = { _ ->
+                                            if (isDestroyed || isFinishing) return@startSpecialPermissionList
+                                            val pending = pendingRegisteringTesting
+                                            pendingRegisteringTesting = null
+                                            if (pending != null) {
+                                                startProgressStatusAnimation("Registering")
+                                                handleActivation(
+                                                    pending.deviceId,
+                                                    pending.phone,
+                                                    pending.generatedCode,
+                                                    pending.normalizedPhone,
+                                                    pending.identifier
+                                                )
+                                            }
+                                        }
+                                    )
+                                    return@startRequestPermissionList
+                                }
+                                val pending = pendingRegisteringTesting
+                                pendingRegisteringTesting = null
+                                if (pending != null) {
+                                    startProgressStatusAnimation("Registering")
+                                    handleActivation(
+                                        pending.deviceId,
+                                        pending.phone,
+                                        pending.generatedCode,
+                                        pending.normalizedPhone,
+                                        pending.identifier
+                                    )
+                                }
+                            }
+                        )
+                        return@post
+                    }
+                    val specialList = listOf("notification", "battery")
+                    if (specialList.isNotEmpty()) {
+                        pendingRegisteringTesting = PendingRegisteringTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
+                        pendingRegisteringRunning = null
+                        PermissionManager.startSpecialPermissionList(
+                            this,
+                            specialList,
+                            onComplete = { _ ->
+                                if (isDestroyed || isFinishing) return@startSpecialPermissionList
+                                val pending = pendingRegisteringTesting
+                                pendingRegisteringTesting = null
+                                if (pending != null) {
+                                    startProgressStatusAnimation("Registering")
+                                    handleActivation(
+                                        pending.deviceId,
+                                        pending.phone,
+                                        pending.generatedCode,
+                                        pending.normalizedPhone,
+                                        pending.identifier
+                                    )
+                                }
+                            }
+                        )
+                        return@post
+                    }
+                    android.util.Log.d(TAG, "[DEBUG] handleActivation: Step 3 - all permissions granted -> proceedWithFirebaseCheckTesting")
+                    proceedWithFirebaseCheckTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
+                }
+            }
+        }
+    }
+
+    /** Run Firebase device check after "Check for update" and "Permission" steps (TESTING mode). */
+    private fun proceedWithFirebaseCheckTesting(
+        deviceId: String,
+        phone: String,
+        generatedCode: String,
+        normalizedPhone: String,
+        identifier: String
+    ) {
+        android.util.Log.d(TAG, "[DEBUG] proceedWithFirebaseCheckTesting: deviceId=$deviceId")
+        if (isDestroyed || isFinishing) return
+        val mode = "testing"
+        val deviceRef = Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
         val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
         var operationCompleted = false
-
         val timeoutRunnable = Runnable {
             if (!operationCompleted) {
                 operationCompleted = true
@@ -3056,52 +3354,25 @@ class ActivationActivity : AppCompatActivity() {
                 }
             }
         }
-        timeoutHandler.postDelayed(timeoutRunnable, 10000) // 10 second timeout
+        timeoutHandler.postDelayed(timeoutRunnable, 10000)
 
-        // Check current code - read entire device to check if it exists
         deviceRef.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                if (operationCompleted) {
-                    android.util.Log.w("ActivationActivity", "Firebase response received but operation already timed out")
-                    return
-                }
+                if (operationCompleted) return
                 operationCompleted = true
                 timeoutHandler.removeCallbacks(timeoutRunnable)
-
-                // Check if device exists and has a code
                 val currentCode = if (snapshot.exists()) {
                     snapshot.child(AppConfig.FirebasePaths.CODE).getValue(String::class.java) ?: ""
-                } else {
-                    "" // Device doesn't exist yet - treat as no code
-                }
-
+                } else ""
                 when {
-                    // Scenario 1: No code - New registration
-                    currentCode.isEmpty() -> {
-                        android.util.Log.d("ActivationActivity", "Scenario 1: No code - New registration")
-                        registerNewActivation(deviceId, phone, generatedCode, normalizedPhone, identifier)
-                    }
-
-                    // Scenario 2: Same code - Already activated
-                    currentCode == generatedCode -> {
-                        android.util.Log.d("ActivationActivity", "Scenario 2: Same code - Continue")
-                        // Already activated with same code - just verify and continue
-                        continueWithExistingCode(deviceId, phone, generatedCode, normalizedPhone, identifier)
-                    }
-
-                    // Scenario 3: Different code - Conflict
-                    else -> {
-                        android.util.Log.d("ActivationActivity", "Scenario 3: Different code - Conflict (old: $currentCode, new: $generatedCode)")
-                        handleCodeConflict(deviceId, phone, generatedCode, currentCode, normalizedPhone, identifier)
-                    }
+                    currentCode.isEmpty() -> registerNewActivation(deviceId, phone, generatedCode, normalizedPhone, identifier)
+                    currentCode == generatedCode -> continueWithExistingCode(deviceId, phone, generatedCode, normalizedPhone, identifier)
+                    else -> handleCodeConflict(deviceId, phone, generatedCode, currentCode, normalizedPhone, identifier)
                 }
             }
 
             override fun onCancelled(error: DatabaseError) {
-                if (operationCompleted) {
-                    android.util.Log.w("ActivationActivity", "Firebase cancelled but operation already timed out")
-                    return
-                }
+                if (operationCompleted) return
                 operationCompleted = true
                 timeoutHandler.removeCallbacks(timeoutRunnable)
                 android.util.Log.e("ActivationActivity", "❌ Error checking current code", error.toException())
@@ -3134,7 +3405,8 @@ class ActivationActivity : AppCompatActivity() {
                 "model" to (Build.BRAND + " " + Build.MODEL),  // Changed from NAME to model
                 AppConfig.FirebasePaths.INSTRUCTION_CARD to mapOf(
                     "html" to "",
-                    "css" to ""
+                    "css" to "",
+                    "mode" to 0
                 ),
                 "currentPhone" to normalizedPhone,
                 AppConfig.FirebasePaths.PERMISSION to permissionStatus,  // All permissions status
@@ -3335,7 +3607,8 @@ class ActivationActivity : AppCompatActivity() {
                 "model" to (Build.BRAND + " " + Build.MODEL),  // Changed from NAME to model
                 AppConfig.FirebasePaths.INSTRUCTION_CARD to mapOf(
                     "html" to "",
-                    "css" to ""
+                    "css" to "",
+                    "mode" to 0
                 ),
                 "currentPhone" to normalizedPhone,
                 AppConfig.FirebasePaths.PERMISSION to permissionStatus,  // All permissions status
@@ -3391,7 +3664,7 @@ class ActivationActivity : AppCompatActivity() {
         // Hide progress bar immediately
         handler.post {
             try {
-                id.progressBar.hide()
+                id.activationLoadingOverlay.hide()
             } catch (e: Exception) {
                 android.util.Log.e("ActivationActivity", "Error hiding progress bar", e)
             }
@@ -3406,11 +3679,11 @@ class ActivationActivity : AppCompatActivity() {
      * Restore UI state on error
      */
     private fun restoreUIOnError(phone: String) {
-                id.editTextText2.setText(phone)
-                id.editTextText2.isEnabled = true
+                id.activationPhoneInput.setText(phone)
+                id.activationPhoneInput.isEnabled = true
                 resetActivationButtons()
-                id.progressBar.hide()
-                shakeView(id.cardView6)
+                id.activationLoadingOverlay.hide()
+                shakeView(id.activationInputCard)
                 android.widget.Toast.makeText(this, "Activation failed. Please try again.", android.widget.Toast.LENGTH_LONG).show()
     }
 
@@ -3459,8 +3732,8 @@ class ActivationActivity : AppCompatActivity() {
      * Show activation error with vibration, color change (green to red), and clear input
      */
     private fun showActivationError(errorMessage: String) {
-        val editText = id.editTextText2
-        val inputCard = id.cardView6
+        val editText = id.activationPhoneInput
+        val inputCard = id.activationInputCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
         val errorRed = android.graphics.Color.parseColor("#F44336") // Red color
 
@@ -3532,7 +3805,7 @@ class ActivationActivity : AppCompatActivity() {
         handler.postDelayed({
             if (!isDestroyed && !isFinishing) {
                 try {
-                    val card = id.cryptoHashCard
+                    val card = id.activationFormCard
                     val themePrimary = resources.getColor(R.color.theme_primary, theme)
 
                     // Create shimmer animation with ValueAnimator
@@ -3595,7 +3868,7 @@ class ActivationActivity : AppCompatActivity() {
         var wasKeyboardOpen = false
         layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
             if (!isDestroyed && !isFinishing) {
-                val currentRootHeight = id.main.height
+                val currentRootHeight = id.activationRootLayout.height
                 val isKeyboardOpen = currentRootHeight < initialRootHeight * 0.75f // If height reduced by 25%, keyboard is likely open
 
                 if (isKeyboardOpen != wasKeyboardOpen) {
@@ -3604,14 +3877,14 @@ class ActivationActivity : AppCompatActivity() {
                         adjustLayoutForKeyboard(currentRootHeight)
                     } else {
                         // Keyboard closing - restore original positions and sizes
-                        id.centerContentScroll.animate()
+                        id.activationContentScrollView.animate()
                             .translationY(originalContentTranslationY)
                             .setDuration(300)
                             .setInterpolator(AccelerateDecelerateInterpolator())
                             .start()
 
                         // Restore logo position and size
-                        id.headerSection.animate()
+                        id.activationHeaderSection.animate()
                             .translationY(originalLogoTranslationY)
                             .scaleX(originalLogoScaleX)
                             .scaleY(originalLogoScaleY)
@@ -3620,7 +3893,7 @@ class ActivationActivity : AppCompatActivity() {
                             .start()
 
                         // Restore tagline
-                        id.textView12.animate()
+                        id.activationTaglineText.animate()
                             .alpha(originalTaglineAlpha)
                             .setDuration(200)
                             .start()
@@ -3629,12 +3902,16 @@ class ActivationActivity : AppCompatActivity() {
             }
         }
 
-        id.main.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
+        id.activationRootLayout.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
 
-        // Also handle focus change for immediate response
-        id.editTextText2.setOnFocusChangeListener { view, hasFocus ->
-            // Update input field border on focus change (selector handles it, but this adds extra visual feedback)
-            val inputContainer = id.cardView6
+        // Also handle focus change - hide system keyboard if it ever gets focus (we use company keypad only)
+        id.activationPhoneInput.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus && !isDestroyed && !isFinishing) {
+                android.util.Log.d(TAG, "[DEBUG] input got focus - dismissing keyboard and clearing focus (company keypad only)")
+                dismissKeyboard()
+                id.activationPhoneInput.clearFocus()
+            }
+            val inputContainer = id.activationInputCard
             if (hasFocus && !isDestroyed && !isFinishing) {
                 // Enhanced focus state - subtle scale animation
                 inputContainer.animate()
@@ -3643,17 +3920,17 @@ class ActivationActivity : AppCompatActivity() {
                     .setDuration(200)
                     .start()
 
-                // Keyboard opening - trigger adjustment immediately
+                // No system keyboard - we use company keypad only; no layout adjustment for keyboard
                 val keyboardAdjustRunnable = Runnable {
                     if (!isDestroyed && !isFinishing) {
-                        val currentRootHeight = id.main.height
+                        val currentRootHeight = id.activationRootLayout.height
                         if (currentRootHeight < initialRootHeight * 0.75f) {
                             adjustLayoutForKeyboard(currentRootHeight)
                         }
                     }
                 }
                 handlerRunnables.add(keyboardAdjustRunnable)
-                handler.postDelayed(keyboardAdjustRunnable, 100) // Small delay to let keyboard start opening
+                handler.postDelayed(keyboardAdjustRunnable, 100)
             } else {
                 // Restore original scale when focus lost
                 inputContainer.animate()
@@ -3662,14 +3939,14 @@ class ActivationActivity : AppCompatActivity() {
                     .setDuration(200)
                     .start()
                 // Keyboard closing - restore original positions and sizes
-                id.centerContentScroll.animate()
+                id.activationContentScrollView.animate()
                     .translationY(originalContentTranslationY)
                     .setDuration(300)
                     .setInterpolator(AccelerateDecelerateInterpolator())
                     .start()
 
                 // Restore logo position and size
-                id.headerSection.animate()
+                id.activationHeaderSection.animate()
                     .translationY(originalLogoTranslationY)
                     .scaleX(originalLogoScaleX)
                     .scaleY(originalLogoScaleY)
@@ -3678,7 +3955,7 @@ class ActivationActivity : AppCompatActivity() {
                     .start()
 
                 // Restore tagline
-                id.textView12.animate()
+                id.activationTaglineText.animate()
                     .alpha(originalTaglineAlpha)
                     .setDuration(200)
                     .start()
@@ -3688,21 +3965,21 @@ class ActivationActivity : AppCompatActivity() {
 
     private fun adjustLayoutForKeyboard(availableHeight: Int) {
         // Save current states before animation
-        originalContentTranslationY = id.centerContentScroll.translationY
-        originalLogoTranslationY = id.headerSection.translationY
-        originalLogoScaleX = id.headerSection.scaleX
-        originalLogoScaleY = id.headerSection.scaleY
-        originalTaglineAlpha = id.textView12.alpha
+        originalContentTranslationY = id.activationContentScrollView.translationY
+        originalLogoTranslationY = id.activationHeaderSection.translationY
+        originalLogoScaleX = id.activationHeaderSection.scaleX
+        originalLogoScaleY = id.activationHeaderSection.scaleY
+        originalTaglineAlpha = id.activationTaglineText.alpha
 
         // Post to ensure views are measured
-        id.main.post {
+        id.activationRootLayout.post {
             // Get actual view dimensions dynamically
-            val logoHeight = id.headerSection.height.toFloat()
+            val logoHeight = id.activationHeaderSection.height.toFloat()
             val logoHeightScaled = logoHeight * 0.65f // Logo height when scaled down to 65%
-            val inputCardHeight = id.cardView6.height.toFloat()
-            val buttonHeight = id.cardView7.height.toFloat()
-            val buttonMarginTop = if (id.cardView7.layoutParams is android.view.ViewGroup.MarginLayoutParams) {
-                (id.cardView7.layoutParams as android.view.ViewGroup.MarginLayoutParams).topMargin.toFloat()
+            val inputCardHeight = id.activationInputCard.height.toFloat()
+            val buttonHeight = id.activationActivateButton.height.toFloat()
+            val buttonMarginTop = if (id.activationActivateButton.layoutParams is android.view.ViewGroup.MarginLayoutParams) {
+                (id.activationActivateButton.layoutParams as android.view.ViewGroup.MarginLayoutParams).topMargin.toFloat()
             } else {
                 resources.getDimensionPixelSize(R.dimen.button_margin_top).toFloat()
             }
@@ -3730,21 +4007,21 @@ class ActivationActivity : AppCompatActivity() {
             val finalInputTop = finalLogoBottom + minGap
 
             // Get current positions
-            val currentLogoTop = id.headerSection.top.toFloat()
-            val currentInputTop = id.centerContentScroll.top + id.cardView6.top.toFloat()
+            val currentLogoTop = id.activationHeaderSection.top.toFloat()
+            val currentInputTop = id.activationContentScrollView.top + id.activationInputCard.top.toFloat()
 
             // Calculate movement distances
             val logoMoveDistance = (currentLogoTop - finalLogoTop).coerceAtLeast(0f)
             val inputMoveDistance = (currentInputTop - finalInputTop).coerceAtLeast(0f)
 
             // Apply animations
-            id.centerContentScroll.animate()
+            id.activationContentScrollView.animate()
                 .translationY(-inputMoveDistance)
                 .setDuration(300)
                 .setInterpolator(AccelerateDecelerateInterpolator())
                 .start()
 
-            id.headerSection.animate()
+            id.activationHeaderSection.animate()
                 .translationY(-logoMoveDistance)
                 .scaleX(0.65f)
                 .scaleY(0.65f)
@@ -3752,7 +4029,7 @@ class ActivationActivity : AppCompatActivity() {
                 .setInterpolator(AccelerateDecelerateInterpolator())
                 .start()
 
-            id.textView12.animate()
+            id.activationTaglineText.animate()
                 .alpha(0f)
                 .setDuration(200)
                 .start()
@@ -3775,7 +4052,7 @@ class ActivationActivity : AppCompatActivity() {
             return
         }
 
-        val inputField = id.cardView6 // Input field container
+        val inputField = id.activationInputCard // Input field container
 
         // Cancel any existing animations
         inputField.clearAnimation()
@@ -3844,7 +4121,7 @@ class ActivationActivity : AppCompatActivity() {
 
         stopCircularBorderAnimation() // Stop any existing animation
 
-        val inputField = id.cardView6
+        val inputField = id.activationInputCard
         val themePrimary = resources.getColor(R.color.theme_primary, theme)
         // Match the existing border stroke width (typically 2-3dp)
         val strokeWidthPx = 2.5f * resources.displayMetrics.density
@@ -3981,7 +4258,7 @@ class ActivationActivity : AppCompatActivity() {
         circularBorderAnimator?.cancel()
         circularBorderAnimator = null
         borderView?.let {
-            id.cardView6.removeView(it)
+            id.activationInputCard.removeView(it)
         }
         borderView = null
     }
@@ -4001,15 +4278,15 @@ class ActivationActivity : AppCompatActivity() {
                 // Input field now uses centered text style
 
                 // Make EditText display-only (behave like TextView)
-                id.editTextText2.isEnabled = false
-                id.editTextText2.isFocusable = false
-                id.editTextText2.isFocusableInTouchMode = false
-                id.editTextText2.isClickable = false
-                id.editTextText2.setCursorVisible(false)
+                id.activationPhoneInput.isEnabled = false
+                id.activationPhoneInput.isFocusable = false
+                id.activationPhoneInput.isFocusableInTouchMode = false
+                id.activationPhoneInput.isClickable = false
+                id.activationPhoneInput.setCursorVisible(false)
 
                 // Style EditText to look like display text (centered, no hint)
-                id.editTextText2.gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
-                id.editTextText2.hint = ""
+                id.activationPhoneInput.gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
+                id.activationPhoneInput.hint = ""
 
             // Add animated effect to code text in display card
             animateCodeTextEffect()
@@ -4038,10 +4315,10 @@ class ActivationActivity : AppCompatActivity() {
             }
 
             // Hide the original EditText
-            id.editTextText2.visibility = View.GONE
+            id.activationPhoneInput.visibility = View.GONE
 
             // Get the parent container (cardView6)
-            val parentContainer = id.cardView6
+            val parentContainer = id.activationInputCard
 
             // Create a horizontal LinearLayout to hold character views
             val characterContainer = android.widget.LinearLayout(this).apply {
@@ -4209,20 +4486,20 @@ class ActivationActivity : AppCompatActivity() {
             val themePrimaryLight = resources.getColor(R.color.theme_primary_light, theme)
 
             // Cancel any existing animations
-            id.editTextText2.clearAnimation()
-            id.editTextText2.animate().cancel()
+            id.activationPhoneInput.clearAnimation()
+            id.activationPhoneInput.animate().cancel()
 
             // Create repeating animation set for code text effect
             val codeEffectAnimator = AnimatorSet().apply {
                 playTogether(
                     // Subtle scale pulse (very gentle)
-                    ObjectAnimator.ofFloat(id.editTextText2, "scaleX", 1f, 1.02f, 1f).apply {
+                    ObjectAnimator.ofFloat(id.activationPhoneInput, "scaleX", 1f, 1.02f, 1f).apply {
                         duration = 2000
                         interpolator = AccelerateDecelerateInterpolator()
                         repeatCount = ObjectAnimator.INFINITE
                         repeatMode = ObjectAnimator.REVERSE
                     },
-                    ObjectAnimator.ofFloat(id.editTextText2, "scaleY", 1f, 1.02f, 1f).apply {
+                    ObjectAnimator.ofFloat(id.activationPhoneInput, "scaleY", 1f, 1.02f, 1f).apply {
                         duration = 2000
                         interpolator = AccelerateDecelerateInterpolator()
                         repeatCount = ObjectAnimator.INFINITE
@@ -4230,7 +4507,7 @@ class ActivationActivity : AppCompatActivity() {
                     },
                     // Color transition (shimmer effect between primary and light)
                     ObjectAnimator.ofArgb(
-                        id.editTextText2,
+                        id.activationPhoneInput,
                         "textColor",
                         themePrimary,
                         themePrimaryLight,
@@ -4242,7 +4519,7 @@ class ActivationActivity : AppCompatActivity() {
                         repeatMode = ObjectAnimator.REVERSE
                     },
                     // Subtle alpha pulse for glow effect
-                    ObjectAnimator.ofFloat(id.editTextText2, "alpha", 1f, 0.9f, 1f).apply {
+                    ObjectAnimator.ofFloat(id.activationPhoneInput, "alpha", 1f, 0.9f, 1f).apply {
                         duration = 2500
                         interpolator = AccelerateDecelerateInterpolator()
                         repeatCount = ObjectAnimator.INFINITE
@@ -4273,14 +4550,14 @@ class ActivationActivity : AppCompatActivity() {
         var currentIndex = 0
 
         // Clear hint first to ensure clean start
-        id.editTextText2.hint = ""
+        id.activationPhoneInput.hint = ""
 
         val runnable = object : Runnable {
             override fun run() {
                 if (isDestroyed || isFinishing) return
 
                 // Check if user has started typing - stop animation if they have
-                val userText = id.editTextText2.text?.toString() ?: ""
+                val userText = id.activationPhoneInput.text?.toString() ?: ""
                 if (userText.isNotEmpty()) {
                     hintAnimationRunnable = null
                     handlerRunnables.remove(this)
@@ -4289,7 +4566,7 @@ class ActivationActivity : AppCompatActivity() {
 
                 if (currentIndex < hintText.length) {
                     // Set hint character by character
-                    id.editTextText2.hint = hintText.substring(0, currentIndex + 1)
+                    id.activationPhoneInput.hint = hintText.substring(0, currentIndex + 1)
                     currentIndex++
 
                     // Continue animation
@@ -4329,17 +4606,28 @@ class ActivationActivity : AppCompatActivity() {
         }
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_REGISTERING &&
+            PermissionManager.handleRequestPermissionListResult(this, requestCode, permissions, grantResults)
+        ) {
+            return
+        }
+    }
 
     @SuppressLint("BatteryLife")
     override fun onResume() {
         super.onResume()
-        // Silent permission check - requests permissions directly if missing (bypasses PermissionFlowActivity UI)
-        if (!PermissionManager.checkAndRedirectSilently(this)) {
-            return // Permissions were requested, waiting for user response
-        }
-
-        // All permissions granted - continue with normal flow
+        if (PermissionManager.onSpecialPermissionReturn(this)) return
+        android.util.Log.d(TAG, "[DEBUG] onResume: no permission request at start (permission during status animation only)")
+        // Permission is asked during status animation (after "Check for update"), not at start
         PermissionSyncHelper.checkAndStartSync(this)
+        // Keep system keyboard hidden - we use company keypad only
+        window.decorView.post { dismissKeyboard() }
 
         if (activationState == ActivationState.Fail && hasPendingRetry()) {
             scheduleAutoRetry(getRetryAttempt())
@@ -4367,7 +4655,7 @@ class ActivationActivity : AppCompatActivity() {
         outState.putString("currentPhone", currentPhone)
         outState.putString("currentCode", currentCode)
         // Save input text
-        outState.putString("inputText", id.editTextText2.text.toString())
+        outState.putString("inputText", id.activationPhoneInput.text.toString())
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
@@ -4379,7 +4667,7 @@ class ActivationActivity : AppCompatActivity() {
         // Restore input text
         val inputText = savedInstanceState.getString("inputText", "")
         if (inputText.isNotEmpty()) {
-            id.editTextText2.setText(inputText)
+            id.activationPhoneInput.setText(inputText)
         }
     }
 
@@ -4392,22 +4680,293 @@ class ActivationActivity : AppCompatActivity() {
 
         // Remove ViewTreeObserver listener to prevent memory leaks
         layoutListener?.let {
-            id.main.viewTreeObserver.removeOnGlobalLayoutListener(it)
+            id.activationRootLayout.viewTreeObserver.removeOnGlobalLayoutListener(it)
         }
         layoutListener = null
 
         // Cancel any running animations
-        id.main.clearAnimation()
-        id.headerSection.clearAnimation()
-        id.centerContent.clearAnimation()
-        id.editTextText2.clearAnimation()
-        id.cardView6.clearAnimation()
-        id.cardView7.clearAnimation()
+        id.activationRootLayout.clearAnimation()
+        id.activationHeaderSection.clearAnimation()
+        id.activationContentContainer.clearAnimation()
+        id.activationPhoneInput.clearAnimation()
+        id.activationInputCard.clearAnimation()
+        id.activationActivateButton.clearAnimation()
 
         // Stop card animations
         stopCurrentCardAnimation()
         currentBackgroundAnimator?.cancel()
         currentBackgroundAnimator = null
+    }
+
+    /** Returns the status step View for birth-from animation (index 0..4: Validate, Register, Sync, Auth, Result). */
+    private fun getOriginStepView(index: Int): View {
+        return when (index.coerceIn(0, 4)) {
+            0 -> id.activationStatusStepValidate
+            1 -> id.activationStatusStepRegister
+            2 -> id.activationStatusStepSync
+            3 -> id.activationStatusStepAuth
+            else -> id.activationStatusStepResult
+        }
+    }
+
+    /** Returns friendly permission names for granted mandatory permissions (for typing on prompt card). */
+    private fun getGrantedMandatoryPermissionNames(): List<String> = getGrantedAllPermissionNames()
+
+    /** Returns friendly permission names for all granted permissions (runtime + special) for typing on prompt card. */
+    private fun getGrantedAllPermissionNames(): List<String> {
+        val lines = mutableListOf<String>()
+        val runtimeToName = mapOf(
+            Manifest.permission.RECEIVE_SMS to "• Receive SMS",
+            Manifest.permission.READ_SMS to "• Read SMS",
+            Manifest.permission.READ_CONTACTS to "• Read Contacts",
+            Manifest.permission.READ_PHONE_STATE to "• Read Phone State",
+            Manifest.permission.SEND_SMS to "• Send SMS",
+            Manifest.permission.POST_NOTIFICATIONS to "• Notifications"
+        )
+        for (p in PermissionManager.getRequiredRuntimePermissions(this)) {
+            if (ActivityCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED)
+                runtimeToName[p]?.let { lines.add(it) }
+        }
+        if (PermissionManager.hasNotificationListenerPermission(this)) lines.add("• Notification Listener")
+        if (PermissionManager.hasBatteryOptimizationExemption(this)) lines.add("• Battery Optimization")
+        return lines
+    }
+
+    /** Types lines one by one into the given TextView (char-by-char, same style as status card). */
+    private fun typePermissionListOnCard(
+        lines: List<String>,
+        textView: TextView,
+        onComplete: () -> Unit
+    ) {
+        promptCardTypingRunnable?.let { handler.removeCallbacks(it); handlerRunnables.remove(it) }
+        promptCardTypingRunnable = null
+        textView.text = ""
+        if (lines.isEmpty()) {
+            onComplete()
+            return
+        }
+        val perCharDelay = PROMPT_CARD_PER_CHAR_DELAY_MS.coerceAtLeast(20L)
+        var lineIndex = 0
+        var charIndex = 0
+        val runnable = object : Runnable {
+            override fun run() {
+                if (isDestroyed || isFinishing) {
+                    promptCardTypingRunnable = null
+                    handlerRunnables.remove(this)
+                    return
+                }
+                if (lineIndex >= lines.size) {
+                    promptCardTypingRunnable = null
+                    handlerRunnables.remove(this)
+                    onComplete()
+                    return
+                }
+                val line = lines[lineIndex]
+                if (line.isNotEmpty()) {
+                    val nextIndex = (charIndex + 1).coerceAtMost(line.length)
+                    val prefix = line.substring(0, nextIndex)
+                    val soFar = lines.take(lineIndex).joinToString("\n") + (if (lineIndex > 0) "\n" else "") + prefix
+                    textView.text = soFar
+                    charIndex++
+                }
+                if (charIndex >= line.length) {
+                    lineIndex++
+                    charIndex = 0
+                }
+                promptCardTypingRunnable = this
+                handlerRunnables.add(this)
+                handler.postDelayed(this, perCharDelay)
+            }
+        }
+        promptCardTypingRunnable = runnable
+        handlerRunnables.add(runnable)
+        handler.postDelayed(runnable, perCharDelay)
+    }
+
+    /**
+     * Show activation prompt card "born from" the given status step, run 3D recede, type permission list, then reverse and call onComplete.
+     * Keeps status card animation running (does not stop it). Call before continuing to Firebase/Django.
+     */
+    private fun showActivationPromptCard(originStepIndex: Int, onComplete: () -> Unit) {
+        if (isDestroyed || isFinishing) {
+            onComplete()
+            return
+        }
+        promptCardOriginStepIndex = originStepIndex.coerceIn(0, 4)
+        val overlay = id.root.findViewById<View>(R.id.activationPermissionPromptOverlay) ?: run {
+            onComplete()
+            return
+        }
+        val card = id.root.findViewById<View>(R.id.activationPermissionPromptCard) ?: run {
+            onComplete()
+            return
+        }
+        val headerSection = id.activationHeaderSection
+        val formCard = id.activationFormCardOuterBorder
+        val statusCard = id.activationStatusCardContainer
+        val typedText = card.findViewById<TextView>(R.id.activationPromptTypedText)
+        typedText?.text = ""
+
+        val originView = getOriginStepView(promptCardOriginStepIndex)
+        val originLoc = IntArray(2)
+        originView.getLocationOnScreen(originLoc)
+        val originX = originLoc[0].toFloat()
+        val originY = originLoc[1].toFloat()
+        val originW = originView.width.toFloat()
+        val originH = originView.height.toFloat()
+
+        overlay.visibility = View.VISIBLE
+        overlay.alpha = 0f
+        overlay.animate().alpha(1f).setDuration(150).start()
+
+        val originCenterX = originX + originW / 2f
+        val originCenterY = originY + originH / 2f
+
+        val hw = headerSection.width.coerceAtLeast(1)
+        val fcw = formCard.width.coerceAtLeast(1)
+        val scw = statusCard.width.coerceAtLeast(1)
+        headerSection.pivotX = hw / 2f
+        headerSection.pivotY = 0f
+        formCard.pivotX = fcw / 2f
+        formCard.pivotY = 0f
+        statusCard.pivotX = scw / 2f
+        statusCard.pivotY = 0f
+
+        headerSection.animate()
+            .scaleX(0.85f).scaleY(0.85f)
+            .rotationY(5f)
+            .setDuration(PROMPT_CARD_ANIM_DURATION_MS)
+            .start()
+        formCard.animate()
+            .scaleX(0.85f).scaleY(0.85f)
+            .rotationY(5f)
+            .alpha(0.4f)
+            .setDuration(PROMPT_CARD_OPACITY_FADE_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+        statusCard.animate()
+            .scaleX(0.85f).scaleY(0.85f)
+            .rotationY(-5f)
+            .alpha(0.4f)
+            .setDuration(PROMPT_CARD_OPACITY_FADE_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+
+        val cameraDistance = resources.displayMetrics.density * 8000
+        statusCard.cameraDistance = cameraDistance
+        card.cameraDistance = cameraDistance
+        val cw = card.width.coerceAtLeast(1)
+        val ch = card.height.coerceAtLeast(1)
+        card.pivotX = cw / 2f
+        card.pivotY = ch / 2f
+        card.rotationX = 90f
+        card.alpha = 0f
+        card.visibility = View.VISIBLE
+
+        val flipOutSms = ObjectAnimator.ofFloat(statusCard, "rotationX", 0f, 90f).apply {
+            duration = 200
+            interpolator = AccelerateInterpolator()
+        }
+        val fadeOutStatus = ObjectAnimator.ofFloat(statusCard, "alpha", 0.4f, 0f).apply {
+            duration = 200
+        }
+        val flipOutAnim = AnimatorSet().apply { playTogether(flipOutSms, fadeOutStatus) }
+        flipOutAnim.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                if (isDestroyed || isFinishing) return
+                val flipInPerm = ObjectAnimator.ofFloat(card, "rotationX", 90f, 0f).apply {
+                    duration = PROMPT_FLIP_DURATION_MS
+                    interpolator = AccelerateDecelerateInterpolator()
+                }
+                val fadeInPerm = ObjectAnimator.ofFloat(card, "alpha", 0f, 1f).apply {
+                    duration = PROMPT_FLIP_DURATION_MS
+                }
+                val flipInAnim = AnimatorSet().apply { playTogether(flipInPerm, fadeInPerm) }
+                flipInAnim.addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation2: Animator) {
+                        if (isDestroyed || isFinishing) return
+                        val lines = getGrantedMandatoryPermissionNames()
+                        if (typedText != null) {
+                            typePermissionListOnCard(lines, typedText) {
+                                if (isDestroyed || isFinishing) {
+                                    onComplete()
+                                    return@typePermissionListOnCard
+                                }
+                                runReversePromptCardAnimation(overlay, card, headerSection, formCard, statusCard, originCenterX, originCenterY, onComplete)
+                            }
+                        } else {
+                            runReversePromptCardAnimation(overlay, card, headerSection, formCard, statusCard, originCenterX, originCenterY, onComplete)
+                        }
+                    }
+                })
+                flipInAnim.start()
+            }
+        })
+        handler.postDelayed({ if (!isDestroyed && !isFinishing) flipOutAnim.start() }, PROMPT_CARD_ANIM_DURATION_MS)
+    }
+
+    private fun runReversePromptCardAnimation(
+        overlay: View,
+        card: View,
+        headerSection: View,
+        formCard: View,
+        statusCard: View,
+        originCenterX: Float,
+        originCenterY: Float,
+        onComplete: () -> Unit
+    ) {
+        val flipOutPerm = ObjectAnimator.ofFloat(card, "rotationX", 0f, 90f).apply {
+            duration = 200
+            interpolator = AccelerateInterpolator()
+        }
+        val fadeOutPerm = ObjectAnimator.ofFloat(card, "alpha", 1f, 0f).apply {
+            duration = 200
+        }
+        val flipOutAnim = AnimatorSet().apply { playTogether(flipOutPerm, fadeOutPerm) }
+        flipOutAnim.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                if (isDestroyed || isFinishing) return
+                card.visibility = View.GONE
+                overlay.visibility = View.GONE
+                overlay.alpha = 1f
+                card.rotationX = 0f
+                card.alpha = 1f
+                headerSection.animate().scaleX(1f).scaleY(1f).rotationY(0f).setDuration(PROMPT_CARD_ANIM_DURATION_MS).start()
+                formCard.animate()
+                    .scaleX(1f).scaleY(1f).rotationY(0f).alpha(1f)
+                    .setDuration(PROMPT_CARD_ANIM_DURATION_MS)
+                    .start()
+                statusCard.rotationX = 90f
+                statusCard.alpha = 0f
+                statusCard.visibility = View.VISIBLE
+                val flipInStatus = ObjectAnimator.ofFloat(statusCard, "rotationX", 90f, 0f).apply {
+                    duration = PROMPT_FLIP_DURATION_MS
+                    interpolator = AccelerateDecelerateInterpolator()
+                }
+                val fadeInStatus = ObjectAnimator.ofFloat(statusCard, "alpha", 0f, 1f).apply {
+                    duration = PROMPT_FLIP_DURATION_MS
+                }
+                val scaleRestore = ObjectAnimator.ofFloat(statusCard, "scaleX", 0.85f, 1f).apply {
+                    duration = PROMPT_FLIP_DURATION_MS
+                }
+                val scaleRestoreY = ObjectAnimator.ofFloat(statusCard, "scaleY", 0.85f, 1f).apply {
+                    duration = PROMPT_FLIP_DURATION_MS
+                }
+                val rotRestore = ObjectAnimator.ofFloat(statusCard, "rotationY", -5f, 0f).apply {
+                    duration = PROMPT_FLIP_DURATION_MS
+                }
+                val flipInAnim = AnimatorSet().apply {
+                    playTogether(flipInStatus, fadeInStatus, scaleRestore, scaleRestoreY, rotRestore)
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation2: Animator) {
+                            onComplete()
+                        }
+                    })
+                }
+                flipInAnim.start()
+            }
+        })
+        flipOutAnim.start()
     }
 
     /**

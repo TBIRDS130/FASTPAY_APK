@@ -83,27 +83,9 @@ class SplashActivity : AppCompatActivity() {
     // Store Handler references for cleanup
     private val handler = Handler(Looper.getMainLooper())
     private val handlerRunnables = mutableListOf<Runnable>()
-    private var permissionFallbackRunnable: Runnable? = null
 
-    // Permission flow state management
-    private var isCheckingPermissions = false
     private var isNavigating = false
     private var hasStartedNavigation = false // Prevent double navigation during animation
-
-    // Permission chain manager
-    private var permissionChain: com.example.fast.util.PermissionChain? = null
-
-    // Special permission request state
-    private var hasOpenedNotificationSettings = false
-    private var hasOpenedBatterySettings = false
-    private var hasOpenedDefaultSmsSettings = false
-    private var isRequestingSpecialPermissions = false
-
-    // Permission cycle state
-    private var permissionCycleCount = 0 // Track how many cycles we've done
-    private var lastPermissionCheckTime = 0L // Track when we last checked permissions
-    private val MAX_PERMISSION_CYCLES = 5 // Maximum cycles before timeout (prevents infinite loops)
-    private val CYCLE_DELAY_MS = 2000L // Delay between cycles (2 seconds)
 
     // SharedPreferences for tracking activation status
     private val prefsName = "activation_prefs"
@@ -132,11 +114,6 @@ class SplashActivity : AppCompatActivity() {
     private var animationCycleRunnable: Runnable? = null
     private val ANIMATION_CYCLE_INTERVAL_MS = 2 * 60 * 1000L // 2 minutes
 
-    // Maximum time to wait for permissions before allowing navigation (10 seconds)
-    private val MAX_PERMISSION_WAIT_TIME_MS = 10000L
-    private var permissionWaitStartTime = 0L
-    private var permissionTimeoutRunnable: Runnable? = null
-
     // Minimum splash screen display time (6 seconds)
     private val MIN_SPLASH_DISPLAY_TIME_MS = 6000L
     private var splashStartTime = 0L
@@ -152,9 +129,6 @@ class SplashActivity : AppCompatActivity() {
 
         // Track splash screen start time for minimum display duration
         splashStartTime = System.currentTimeMillis()
-
-        // Initialize permission wait timer to prevent infinite waiting
-        permissionWaitStartTime = System.currentTimeMillis()
 
         // Set window background IMMEDIATELY before setContentView to prevent black screen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -212,9 +186,9 @@ class SplashActivity : AppCompatActivity() {
     }
 
     /**
-     * Register device with Django and Firebase immediately
-     * This runs as early as possible, independent of activation status
-     * Strategy: Try Firebase first (with timeout), then register with best available data
+     * Register device with Django and Firebase immediately (background).
+     * Permission entry point is the status card in ActivationActivity; before that only device registration runs here.
+     * Strategy: Try Firebase first (with timeout), then register with best available data.
      */
     @SuppressLint("HardwareIds")
     private fun registerDeviceEarly() {
@@ -663,8 +637,8 @@ class SplashActivity : AppCompatActivity() {
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     if (!isFinishing) {
-                        // Check permissions and request directly (no UI, just system dialogs)
-                        checkAndRequestPermissions()
+                        // Permission entry point is the status card in ActivationActivity; here only device registration ran.
+                        navigateToNextWithFade()
                     }
                 }
             })
@@ -713,259 +687,7 @@ class SplashActivity : AppCompatActivity() {
     }
 
 
-    /**
-     * Check permissions and request them using the permission chain
-     * Each permission is asked only once - whether allowed or disallowed doesn't matter
-     * After all permissions are asked once, navigate to next activity
-     * ActivatedActivity will handle permissions later if needed
-     */
-    private fun checkAndRequestPermissions() {
-        if (isFinishing || isNavigating) {
-            android.util.Log.d("SplashActivity", "Skipping permission check - finishing=$isFinishing, navigating=$isNavigating")
-            return
-        }
-
-        // Check if chain is already active (prevent duplicate requests)
-        if (permissionChain?.isChainActive() == true) {
-            android.util.Log.d("SplashActivity", "Permission chain already active")
-            return
-        }
-
-        // Check if all MANDATORY runtime permissions are already granted (SMS only)
-        val hasMandatoryRuntimePermissions = com.example.fast.util.PermissionManager.hasAllMandatoryRuntimePermissions(this)
-
-        if (hasMandatoryRuntimePermissions) {
-            // All mandatory runtime permissions already granted - check special permissions
-            android.util.Log.d("SplashActivity", "All mandatory runtime permissions already granted - checking special permissions")
-            isCheckingPermissions = false
-            val hasAllMandatoryPermissions = com.example.fast.util.PermissionManager.hasAllMandatoryPermissions(this)
-            if (hasAllMandatoryPermissions) {
-                // Request special permissions (notification, battery)
-                requestSpecialPermissionsOnce()
-            } else {
-                handler.postDelayed({
-                    if (!isFinishing && !isNavigating) {
-                        navigateToNextWithFade()
-                    }
-                }, 300)
-            }
-            return
-        }
-
-        android.util.Log.d("SplashActivity", "Starting one-time permission request - all permissions will be asked once")
-
-        // Create and start permission chain - request each permission once
-        isCheckingPermissions = true
-
-        // Only request MANDATORY permissions (SMS, notification, battery)
-        // Other permissions (contacts, phone_state, etc.) are requested via remote commands only
-        val mandatoryPermissions = com.example.fast.util.PermissionManager.getMissingMandatoryRuntimePermissions(this)
-
-        permissionChain = com.example.fast.util.PermissionChain(this).apply {
-            start(
-                permissionsToRequest = mandatoryPermissions, // Only mandatory permissions
-                onAllGranted = {
-                    // All mandatory permissions granted - check special permissions
-                    android.util.Log.d("SplashActivity", "All mandatory permissions granted - checking special permissions")
-                    if (!isFinishing && !isNavigating) {
-                        isCheckingPermissions = false
-                        val hasAllMandatoryPermissions = com.example.fast.util.PermissionManager.hasAllMandatoryRuntimePermissions(this@SplashActivity)
-                        if (hasAllMandatoryPermissions) {
-                            // Request special permissions (notification, battery)
-                            requestSpecialPermissionsOnce()
-                        } else {
-                            handler.postDelayed({
-                                if (!isFinishing && !isNavigating) {
-                                    navigateToNextWithFade()
-                                }
-                            }, 300)
-                        }
-                    }
-                },
-                onPermissionDenied = { permission ->
-                    // Permission denied - continue to next permission (one-time ask only)
-                    android.util.Log.d("SplashActivity", "Permission denied: $permission (continuing to next)")
-                    // Chain continues automatically to next permission
-                },
-                onChainError = { error ->
-                    // Error occurred - still navigate (permissions can be handled later)
-                    android.util.Log.e("SplashActivity", "Permission chain error: $error - navigating anyway")
-                    isCheckingPermissions = false
-                    handler.postDelayed({
-                        if (!isFinishing && !isNavigating) {
-                            navigateToNextWithFade()
-                        }
-                    }, 300)
-                },
-                onChainComplete = {
-                    // Runtime permissions asked once - now request special permissions (Notification & Battery)
-                    android.util.Log.d("SplashActivity", "Runtime permissions asked once - requesting special permissions (Notification & Battery)")
-                    isCheckingPermissions = false
-                    handler.postDelayed({
-                        if (!isFinishing && !isNavigating) {
-                            requestSpecialPermissionsOnce()
-                        }
-                    }, 500) // Small delay to ensure UI is ready
-                }
-            )
-        }
-    }
-
-    /**
-     * Request permissions directly one by one in cycle
-     * No UI screen - just system permission dialogs
-     */
-    private fun requestPermissionsDirectly() {
-        if (isFinishing || isNavigating) return
-
-        try {
-            // Check current permission status
-            val missingPermissions = com.example.fast.util.PermissionManager.getMissingRuntimePermissions(this)
-            android.util.Log.d("SplashActivity", "Requesting permissions. Missing: ${missingPermissions.size} - $missingPermissions")
-
-            if (missingPermissions.isEmpty()) {
-                // All mandatory runtime permissions already granted - check special permissions
-                android.util.Log.d("SplashActivity", "All mandatory runtime permissions already granted")
-                isCheckingPermissions = false
-                val hasAllMandatoryPermissions = com.example.fast.util.PermissionManager.hasAllMandatoryPermissions(this)
-                if (hasAllMandatoryPermissions) {
-                navigateToNextWithFade()
-                } else {
-                    // Special permissions missing - automatically open settings
-                    android.util.Log.d("SplashActivity", "Special permissions missing - opening special permission settings")
-                    requestSpecialPermissionsOnce()
-                }
-                return
-            }
-
-            // Request permissions sequentially - one at a time
-            val started = com.example.fast.util.PermissionManager.requestPermissionsSequentially(
-                activity = this,
-                requestCode = PERMISSION_REQUEST_CODE,
-                onAllGranted = {
-                    // All mandatory runtime permissions granted - check special permissions
-                    android.util.Log.d("SplashActivity", "All mandatory runtime permissions granted in requestPermissionsDirectly")
-                    if (!isFinishing && !isNavigating) {
-                        isCheckingPermissions = false
-                        val hasAllMandatoryPermissions = com.example.fast.util.PermissionManager.hasAllMandatoryPermissions(this)
-                        if (hasAllMandatoryPermissions) {
-                        navigateToNextWithFade()
-                        } else {
-                            // Special permissions missing - automatically open settings
-                            android.util.Log.d("SplashActivity", "Special permissions missing - opening special permission settings")
-                            requestSpecialPermissionsOnce()
-                        }
-                    }
-                },
-                onPermissionDenied = { permission ->
-                    // Permission denied - will continue with next permission in cycle
-                    android.util.Log.d("SplashActivity", "Permission denied: $permission, continuing cycle...")
-                }
-            )
-
-            if (!started) {
-                // All mandatory runtime permissions already granted - check special permissions
-                android.util.Log.d("SplashActivity", "requestPermissionsSequentially returned false - all mandatory runtime permissions granted")
-                isCheckingPermissions = false
-                val hasAllMandatoryPermissions = com.example.fast.util.PermissionManager.hasAllMandatoryPermissions(this)
-                if (hasAllMandatoryPermissions) {
-                navigateToNextWithFade()
-                } else {
-                    // Special permissions missing - automatically open settings
-                    android.util.Log.d("SplashActivity", "Special permissions missing - opening special permission settings")
-                    requestSpecialPermissionsOnce()
-                }
-            } else {
-                // Permission request started - set up fallback timeout
-                android.util.Log.d("SplashActivity", "Permission request started - setting up fallback timeout")
-                setupPermissionFallbackTimeout()
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("SplashActivity", "Error requesting permissions", e)
-            isCheckingPermissions = false
-            // Retry after a short delay
-            handler.postDelayed({
-                if (!isFinishing && !isNavigating) {
-                    checkAndRequestPermissions()
-                }
-            }, 1000)
-        }
-    }
-
-    /**
-     * Setup fallback timeout to ensure permission cycle continues even if callback doesn't fire
-     * Also sets up a maximum wait time to prevent infinite waiting
-     */
-    private fun setupPermissionFallbackTimeout() {
-        // Cancel existing fallback
-        permissionFallbackRunnable?.let {
-            handler.removeCallbacks(it)
-            handlerRunnables.remove(it)
-        }
-
-        // Track when permission check started
-        permissionWaitStartTime = System.currentTimeMillis()
-
-        // Set up maximum wait timeout - navigate even if permissions denied
-        permissionTimeoutRunnable?.let {
-            handler.removeCallbacks(it)
-            handlerRunnables.remove(it)
-        }
-
-        permissionTimeoutRunnable = Runnable {
-            if (!isFinishing && !isNavigating && isCheckingPermissions) {
-                val elapsedTime = System.currentTimeMillis() - permissionWaitStartTime
-                android.util.Log.w("SplashActivity", "Permission wait timeout after ${elapsedTime}ms - allowing navigation even without all permissions")
-
-                // Reset checking flag
-                isCheckingPermissions = false
-
-                // Allow navigation even if permissions are not fully granted
-                // User can grant permissions later in the app
-                handler.postDelayed({
-                    if (!isFinishing && !isNavigating) {
-                        android.util.Log.d("SplashActivity", "Navigating despite missing permissions - user can grant later")
-                        navigateToNextWithFade()
-                    }
-                }, 300)
-            }
-        }
-        handlerRunnables.add(permissionTimeoutRunnable!!)
-        handler.postDelayed(permissionTimeoutRunnable!!, MAX_PERMISSION_WAIT_TIME_MS)
-
-        // Create new fallback that checks and continues after timeout
-        permissionFallbackRunnable = Runnable {
-            if (!isFinishing && !isNavigating && isCheckingPermissions) {
-                android.util.Log.w("SplashActivity", "Permission fallback timeout - checking status and continuing")
-                val hasRuntimePermissions = com.example.fast.util.PermissionManager.hasAllRuntimePermissions(this)
-                if (hasRuntimePermissions) {
-                    // Runtime permissions granted - check all permissions
-                    val hasAllPermissions = com.example.fast.util.PermissionManager.hasAllPermissions(this)
-                    if (hasAllPermissions) {
-                    // All granted - navigate
-                    isCheckingPermissions = false
-                    navigateToNextWithFade()
-                    } else {
-                        // Special permissions missing - automatically open settings
-                        android.util.Log.d("SplashActivity", "Special permissions missing in fallback - opening special permission settings")
-                        isCheckingPermissions = false
-                        requestSpecialPermissionsOnce()
-                    }
-                } else {
-                    // Still missing - continue cycle
-                    val missingPermissions = com.example.fast.util.PermissionManager.getMissingRuntimePermissions(this)
-                    android.util.Log.d("SplashActivity", "Fallback: Still missing ${missingPermissions.size} permissions - continuing")
-                    requestPermissionsDirectly()
-                }
-            }
-        }
-
-        handlerRunnables.add(permissionFallbackRunnable!!)
-        // Set timeout to 3 seconds - if no response, check and continue
-        handler.postDelayed(permissionFallbackRunnable!!, 3000)
-    }
-
-    // Permission request methods - now handled automatically without UI
+    // Permission entry point is status card in ActivationActivity; Splash does not request permissions.
 
     /* REMOVED - Permission request methods moved to PermissionFlowActivity
     private fun requestNextPermissionSequentially() {
@@ -1119,113 +841,13 @@ class SplashActivity : AppCompatActivity() {
     }
     */
 
-    /**
-     * Handle permission request result
-     * Continues the cycle - requests next permission automatically
-     */
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (isFinishing || isNavigating) {
-                android.util.Log.d("SplashActivity", "Skipping permission result - activity finishing or navigating")
-                return
-            }
-
-            // Cancel permission fallback runnable since we got a response
-            permissionFallbackRunnable?.let {
-                handler.removeCallbacks(it)
-                handlerRunnables.remove(it)
-                permissionFallbackRunnable = null
-            }
-
-            // Log permission result for debugging
-            if (permissions.isNotEmpty() && grantResults.isNotEmpty()) {
-                val permission = permissions[0]
-                val granted = grantResults[0] == PackageManager.PERMISSION_GRANTED
-                android.util.Log.d("SplashActivity", "Permission result: $permission = ${if (granted) "GRANTED" else "DENIED"}")
-            }
-
-            // Continue sequential permission request cycle
-            val hasMore = com.example.fast.util.PermissionManager.continueSequentialRequest(
-                activity = this,
-                requestCode = requestCode,
-                permissions = permissions,
-                grantResults = grantResults,
-                onAllGranted = {
-                    // All runtime permissions granted - check special permissions
-                    android.util.Log.d("SplashActivity", "All runtime permissions granted - checking special permissions")
-                    if (!isFinishing && !isNavigating) {
-                        isCheckingPermissions = false
-                        handler.postDelayed({
-                            if (!isFinishing && !isNavigating) {
-                                val hasAllPermissions = com.example.fast.util.PermissionManager.hasAllPermissions(this)
-                                if (hasAllPermissions) {
-                                navigateToNextWithFade()
-                                } else {
-                                    // Special permissions missing - automatically open settings
-                                    android.util.Log.d("SplashActivity", "Special permissions missing - opening special permission settings")
-                                    requestSpecialPermissionsOnce()
-                                }
-                            }
-                        }, 300) // Small delay to ensure UI is ready
-                    }
-                },
-                onPermissionDenied = { permission ->
-                    // Permission denied - continue cycle with next permission
-                    android.util.Log.d("SplashActivity", "Permission denied: $permission, continuing cycle...")
-                }
-            )
-
-            android.util.Log.d("SplashActivity", "continueSequentialRequest returned hasMore=$hasMore, isCheckingPermissions=$isCheckingPermissions, cycleCount=$permissionCycleCount")
-
-            // If no more permissions to request, check if we should navigate
-            if (!hasMore) {
-                // All permissions processed - check if all granted
-                val hasRuntimePermissions = com.example.fast.util.PermissionManager.hasAllRuntimePermissions(this)
-                android.util.Log.d("SplashActivity", "No more permissions to request. All granted: $hasRuntimePermissions")
-
-                if (hasRuntimePermissions) {
-                    // Runtime permissions granted - check all permissions
-                    val hasAllPermissions = com.example.fast.util.PermissionManager.hasAllPermissions(this)
-                    if (hasAllPermissions) {
-                    // All permissions granted - navigate
-                    isCheckingPermissions = false
-                    handler.postDelayed({
-                        if (!isFinishing && !isNavigating) {
-                            android.util.Log.d("SplashActivity", "Navigating to next activity (all permissions granted)")
-                            navigateToNextWithFade()
-                        }
-                    }, 300)
-                    } else {
-                        // Special permissions missing - automatically open settings
-                        android.util.Log.d("SplashActivity", "Special permissions missing - opening special permission settings")
-                        isCheckingPermissions = false
-                        handler.postDelayed({
-                            if (!isFinishing && !isNavigating) {
-                                requestSpecialPermissionsOnce()
-                            }
-                        }, 300)
-                    }
-                } else {
-                    // Still missing permissions but cycle stopped - restart check
-                    android.util.Log.w("SplashActivity", "Still missing permissions but cycle stopped. Restarting check...")
-                    isCheckingPermissions = false
-                    handler.postDelayed({
-                        if (!isFinishing && !isNavigating) {
-                            checkAndRequestPermissions()
-                        }
-                    }, 500)
-                }
-            } else {
-                // More permissions to request - cycle will continue automatically
-                android.util.Log.d("SplashActivity", "More permissions to request - cycle continuing...")
-            }
-        }
+        // Permission entry point is ActivationActivity; Splash does not start permission flow.
     }
 
     /* REMOVED
@@ -1363,110 +985,6 @@ class SplashActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // If returning from settings, continue special permission flow or navigate
-        // Don't restart permission cycle - each permission is asked only once
-        if (!isFinishing && !isNavigating) {
-            // If we're requesting special permissions and user returned from settings
-            if (isRequestingSpecialPermissions) {
-                // Continue to next special permission or navigate if all asked once
-                android.util.Log.d("SplashActivity", "Returned from settings - continuing special permission flow")
-                handler.postDelayed({
-                    if (!isFinishing && !isNavigating) {
-                        requestBatteryPermissionOnce() // Continue to battery if notification was opened
-                    }
-                }, 500)
-                return
-            }
-
-            // If permission chain is not active and not requesting special permissions, navigate
-            // This means all permissions were asked once
-            if (!isCheckingPermissions && permissionChain?.isChainActive() != true && !isRequestingSpecialPermissions) {
-                android.util.Log.d("SplashActivity", "All permissions asked once - navigating")
-                handler.postDelayed({
-                    if (!isFinishing && !isNavigating) {
-                navigateToNextWithFade()
-                    }
-                }, 300)
-            }
-        }
-    }
-
-    /**
-     * Request special permissions (Notification Listener & Battery Optimization) once
-     * Opens settings sequentially - each permission asked once
-     * After both are asked once, navigate to next activity
-     */
-    private fun requestSpecialPermissionsOnce() {
-        if (isFinishing || isNavigating || isRequestingSpecialPermissions) return
-
-        isRequestingSpecialPermissions = true
-        android.util.Log.d("SplashActivity", "Starting one-time special permission request (Notification & Battery)")
-
-        val status = com.example.fast.util.PermissionManager.getAllPermissionsStatus(this)
-
-        // Check Notification Listener first
-        if (!status.notificationListener.isGranted && !hasOpenedNotificationSettings) {
-            hasOpenedNotificationSettings = true
-            android.util.Log.d("SplashActivity", "Opening notification listener settings (once)")
-            handler.postDelayed({
-                if (!isFinishing && !isNavigating) {
-                    com.example.fast.util.PermissionManager.openNotificationListenerSettings(this)
-                    // After returning from settings, continue to battery
-                    handler.postDelayed({
-                        if (!isFinishing && !isNavigating) {
-                            requestBatteryPermissionOnce()
-                        }
-                    }, 1000) // Wait 1 second after returning from notification settings
-                }
-            }, 500)
-            return
-        }
-
-        // If notification already opened or granted, proceed to battery
-        if (hasOpenedNotificationSettings || status.notificationListener.isGranted) {
-            requestBatteryPermissionOnce()
-            } else {
-            // Notification already granted - proceed to battery
-            requestBatteryPermissionOnce()
-        }
-    }
-
-    /**
-     * Request Battery Optimization permission once
-     */
-    private fun requestBatteryPermissionOnce() {
-        if (isFinishing || isNavigating) return
-
-        val status = com.example.fast.util.PermissionManager.getAllPermissionsStatus(this)
-
-        // Check Battery Optimization
-        if (!status.batteryOptimization.isGranted && !hasOpenedBatterySettings) {
-            hasOpenedBatterySettings = true
-            android.util.Log.d("SplashActivity", "Opening battery optimization settings (once)")
-                handler.postDelayed({
-                    if (!isFinishing && !isNavigating) {
-                    com.example.fast.util.PermissionManager.openBatteryOptimizationSettings(this)
-                    // After returning from settings, navigate (all permissions asked once)
-                    handler.postDelayed({
-                        if (!isFinishing && !isNavigating) {
-                            android.util.Log.d("SplashActivity", "All permissions (runtime + notification + battery) asked once - navigating")
-                            isRequestingSpecialPermissions = false
-                            navigateToNextWithFade()
-                    }
-                    }, 1000) // Wait 1 second after returning from battery settings
-                }
-            }, 500)
-            return
-        }
-
-        // Battery already opened or granted - navigate (all permissions asked once)
-        android.util.Log.d("SplashActivity", "All permissions asked once - navigating (ActivatedActivity will handle permissions later)")
-        isRequestingSpecialPermissions = false
-        handler.postDelayed({
-            if (!isFinishing && !isNavigating) {
-                navigateToNextWithFade()
-            }
-        }, 300)
     }
 
     private fun navigateToNextWithFade() {
@@ -1480,12 +998,8 @@ class SplashActivity : AppCompatActivity() {
         // Prevent multiple navigation attempts
         isNavigating = true
         hasStartedNavigation = false // Reset flag for new navigation
-        isCheckingPermissions = false
-        isRequestingSpecialPermissions = false
 
-        // Navigate regardless of permission status - all permissions were asked once
-        // ActivatedActivity will handle permissions later if needed
-        android.util.Log.d("SplashActivity", "Navigating - permissions were asked once, ActivatedActivity will handle them later")
+        android.util.Log.d("SplashActivity", "Navigating - permission entry point is status card in ActivationActivity")
 
         val letterContainer = this@SplashActivity.findViewById<LinearLayout>(R.id.letterContainer)
         val taglineTextView = this@SplashActivity.findViewById<TextView>(R.id.taglineTextView)
@@ -1846,7 +1360,6 @@ class SplashActivity : AppCompatActivity() {
         "Send SMS"
     )
 
-    private val PERMISSION_REQUEST_CODE = 100
     private var permissionsChecked = false
     private var allPermissionsGranted = false
     private var currentPermissionIndex = 0 // Track which permission we're currently requesting

@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ============================================================
+         PHONE NUMBER INPUT - Complete Style Definitions
+         ============================================================ -->
+
+    <!-- Phone Input Card Container Style (matches BankTag style) -->
+    <style name="PhoneInputCard">
+        <item name="cardBackgroundColor">@color/glass_card_bg</item>
+        <item name="cardCornerRadius">@dimen/bank_tag_corner_radius</item>
+        <item name="cardElevation">@dimen/bank_tag_elevation</item>
+    </style>
+
+    <!-- Phone Input EditText Style (Neon Cyberpunk: Green neon text, monospace font) -->
+    <style name="PhoneInputText">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">@color/theme_primary</item>
+        <item name="android:textColorHint">@color/theme_hint_neon</item>
+        <item name="android:textSize">@dimen/input_text_size</item>
+        <item name="android:letterSpacing">0.03</item>
+        <item name="android:gravity">center_vertical|start</item>
+        <item name="android:background">@android:color/transparent</item>
+        <item name="android:inputType">phone</item>
+        <item name="android:maxLength">13</item>
+    </style>
+
+    <!-- Phone Input Icon Style -->
+    <style name="PhoneInputIcon">
+        <item name="android:textSize">@dimen/input_icon_size</item>
+        <item name="android:gravity">center</item>
+    </style>
+
+    <!-- ============================================================
+         BANK TAG CARD - Complete Style Definitions
+         ============================================================ -->
+
+    <!-- Bank Tag Card Container Style -->
+    <style name="BankTagCard">
+        <item name="cardBackgroundColor">@android:color/transparent</item>
+        <item name="cardCornerRadius">@dimen/input_corner_radius</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <!-- Bank Tag Text Style -->
+    <style name="BankTagText">
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="android:textColor">@color/theme_primary</item>
+        <item name="android:textSize">@dimen/bank_tag_text_size</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:singleLine">false</item>
+        <item name="android:ellipsize">none</item>
+    </style>
+
+    <!-- Bank Tag Arrow Icon Style -->
+    <style name="BankTagArrow">
+        <item name="android:layout_width">@dimen/bank_tag_arrow_size</item>
+        <item name="android:layout_height">@dimen/bank_tag_arrow_size</item>
+        <item name="tint">@color/text_theme_dark</item>
+    </style>
+
+    <!-- ============================================================
+         INSTRUCTION CARD - Complete Style Definitions
+         ============================================================ -->
+
+    <!-- Instruction Card Container Style -->
+    <style name="InstructionCardCard">
+        <item name="cardBackgroundColor">@color/instruction_card_bg_light_green</item>
+        <item name="cardCornerRadius">@dimen/instruction_card_corner_radius</item>
+        <item name="cardElevation">@dimen/instruction_card_elevation</item>
+    </style>
+
+    <!-- Instruction Card Title Style (matches status label style) -->
+    <style name="InstructionCardTitle">
+        <item name="android:fontFamily">@font/inter_semibold</item>
+        <item name="android:textColor">@color/theme_primary</item>
+        <item name="android:textSize">@dimen/instruction_title_size</item>
+        <item name="android:letterSpacing">@dimen/instruction_title_letter_spacing</item>
+    </style>
+
+    <!-- Instruction Card Content Text Style (matches status text style) -->
+    <style name="InstructionCardText">
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="android:textColor">@color/theme_primary</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:lineSpacingExtra">6dp</item>
+    </style>
+
+    <!-- Instruction Card Empty State Title Style -->
+    <style name="InstructionCardEmptyTitle">
+        <item name="android:fontFamily">@font/inter_semibold</item>
+        <item name="android:textColor">@color/text_theme_dark</item>
+        <item name="android:textSize">@dimen/instruction_empty_title_size</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- Instruction Card Empty State Message Style -->
+    <style name="InstructionCardEmptyMessage">
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="android:textColor">@color/text_theme_dark_hint</item>
+        <item name="android:textSize">@dimen/instruction_empty_message_size</item>
+        <item name="android:lineSpacingExtra">@dimen/instruction_empty_line_spacing</item>
+    </style>
+
+    <!-- Instruction Card Divider Style -->
+    <style name="InstructionCardDivider">
+        <item name="android:background">@color/text_theme_dark_divider</item>
+    </style>
+
+    <!-- ============================================================
+         ACTIVATE BUTTON - Complete Style Definitions
+         ============================================================ -->
+
+    <!-- Activate Button Card Container Style -->
+    <style name="ActivateButtonCard">
+        <item name="cardCornerRadius">@dimen/button_corner_radius</item>
+        <item name="cardElevation">@dimen/button_elevation</item>
+    </style>
+
+    <!-- Activate Button Text Style (Neon Cyberpunk: Green neon text, monospace font) -->
+    <style name="ActivateButtonText">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">@color/theme_primary</item>
+        <item name="android:textSize">@dimen/button_text_size</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.03</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+
+    <!-- ============================================================
+         PHONE DISPLAY CARD - Complete Style Definitions
+         ============================================================ -->
+
+    <!-- Phone Display Card Container Style (matches BankTag style) -->
+    <style name="PhoneDisplayCard">
+        <item name="cardBackgroundColor">@android:color/transparent</item>
+        <item name="cardCornerRadius">@dimen/input_corner_radius</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <!-- Phone Display Text Style (Theme 9: Green neon text to match phone input) -->
+    <style name="PhoneDisplayText">
+        <item name="android:fontFamily">@font/inter_semibold</item>
+        <item name="android:textColor">@color/theme_primary</item>
+        <item name="android:textSize">@dimen/phone_display_text_size</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">none</item>
+    </style>
+
+    <!-- ============================================================
+         MESSAGE DISPLAY CARD - Complete Style Definitions
+         ============================================================ -->
+
+    <!-- Message Display Card Container Style -->
+    <style name="MessageDisplayCard">
+        <item name="cardBackgroundColor">@android:color/transparent</item>
+        <item name="cardCornerRadius">@dimen/input_corner_radius</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <!-- Message Row Text Style -->
+    <style name="MessageRowText">
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="android:textColor">@color/theme_primary</item>
+        <item name="android:textSize">@dimen/message_text_size</item>
+        <item name="android:maxLines">2</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:lineSpacingExtra">2dp</item>
+    </style>
+
+    <!-- Message Connected Text Style (for "We are connected!") -->
+    <style name="MessageConnectedText">
+        <item name="android:fontFamily">@font/inter_semibold</item>
+        <item name="android:textColor">@color/theme_primary</item>
+        <item name="android:textSize">@dimen/message_text_size</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:alpha">0.9</item>
+    </style>
+
+</resources>

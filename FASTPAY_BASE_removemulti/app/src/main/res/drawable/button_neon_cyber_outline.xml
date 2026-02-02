@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- Cyberpunk style: Transparent background with neon border -->
+    <solid android:color="@android:color/transparent" />
+    <!-- Neon green border -->
+    <stroke
+        android:width="2dp"
+        android:color="@color/theme_primary" />
+    <!-- Corner radius -->
+    <corners android:radius="@dimen/button_corner_radius" />
+</shape>

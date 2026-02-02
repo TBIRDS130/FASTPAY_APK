@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activate Button Animation</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin-bottom: 2rem;
+      opacity: 0.9;
+    }
+    .center-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 2rem;
+      min-width: 320px;
+    }
+    .crypto-hash-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      min-width: 100%;
+      text-align: center;
+    }
+    .crypto-hash-card .hash-placeholder {
+      font-family: monospace;
+      font-size: 1.1rem;
+      color: #8b949e;
+      letter-spacing: 0.1em;
+    }
+    .status-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      min-width: 100%;
+      min-height: 80px;
+      visibility: hidden;
+    }
+    .status-card.visible {
+      visibility: visible;
+    }
+    .status-main {
+      font-size: 0.95rem;
+      color: #58a6ff;
+      min-height: 1.5em;
+    }
+    .button-row {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .activate-button,
+    .clear-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 24px;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+      transform-origin: center center;
+      transition: none;
+    }
+    .activate-button {
+      min-width: 140px;
+      color: #fff;
+      background: #238636;
+    }
+    .activate-button:hover { background: #2ea043; }
+    .activate-button:disabled {
+      cursor: default;
+      opacity: 0.95;
+    }
+    .clear-button {
+      min-width: 80px;
+      color: #e6edf3;
+      background: #21262d;
+      border: 1px solid #30363d;
+    }
+    .clear-button:hover { background: #30363d; }
+    .activate-button:active,
+    .clear-button:active { outline: none; }
+
+    .activate-button.press-scale-down {
+      animation: scaleDown 100ms ease-out forwards;
+    }
+    .activate-button.press-scale-up {
+      animation: scaleUp 150ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    .activate-button.loading-scale {
+      animation: activateLoading 4000ms ease-out forwards;
+    }
+    .clear-button.loading-scale {
+      animation: clearLoading 4000ms ease-out forwards;
+    }
+    @keyframes scaleDown {
+      from { transform: scale(1); }
+      to { transform: scale(0.95); }
+    }
+    @keyframes scaleUp {
+      from { transform: scale(0.95); }
+      to { transform: scale(1); }
+    }
+    @keyframes activateLoading {
+      from { transform: scale(1); }
+      to { transform: scale(1.08, 1.04); }
+    }
+    @keyframes clearLoading {
+      from { transform: scale(1); }
+      to { transform: scale(0.92); }
+    }
+  </style>
+</head>
+<body>
+  <h1>Activate Flow</h1>
+  <div class="center-content">
+    <div class="crypto-hash-card">
+      <span class="hash-placeholder">XXXXX-XXXXX</span>
+    </div>
+    <div class="status-card" id="statusCard">
+      <div class="status-main" id="statusMain"></div>
+    </div>
+    <div class="button-row">
+      <button class="activate-button" id="activateBtn">Activate</button>
+      <button class="clear-button" id="clearBtn">Clear</button>
+    </div>
+  </div>
+
+  <script>
+    const activateBtn = document.getElementById('activateBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusCard = document.getElementById('statusCard');
+    const statusMain = document.getElementById('statusMain');
+
+    const STATUS_TEXT = 'Creating secure tunnel with company database';
+
+    function typeStatus(text, onComplete) {
+      let i = 0;
+      statusMain.textContent = '';
+      const perChar = Math.max(20, 4000 / text.length);
+      const id = setInterval(() => {
+        if (i < text.length) {
+          statusMain.textContent += text[i++];
+        } else {
+          clearInterval(id);
+          onComplete?.();
+        }
+      }, perChar);
+      return () => clearInterval(id);
+    }
+
+    activateBtn.addEventListener('click', function handlePress() {
+      if (activateBtn.disabled) return;
+      activateBtn.disabled = true;
+
+      // 1. Scale down → scale up (press feedback)
+      activateBtn.classList.remove('press-scale-down', 'press-scale-up', 'loading-scale');
+      clearBtn.classList.remove('loading-scale');
+      void activateBtn.offsetWidth;
+
+      activateBtn.classList.add('press-scale-down');
+
+      setTimeout(() => {
+        activateBtn.classList.remove('press-scale-down');
+        activateBtn.classList.add('press-scale-up');
+
+        setTimeout(() => {
+          activateBtn.classList.remove('press-scale-up');
+
+          // 2. Show empty status card below crypto hash
+          statusCard.classList.add('visible');
+          statusMain.textContent = '';
+
+          // 3. Together: (1) button animations, (2) typing
+          activateBtn.classList.add('loading-scale');
+          clearBtn.classList.add('loading-scale');
+          typeStatus(STATUS_TEXT);
+
+          // Reset after 4s
+          setTimeout(() => {
+            statusCard.classList.remove('visible');
+            activateBtn.classList.remove('loading-scale');
+            clearBtn.classList.remove('loading-scale');
+            statusMain.textContent = '';
+            activateBtn.disabled = false;
+          }, 4000);
+        }, 150);
+      }, 100);
+    });
+  </script>
+</body>
+</html>

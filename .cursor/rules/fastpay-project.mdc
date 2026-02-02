@@ -1,5 +1,5 @@
 ---
-description: FASTPAY_APK is the project root; versions live in subfolders (FASTPAY_BASE, etc.)
+description: FASTPAY_APK is the project root; versions live in subfolders (FASTPAY_BASE, etc.). Includes agent-testing commands.
 alwaysApply: true
 ---
 
@@ -9,5 +9,11 @@ alwaysApply: true
 - **Versions:** Each FastPay app variant is a subfolder:
   - `FASTPAY_BASE` – base app (current release candidate)
   - Future versions (e.g. branded builds) go as sibling folders.
-- **Build:** To build a version, run from repo root: `.\scripts\build-version.ps1` or `cd FASTPAY_BASE && .\gradlew assembleRelease`.
+- **Build:** To build a version, run from repo root: `.\scripts\build-version.ps1` or `cd FASTPAY_BASE` then `.\gradlew.bat assembleRelease`.
 - **Style:** Use `.editorconfig` at repo root for Kotlin/XML/JSON consistency across all version folders.
+
+## Testing (debug build + device + logs)
+
+- **Build and install on connected device:** From repo root run `.\scripts\test-debug.ps1` (or `.\scripts\test-debug.ps1 FASTPAY_BASE`). From `FASTPAY_BASE`: `.\gradlew.bat assembleDebug installDebug`.
+- **View activation debug logs:** `adb logcat -s ActivationActivity:D`.
+- **Full details:** See `ENVIRONMENT.md` section "Cursor / Agent testing".

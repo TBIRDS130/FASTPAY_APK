@@ -289,24 +289,35 @@ class PermissionFlowActivity : AppCompatActivity() {
     }
 
     /**
-     * Request all runtime permissions at once (first cycle)
-     * This requests all mandatory permissions together instead of sequentially
+     * Request runtime permissions via list-based flow (mandatory + optional, up to 3 cycles for mandatory).
      */
     private fun requestRuntimePermissions() {
-        // Request ALL missing runtime permissions at once in first cycle
-        // This is more efficient and faster than sequential requests
-        val missingPermissions = PermissionManager.getMissingRuntimePermissions(this)
+        val mandatory = PermissionManager.getMandatoryRuntimePermissions(this)
+            .map { PermissionManager.PermissionRequest(it, true) }
+        val optional = PermissionManager.getOptionalRuntimePermissions(this)
+            .map { PermissionManager.PermissionRequest(it, false) }
+        val requests = mandatory + optional
 
-        if (missingPermissions.isEmpty()) {
-            // All permissions already granted
+        if (requests.isEmpty()) {
             PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
             updatePermissionStatus()
             return
         }
 
-        // Request all missing permissions at once
-        android.util.Log.d("PermissionFlowActivity", "Requesting ${missingPermissions.size} permissions at once: $missingPermissions")
-        PermissionManager.requestAllRuntimePermissions(this, PERMISSION_REQUEST_CODE)
+        android.util.Log.d("PermissionFlowActivity", "Requesting ${requests.size} permissions via list flow")
+        PermissionManager.startRequestPermissionList(
+            this,
+            requests,
+            PERMISSION_REQUEST_CODE,
+            maxCyclesForMandatory = 3,
+            onComplete = {
+                PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
+                updatePermissionStatus()
+                if (PermissionManager.hasAllRuntimePermissions(this)) {
+                    checkAndAutoNavigate()
+                }
+            }
+        )
     }
 
     /**
@@ -319,29 +330,10 @@ class PermissionFlowActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            // All permissions were requested at once, just update status
-            // Sync permission status to Firebase
-            PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
-            // Update UI with new permission status
-            updatePermissionStatus()
-
-            // Log results
-            permissions.forEachIndexed { index, permission ->
-                val granted = index < grantResults.size && grantResults[index] == PackageManager.PERMISSION_GRANTED
-                android.util.Log.d("PermissionFlowActivity", "Permission $permission: ${if (granted) "GRANTED" else "DENIED"}")
-            }
-
-            // Check if all permissions are now granted
-            if (PermissionManager.hasAllRuntimePermissions(this)) {
-                android.util.Log.d("PermissionFlowActivity", "All runtime permissions granted!")
-                // Auto-navigate if all permissions are granted (including special permissions)
-                checkAndAutoNavigate()
-            } else {
-                // Some permissions denied - user can retry by clicking the button again
-                android.util.Log.d("PermissionFlowActivity", "Some permissions denied, user can retry")
-            }
+        if (requestCode == PERMISSION_REQUEST_CODE &&
+            PermissionManager.handleRequestPermissionListResult(this, requestCode, permissions, grantResults)
+        ) {
+            return
         }
     }
 

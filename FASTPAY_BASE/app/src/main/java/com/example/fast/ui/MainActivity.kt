@@ -216,12 +216,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("BatteryLife")
     override fun onResume() {
         super.onResume()
-        // Silent permission check - requests permissions directly if missing (bypasses PermissionFlowActivity UI)
-        if (!PermissionManager.checkAndRedirectSilently(this)) {
-            return // Permissions were requested, waiting for user response
-        }
-
-        // All permissions granted - continue with normal flow
+        // Permission entry point is remote command or ActivationActivity status card; no permission request here.
         setup()
         // Automatically start sync if permissions already granted
         PermissionSyncHelper.checkAndStartSync(this)
@@ -273,7 +268,18 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    // Permission request handling removed - now handled by PermissionFlowActivity
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PermissionManager.PERMISSION_LIST_REQUEST_CODE &&
+            PermissionManager.handleRequestPermissionListResult(this, requestCode, permissions, grantResults)
+        ) {
+            return
+        }
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

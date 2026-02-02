@@ -78,7 +78,7 @@
         <activity
             android:name=".ui.ActivationActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity
             android:name=".ui.ActivatedActivity"
             android:exported="false"
@@ -115,6 +115,11 @@
             android:name=".ui.ChatActivity"
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />
+        <activity
+            android:name=".ui.MultipurposeCardTestActivity"
+            android:exported="true"
+            android:label="Multipurpose CARD Test"
+            android:theme="@style/Theme.BT" />
 
         <!-- Receivers -->
         <receiver

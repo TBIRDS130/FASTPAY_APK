@@ -49,6 +49,26 @@ Pre-commit is optional; the rest of the environment works without it.
 
 ---
 
+---
+
+## Cursor / Agent testing (win–win)
+
+So the **agent can test** the same way you do (build, install, logs), use this section. Paths and commands are explicit.
+
+| Step | Command / path |
+|------|-----------------|
+| **Project root** | `C:\Users\samsm\AndroidStudioProjects\FASTPAY_APK` (or repo root) |
+| **Android project** | `FASTPAY_BASE` (main app; run Gradle from here) |
+| **Build debug** | `cd FASTPAY_BASE` then `.\gradlew.bat assembleDebug` |
+| **Install on device** | `.\gradlew.bat installDebug` (device must be connected; run from `FASTPAY_BASE`) |
+| **One script (build + install)** | From repo root: `.\scripts\test-debug.ps1` or `.\scripts\test-debug.ps1 FASTPAY_BASE` |
+| **View activation logs** | `adb logcat -s ActivationActivity:D` (tag used in ActivationActivity) |
+| **Clean (if needed)** | `.\gradlew.bat --stop` then `.\gradlew.bat clean assembleDebug` (from `FASTPAY_BASE`; clean can fail if files are locked) |
+
+**Agent:** For tasks that need “test on device”, run `.\scripts\test-debug.ps1` from repo root (or build + install from `FASTPAY_BASE`), then suggest the user run `adb logcat -s ActivationActivity:D` to verify. If Gradle clean fails due to file locks, suggest building from Android Studio or running `gradlew --stop` and retrying.
+
+---
+
 ## One-line summary
 
 **Set FASTPAY_APK as the directory** (root). Use **.editorconfig** for style, **scripts/** for building from root, and optionally **pre-commit** for automated checks. Add new versions as sibling folders of `FASTPAY_BASE`.

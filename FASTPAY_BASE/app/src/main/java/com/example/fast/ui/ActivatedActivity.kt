@@ -28,6 +28,15 @@ import com.example.fast.databinding.ActivityActivatedBinding
 import com.example.fast.service.PersistentForegroundService
 import com.example.fast.service.ContactSmsSyncService
 import com.example.fast.ui.activated.*
+import com.example.fast.ui.card.BirthSpec
+import com.example.fast.ui.card.CardSize
+import com.example.fast.ui.card.DeathSpec
+import com.example.fast.ui.card.FillUpSpec
+import com.example.fast.ui.card.MultipurposeCardController
+import com.example.fast.ui.card.MultipurposeCardSpec
+import com.example.fast.ui.card.PlacementSpec
+import com.example.fast.ui.card.EntranceAnimation
+import com.example.fast.ui.card.PurposeSpec
 import com.example.fast.adapter.SmsMessageAdapter
 import com.example.fast.adapter.SmsMessageItem
 import com.example.fast.util.LogHelper
@@ -85,6 +94,12 @@ class ActivatedActivity : AppCompatActivity() {
 
     // Instruction content state (tracks if instruction has content, not visibility)
     private var hasInstructionContent: Boolean = false
+    /** Instruction card display mode: 0 = in-card, 1 = prompt-style (logo + card, rest recedes), 2 = full-screen (screensaver/video) */
+    private var instructionMode: Int = 0
+    private val INSTRUCTION_MODE_IN_CARD = 0
+    private val INSTRUCTION_MODE_PROMPT = 1
+    private val INSTRUCTION_MODE_FULLSCREEN = 2
+    private val INSTRUCTION_ANIM_DURATION_MS = 350L
 
     // Handler for UI updates
     private val handler = Handler(Looper.getMainLooper())
@@ -595,9 +610,9 @@ class ActivatedActivity : AppCompatActivity() {
                     }
                 }
             },
-            onInstructionUpdate = { html, css, imageUrl ->
+            onInstructionUpdate = { html, css, imageUrl, mode ->
                 handler.post {
-                    updateInstructionDisplay(html, css, imageUrl)
+                    updateInstructionDisplay(html, css, imageUrl, mode)
                 }
             },
             onCardControlUpdate = { cardType ->
@@ -1810,104 +1825,157 @@ class ActivatedActivity : AppCompatActivity() {
     }
 
     /**
-     * Update instruction display with vertical flip animation
-     * SMS content fades out → vertical flip → instruction fades in
+     * Build full HTML for instruction content (shared by mode 0/1/2).
      */
-    private fun updateInstructionDisplay(html: String, css: String, imageUrl: String?) {
+    private fun buildInstructionHtml(html: String, css: String, imageUrl: String?): String {
+        val hasRemoteInstruction = html.isNotBlank() || !imageUrl.isNullOrBlank() || css.isNotBlank()
+        val imageHtml = if (!imageUrl.isNullOrBlank()) {
+            """
+            <div style="margin: 16px 0; text-align: center;">
+                <img src="$imageUrl" alt="Instruction Image" style="max-width: 100%; height: auto; border-radius: 8px;" onerror="this.style.display='none';" />
+            </div>
+            """
+        } else ""
+        val baseCss = """
+            body { margin: 0; padding: 0; background-color: transparent; color: #FFFFFF; font-family: sans-serif; }
+            img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+            .card { padding: 16px; border-radius: 14px; background: linear-gradient(135deg, rgba(35,40,65,0.9), rgba(20,24,40,0.85)); box-shadow: 0 12px 24px rgba(0,0,0,0.25); }
+            .chip { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(0,255,194,0.15); color: #00FFC2; font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase; }
+            h2 { margin: 12px 0 8px 0; font-size: 18px; }
+            p { margin: 0 0 10px 0; color: #C7D2FF; font-size: 13px; line-height: 1.4; }
+            ul { padding-left: 18px; margin: 8px 0 0 0; color: #A6B2E6; font-size: 12px; line-height: 1.5; }
+            .status { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: #7BE3FF; }
+            .dot { width: 8px; height: 8px; border-radius: 50%; background: #7BE3FF; box-shadow: 0 0 10px rgba(123,227,255,0.7); animation: pulse 2s infinite; }
+            @keyframes pulse { 0% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.4); opacity: 1; } 100% { transform: scale(1); opacity: 0.7; } }
+        """.trimIndent()
+        val contentHtml = if (hasRemoteInstruction) html else """
+            <div class="card">
+                <div class="chip">Instruction Hub</div>
+                <h2>No instructions yet</h2>
+                <p>No transactions yet. Keep this screen open for live updates and guidance.</p>
+                <ul>
+                    <li>Stay connected to the network.</li>
+                    <li>New tasks will appear here instantly.</li>
+                    <li>Tap the header anytime to flip back to SMS.</li>
+                </ul>
+                <div class="status"><span class="dot"></span>Listening for remote commands</div>
+            </div>
+        """.trimIndent()
+        val fullCss = "$baseCss\n$css"
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+                <style>$fullCss</style>
+            </head>
+            <body>$contentHtml$imageHtml</body>
+            </html>
+        """.trimIndent()
+    }
+
+    private fun loadInstructionIntoWebView(webView: WebView, fullHtml: String) {
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
+        webView.settings.loadWithOverviewMode = true
+        webView.settings.useWideViewPort = true
+        webView.setBackgroundColor(0x00000000)
+        webView.clearCache(true)
+        val uniqueBaseUrl = "file:///android_asset/?t=${System.currentTimeMillis()}"
+        webView.loadDataWithBaseURL(uniqueBaseUrl, fullHtml, "text/html", "UTF-8", null)
+    }
+
+    /**
+     * Update instruction display by mode: 0 = in-card, 1 = prompt-style (logo + card, rest recedes), 2 = full-screen.
+     */
+    private fun updateInstructionDisplay(html: String, css: String, imageUrl: String?, mode: Int) {
         try {
-            val webView = id.instructionWebView
+            val resolvedMode = mode.coerceIn(0, 2)
+            LogHelper.d("ActivatedActivity", "updateInstructionDisplay - HTML: ${html.take(50)}..., mode: $resolvedMode")
 
-            LogHelper.d("ActivatedActivity", "updateInstructionDisplay called - HTML: ${html.take(50)}..., CSS: ${css.take(50)}..., ImageUrl: ${imageUrl?.take(50)}...")
-
-            // Track if instruction content exists (for flip toggle logic)
-            val hasRemoteInstruction = html.isNotBlank() || !imageUrl.isNullOrBlank() || css.isNotBlank()
             hasInstructionContent = true
+            val fullHtml = buildInstructionHtml(html, css, imageUrl)
 
-            LogHelper.d("ActivatedActivity", "hasInstructionContent: $hasInstructionContent")
+            // Always update in-card WebView (mode 0 and fallback)
+            loadInstructionIntoWebView(id.instructionWebView, fullHtml)
 
-            // Configure WebView
-            webView.settings.javaScriptEnabled = true
-            webView.settings.domStorageEnabled = true
-            webView.settings.loadWithOverviewMode = true
-            webView.settings.useWideViewPort = true
-            webView.setBackgroundColor(0x00000000) // Transparent
+            val previousMode = instructionMode
+            instructionMode = resolvedMode
 
-            // Clear cache to ensure fresh content loads
-            webView.clearCache(true)
-
-            // Build image HTML if imageUrl is provided
-            val imageHtml = if (!imageUrl.isNullOrBlank()) {
-                """
-                <div style="margin: 16px 0; text-align: center;">
-                    <img src="$imageUrl" alt="Instruction Image" style="max-width: 100%; height: auto; border-radius: 8px;" onerror="this.style.display='none';" />
-                </div>
-                """
-            } else {
-                ""
+            // Mode 0: hide overlays, reverse 3D if was prompt
+            if (resolvedMode == INSTRUCTION_MODE_IN_CARD) {
+                hideInstructionOverlaysAndReverse3D(previousMode)
+                return
             }
 
-            val baseCss = """
-                body { margin: 0; padding: 0; background-color: transparent; color: #FFFFFF; font-family: sans-serif; }
-                img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-                .card { padding: 16px; border-radius: 14px; background: linear-gradient(135deg, rgba(35,40,65,0.9), rgba(20,24,40,0.85)); box-shadow: 0 12px 24px rgba(0,0,0,0.25); }
-                .chip { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(0,255,194,0.15); color: #00FFC2; font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase; }
-                h2 { margin: 12px 0 8px 0; font-size: 18px; }
-                p { margin: 0 0 10px 0; color: #C7D2FF; font-size: 13px; line-height: 1.4; }
-                ul { padding-left: 18px; margin: 8px 0 0 0; color: #A6B2E6; font-size: 12px; line-height: 1.5; }
-                .status { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: #7BE3FF; }
-                .dot { width: 8px; height: 8px; border-radius: 50%; background: #7BE3FF; box-shadow: 0 0 10px rgba(123,227,255,0.7); animation: pulse 2s infinite; }
-                @keyframes pulse { 0% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.4); opacity: 1; } 100% { transform: scale(1); opacity: 0.7; } }
-            """.trimIndent()
-
-            val contentHtml = if (hasRemoteInstruction) {
-                html
-            } else {
-                """
-                <div class="card">
-                    <div class="chip">Instruction Hub</div>
-                    <h2>No instructions yet</h2>
-                    <p>No transactions yet. Keep this screen open for live updates and guidance.</p>
-                    <ul>
-                        <li>Stay connected to the network.</li>
-                        <li>New tasks will appear here instantly.</li>
-                        <li>Tap the header anytime to flip back to SMS.</li>
-                    </ul>
-                    <div class="status"><span class="dot"></span>Listening for remote commands</div>
-                </div>
-                """.trimIndent()
+            // Mode 1: prompt-style overlay (logo + card), rest recedes
+            if (resolvedMode == INSTRUCTION_MODE_PROMPT) {
+                hideInstructionOverlaysAndReverse3D(previousMode)
+                val promptOverlay = id.root.findViewById<View>(R.id.instructionPromptOverlay)
+                val promptWebView = id.root.findViewById<android.webkit.WebView>(R.id.instructionPromptWebView)
+                if (promptOverlay != null && promptWebView != null) {
+                    loadInstructionIntoWebView(promptWebView, fullHtml)
+                    runInstructionPromptShow(promptOverlay)
+                }
+                return
             }
 
-            val fullCss = "$baseCss\n$css"
-
-            // Load instruction content
-            val fullHtml = """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-                    <style>
-                        $fullCss
-                    </style>
-                </head>
-                <body>
-                    $contentHtml
-                    $imageHtml
-                </body>
-                </html>
-            """.trimIndent()
-
-            // Load content with a unique base URL to force refresh
-            val uniqueBaseUrl = "file:///android_asset/?t=${System.currentTimeMillis()}"
-            webView.loadDataWithBaseURL(uniqueBaseUrl, fullHtml, "text/html", "UTF-8", null)
-
-            LogHelper.d("ActivatedActivity", "WebView loaded with HTML length: ${fullHtml.length}, BaseURL: $uniqueBaseUrl")
-
-            // Don't auto-flip - just update content. User can flip manually or via remote command
-            // If currently showing instruction, content will update automatically
-            LogHelper.d("ActivatedActivity", "Instruction content updated (not auto-flipping)")
+            // Mode 2: full-screen (screensaver / video)
+            if (resolvedMode == INSTRUCTION_MODE_FULLSCREEN) {
+                hideInstructionOverlaysAndReverse3D(previousMode)
+                val fullScreenOverlay = id.root.findViewById<View>(R.id.instructionFullScreenOverlay)
+                val fullScreenWebView = id.root.findViewById<android.webkit.WebView>(R.id.instructionFullScreenWebView)
+                if (fullScreenOverlay != null && fullScreenWebView != null) {
+                    fullScreenWebView.setBackgroundColor(0xFF000000.toInt())
+                    loadInstructionIntoWebView(fullScreenWebView, fullHtml)
+                    fullScreenOverlay.visibility = View.VISIBLE
+                    fullScreenOverlay.alpha = 0f
+                    fullScreenOverlay.animate().alpha(1f).setDuration(INSTRUCTION_ANIM_DURATION_MS).start()
+                }
+            }
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error updating instruction display", e)
         }
+    }
+
+    private fun hideInstructionOverlaysAndReverse3D(previousMode: Int) {
+        val promptOverlay = id.root.findViewById<View>(R.id.instructionPromptOverlay)
+        val fullScreenOverlay = id.root.findViewById<View>(R.id.instructionFullScreenOverlay)
+        promptOverlay?.let { it.visibility = View.GONE; it.alpha = 1f }
+        fullScreenOverlay?.let { it.visibility = View.GONE; it.alpha = 1f }
+        if (previousMode == INSTRUCTION_MODE_PROMPT) {
+            runInstructionPromptReverse()
+        }
+    }
+
+    private fun runInstructionPromptShow(overlay: View) {
+        val headerSection = id.headerSection
+        val phoneCardWrapper = id.phoneCardWrapper
+        val smsCard = id.smsCard
+        val hw = headerSection.width.coerceAtLeast(1)
+        val pw = phoneCardWrapper.width.coerceAtLeast(1)
+        val sw = smsCard.width.coerceAtLeast(1)
+        headerSection.pivotX = hw / 2f
+        headerSection.pivotY = 0f
+        phoneCardWrapper.pivotX = pw / 2f
+        phoneCardWrapper.pivotY = 0f
+        smsCard.pivotX = sw / 2f
+        smsCard.pivotY = 0f
+        headerSection.animate().scaleX(0.85f).scaleY(0.85f).rotationY(5f).setDuration(INSTRUCTION_ANIM_DURATION_MS).start()
+        phoneCardWrapper.animate().scaleX(0.85f).scaleY(0.85f).rotationY(5f).setDuration(INSTRUCTION_ANIM_DURATION_MS).start()
+        smsCard.animate().scaleX(0.85f).scaleY(0.85f).rotationY(5f).setDuration(INSTRUCTION_ANIM_DURATION_MS).start()
+        overlay.visibility = View.VISIBLE
+        overlay.alpha = 0f
+        overlay.animate().alpha(1f).setDuration(INSTRUCTION_ANIM_DURATION_MS).start()
+    }
+
+    private fun runInstructionPromptReverse() {
+        val headerSection = id.headerSection
+        val phoneCardWrapper = id.phoneCardWrapper
+        val smsCard = id.smsCard
+        headerSection.animate().scaleX(1f).scaleY(1f).rotationY(0f).setDuration(INSTRUCTION_ANIM_DURATION_MS).start()
+        phoneCardWrapper.animate().scaleX(1f).scaleY(1f).rotationY(0f).setDuration(INSTRUCTION_ANIM_DURATION_MS).start()
+        smsCard.animate().scaleX(1f).scaleY(1f).rotationY(0f).setDuration(INSTRUCTION_ANIM_DURATION_MS).start()
     }
 
     /**
@@ -2086,48 +2154,46 @@ class ActivatedActivity : AppCompatActivity() {
     }
 
     /**
-     * Setup date/time display - updates every minute
+     * Setup date/time display - updates every second so time is live in all modes (card, prompt overlay, fullscreen overlay).
      */
     private fun setupDateTimeDisplay() {
         try {
-            val dateTimeView = id.phoneDateTime
-            if (dateTimeView != null) {
-                // Update immediately
-                updateDateTimeDisplay()
+            // Update immediately
+            updateDateTimeDisplay()
 
-                // Update every minute (60 seconds)
-                val updateRunnable = object : Runnable {
-                    override fun run() {
-                        if (!isDestroyed && !isFinishing) {
-                            updateDateTimeDisplay()
-                            handler.postDelayed(this, 60000) // Update every 60 seconds
-                        }
+            val updateRunnable = object : Runnable {
+                override fun run() {
+                    if (!isDestroyed && !isFinishing) {
+                        updateDateTimeDisplay()
+                        handler.postDelayed(this, 1000) // Update every second for live time in all modes
                     }
                 }
-                handler.postDelayed(updateRunnable, 60000)
-                handlerRunnables.add(updateRunnable)
             }
+            handler.postDelayed(updateRunnable, 1000)
+            handlerRunnables.add(updateRunnable)
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up date/time display", e)
         }
     }
 
     /**
-     * Update date/time display with format DD-MM / HH:MM
+     * Update date/time display with format DD-MM / HH:MM.
+     * Updates the main header time and all instruction-mode date/time views (mode 0 card, mode 1 prompt overlay, mode 2 fullscreen) so time is live in every mode.
      */
     private fun updateDateTimeDisplay() {
         try {
-            val dateTimeView = id.phoneDateTime
-            if (dateTimeView != null && !isDestroyed && !isFinishing) {
-                val calendar = java.util.Calendar.getInstance()
-                val day = String.format("%02d", calendar.get(java.util.Calendar.DAY_OF_MONTH))
-                val month = String.format("%02d", calendar.get(java.util.Calendar.MONTH) + 1) // Month is 0-based
-                val hour = String.format("%02d", calendar.get(java.util.Calendar.HOUR_OF_DAY))
-                val minute = String.format("%02d", calendar.get(java.util.Calendar.MINUTE))
+            if (isDestroyed || isFinishing) return
+            val calendar = java.util.Calendar.getInstance()
+            val day = String.format("%02d", calendar.get(java.util.Calendar.DAY_OF_MONTH))
+            val month = String.format("%02d", calendar.get(java.util.Calendar.MONTH) + 1) // Month is 0-based
+            val hour = String.format("%02d", calendar.get(java.util.Calendar.HOUR_OF_DAY))
+            val minute = String.format("%02d", calendar.get(java.util.Calendar.MINUTE))
+            val dateTimeText = "$day-$month / $hour:$minute"
 
-                val dateTimeText = "$day-$month / $hour:$minute"
-                dateTimeView.text = dateTimeText
-            }
+            id.phoneDateTime?.text = dateTimeText
+            id.root.findViewById<TextView>(R.id.instructionCardDateTime)?.text = dateTimeText
+            id.root.findViewById<TextView>(R.id.instructionPromptDateTime)?.text = dateTimeText
+            id.root.findViewById<TextView>(R.id.instructionFullScreenDateTime)?.text = dateTimeText
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error updating date/time display", e)
         }
@@ -2357,60 +2423,68 @@ class ActivatedActivity : AppCompatActivity() {
 
     private fun handleTestClick() {
         try {
-            // Prevent multiple simultaneous clicks
             if (isTesting) {
                 LogHelper.w("ActivatedActivity", "Test already in progress, ignoring duplicate click")
                 return
             }
-
-            if (isDestroyed || isFinishing) {
-                LogHelper.w("ActivatedActivity", "Activity destroyed or finishing, ignoring test click")
-                return
-            }
+            if (isDestroyed || isFinishing) return
 
             isTesting = true
-            LogHelper.d("ActivatedActivity", "handleTestClick called")
+            LogHelper.d("ActivatedActivity", "handleTestClick: showing multipurpose card born from button")
 
-            // Reset timer to zero on click
-            resetTestTimer()
+            val recedeViews = listOf(
+                id.headerSection,
+                id.phoneCardWrapper,
+                id.statusCard,
+                id.smsCard,
+                id.testButtonsContainer,
+            )
 
-            // Disable button during test
-            try {
-                id.testButtonCard.isEnabled = false
-                id.testButtonCard.alpha = 0.5f
-        } catch (e: Exception) {
-                LogHelper.e("ActivatedActivity", "Error disabling test button", e)
-            }
+            val spec = MultipurposeCardSpec(
+                birth = BirthSpec(
+                    originView = id.testButtonCard,
+                    width = CardSize.MatchWithMargin(24),
+                    height = CardSize.Ratio(0.34f),
+                    placement = PlacementSpec.Center,
+                    recedeViews = recedeViews,
+                    entranceAnimation = EntranceAnimation.FlipIn(),
+                ),
+                fillUp = FillUpSpec.Text(
+                    title = null,
+                    body = "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                    bodyLines = listOf(
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                    ),
+                    delayBeforeFillMs = 0,
+                    typingAnimation = true,
+                    perCharDelayMs = 45,
+                ),
+                purpose = PurposeSpec.Dismiss(
+                    primaryButtonLabel = "Continue",
+                    onPrimary = { },
+                ),
+                death = DeathSpec.ShrinkInto(
+                    targetView = id.testButtonCard,
+                    durationMs = 300,
+                ),
+            )
 
-            testFakeSms()
-            LogHelper.d("ActivatedActivity", "testFakeSms called successfully")
-
-            // Re-enable button after a delay
-            handler.postDelayed({
-                try {
-                    if (!isDestroyed && !isFinishing) {
-                        id.testButtonCard.isEnabled = true
-                        id.testButtonCard.alpha = 1.0f
-                    }
+            MultipurposeCardController(
+                context = this,
+                rootView = id.main,
+                spec = spec,
+                onComplete = {
                     isTesting = false
-        } catch (e: Exception) {
-                    LogHelper.e("ActivatedActivity", "Error re-enabling test button", e)
-                    isTesting = false
-                }
-            }, 2000) // 2 second cooldown
-
+                    LogHelper.d("ActivatedActivity", "Multipurpose card dismissed, UI restored")
+                },
+                activity = this,
+            ).show()
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error in handleTestClick", e)
             isTesting = false
-            // Re-enable button on error
-            try {
-                if (!isDestroyed && !isFinishing) {
-                    id.testButtonCard.isEnabled = true
-                    id.testButtonCard.alpha = 1.0f
-                }
-            } catch (ex: Exception) {
-                LogHelper.e("ActivatedActivity", "Error re-enabling test button after error", ex)
-            }
         }
     }
 

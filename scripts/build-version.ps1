@@ -30,6 +30,8 @@ if (-not (Test-Path (Join-Path $versionPath "gradlew.bat"))) {
 
 Write-Host "Building $version (assembleRelease)..." -ForegroundColor Cyan
 Set-Location $versionPath
-& .\gradlew.bat assembleRelease
+& .\gradlew.bat copyReleaseApk
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host "Done. APK under $version\app\build\outputs\apk\release\" -ForegroundColor Green
+Write-Host "Done. APK outputs:" -ForegroundColor Green
+Write-Host "  - $version\app\build\outputs\apk\release\fastpay-*.apk" -ForegroundColor Gray
+Write-Host "  - releases\fastpay-*.apk (repo root)" -ForegroundColor Gray
