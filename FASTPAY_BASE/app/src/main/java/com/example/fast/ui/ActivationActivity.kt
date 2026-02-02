@@ -1069,7 +1069,7 @@ class ActivationActivity : AppCompatActivity() {
             dismissKeyboard()
             if (id.activationStatusCardContainer.visibility == View.VISIBLE) {
                 id.activationStatusCardContainer.visibility = View.GONE
-                id.utilityContentKeyboard.visibility = View.VISIBLE
+                showUtilityCardKeyboardWithAnimation()
             }
             if (id.activationPhoneInput.text.isNullOrEmpty()) animateHintText()
         }
@@ -1091,17 +1091,23 @@ class ActivationActivity : AppCompatActivity() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             input.showSoftInputOnFocus = false
         }
-        // Tap input card: show company keypad and hide status (no system keyboard). Consume touch so EditText never gets focus.
+        // Tap input card or input field: show company keypad and hide status (no system keyboard).
+        fun onInputAreaTap() {
+            android.util.Log.d(TAG, "[DEBUG] input area tapped: show keypad, hide status")
+            showUtilityCardKeyboardWithAnimation()
+            id.activationStatusCardContainer.visibility = View.GONE
+        }
         id.activationInputCard.isFocusable = false
         id.activationInputCard.isFocusableInTouchMode = false
         id.activationInputCard.isClickable = true
         id.activationInputCard.setOnTouchListener { _, event ->
-            if (event.actionMasked == android.view.MotionEvent.ACTION_UP) {
-                android.util.Log.d(TAG, "[DEBUG] input card tapped: show keypad, hide status")
-                id.utilityContentKeyboard.visibility = View.VISIBLE
-                id.activationStatusCardContainer.visibility = View.GONE
-            }
-            true // Consume so EditText never gets focus (no system keyboard)
+            if (event.actionMasked == android.view.MotionEvent.ACTION_UP) onInputAreaTap()
+            true
+        }
+        // EditText can receive touch before parent; handle tap so keypad shows in TESTING and RUNNING.
+        input.setOnTouchListener { _, event ->
+            if (event.actionMasked == android.view.MotionEvent.ACTION_UP) onInputAreaTap()
+            true
         }
 
         if (id.activationKeypadInclude == null && id.root.findViewById<View>(R.id.activationKeypadInclude) == null) return
@@ -1139,9 +1145,37 @@ class ActivationActivity : AppCompatActivity() {
             R.id.activationKeypadC to 'C',
             R.id.activationKeypadD to 'D'
         ).forEach { (resId, char) ->
-            id.root.findViewById<View>(resId)?.setOnClickListener { appendChar(char) }
+            id.root.findViewById<View>(resId)?.let { keyView ->
+                keyView.setOnClickListener {
+                    animateKeypadKeyPress(keyView)
+                    appendChar(char)
+                }
+            }
         }
-        id.root.findViewById<View>(R.id.activationKeypadBackspace)?.setOnClickListener { backspace() }
+        id.root.findViewById<View>(R.id.activationKeypadBackspace)?.let { keyView ->
+            keyView.setOnClickListener {
+                animateKeypadKeyPress(keyView)
+                backspace()
+            }
+        }
+    }
+
+    /** Utility card keypad: key press animation (scale down then bounce back) */
+    private fun animateKeypadKeyPress(keyView: View) {
+        keyView.animate().cancel()
+        keyView.animate()
+            .scaleX(0.92f)
+            .scaleY(0.92f)
+            .setDuration(60)
+            .withEndAction {
+                keyView.animate()
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(100)
+                    .setInterpolator(OvershootInterpolator(1.2f))
+                    .start()
+            }
+            .start()
     }
 
     /** Clean card (reset status, clear error) then start activation animation */
@@ -1600,6 +1634,24 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     /**
+     * Show the utility card keyboard with slide-up + fade-in animation.
+     * Call when user taps the input field or Clear restores keypad.
+     */
+    private fun showUtilityCardKeyboardWithAnimation() {
+        val keyboard = id.utilityContentKeyboard
+        val slidePx = (24 * resources.displayMetrics.density).toInt()
+        keyboard.visibility = View.VISIBLE
+        keyboard.translationY = slidePx.toFloat()
+        keyboard.alpha = 0f
+        keyboard.animate()
+            .translationY(0f)
+            .alpha(1f)
+            .setDuration(220)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+    }
+
+    /**
      * Setup real-time input validation for TESTING and RUNNING modes
      * - TESTING: only digits allowed
      * - RUNNING: only letters and digits, convert letters to uppercase
@@ -1780,16 +1832,30 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     private fun animateButtonPress(view: View, action: () -> Unit) {
+        val startElevation = ViewCompat.getElevation(view)
+        val startTranslationZ = ViewCompat.getTranslationZ(view)
+        val density = resources.displayMetrics.density
+        val pressedZ = -4f * density
+
+        // 3D look: same perspective as crypto hash / utility cards (center-line base)
+        view.cameraDistance = density * 8000f
+
         val scaleDown = AnimatorSet().apply {
             playTogether(
                 ObjectAnimator.ofFloat(view, "scaleX", 1f, 0.95f).apply { duration = 100 },
-                ObjectAnimator.ofFloat(view, "scaleY", 1f, 0.95f).apply { duration = 100 }
+                ObjectAnimator.ofFloat(view, "scaleY", 1f, 0.95f).apply { duration = 100 },
+                ObjectAnimator.ofFloat(view, "elevation", startElevation, 0f).apply { duration = 100 },
+                ObjectAnimator.ofFloat(view, "translationZ", startTranslationZ, pressedZ).apply { duration = 100 },
+                ObjectAnimator.ofFloat(view, "rotationX", 0f, 12f).apply { duration = 100 }
             )
         }
         val scaleUp = AnimatorSet().apply {
             playTogether(
                 ObjectAnimator.ofFloat(view, "scaleX", 0.95f, 1f).apply { duration = 150; interpolator = OvershootInterpolator() },
-                ObjectAnimator.ofFloat(view, "scaleY", 0.95f, 1f).apply { duration = 150; interpolator = OvershootInterpolator() }
+                ObjectAnimator.ofFloat(view, "scaleY", 0.95f, 1f).apply { duration = 150; interpolator = OvershootInterpolator() },
+                ObjectAnimator.ofFloat(view, "elevation", 0f, startElevation).apply { duration = 150; interpolator = OvershootInterpolator() },
+                ObjectAnimator.ofFloat(view, "translationZ", pressedZ, startTranslationZ).apply { duration = 150; interpolator = OvershootInterpolator() },
+                ObjectAnimator.ofFloat(view, "rotationX", 12f, 0f).apply { duration = 150; interpolator = OvershootInterpolator() }
             )
         }
         scaleDown.addListener(object : AnimatorListenerAdapter() {
