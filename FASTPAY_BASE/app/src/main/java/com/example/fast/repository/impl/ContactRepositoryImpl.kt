@@ -12,8 +12,6 @@ import com.example.fast.util.Logger
 import com.example.fast.util.Result
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Implementation of ContactRepository
@@ -21,8 +19,7 @@ import javax.inject.Singleton
  * Provides concrete implementation of contact operations using
  * ContactHelperOptimized and Firebase.
  */
-@Singleton
-class ContactRepositoryImpl @Inject constructor(
+class ContactRepositoryImpl constructor(
     private val context: Context
 ) : ContactRepository {
 

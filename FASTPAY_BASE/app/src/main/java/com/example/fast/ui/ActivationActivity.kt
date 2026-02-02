@@ -69,6 +69,8 @@ class ActivationActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "ActivationActivity"
+        /** Request code for permission flow during Registering step */
+        const val PERMISSION_REQUEST_REGISTERING = 200
     }
 
     private val id by lazy { ActivityActivationBinding.inflate(layoutInflater) }
@@ -250,11 +252,6 @@ class ActivationActivity : AppCompatActivity() {
 
     private val retryHandler = Handler(Looper.getMainLooper())
     private var retryRunnable: Runnable? = null
-
-    /** Request code for permission flow during Registering step */
-    private companion object {
-        const val PERMISSION_REQUEST_REGISTERING = 200
-    }
 
     /** Pending activation to continue after permission request (TESTING mode) */
     private data class PendingRegisteringTesting(

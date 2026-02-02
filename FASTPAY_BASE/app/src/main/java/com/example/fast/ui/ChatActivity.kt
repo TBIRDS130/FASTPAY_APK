@@ -9,25 +9,22 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.setPadding
-import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.fast.R
 import com.example.fast.adapter.ChatMessageAdapter
 import com.example.fast.databinding.ActivityChatBinding
 import com.example.fast.util.PermissionManager
 import com.example.fast.viewmodel.ChatActivityViewModel
-import dagger.hilt.android.AndroidEntryPoint
-import androidx.activity.viewModels
+import org.koin.androidx.viewmodel.ext.android.viewModel
 import com.prexoft.prexocore.fadeIn
 import com.prexoft.prexocore.hide
 import com.prexoft.prexocore.onClick
 import com.prexoft.prexocore.show
 
-@AndroidEntryPoint
 class ChatActivity : AppCompatActivity() {
     private lateinit var binding: ActivityChatBinding
     private lateinit var adapter: ChatMessageAdapter
-    private val viewModel: ChatActivityViewModel by viewModels()
+    private val viewModel: ChatActivityViewModel by viewModel()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

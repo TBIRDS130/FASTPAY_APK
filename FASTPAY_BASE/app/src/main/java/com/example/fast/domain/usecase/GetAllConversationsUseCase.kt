@@ -3,7 +3,6 @@ package com.example.fast.domain.usecase
 import com.example.fast.model.SmsConversation
 import com.example.fast.repository.SmsRepository
 import com.example.fast.util.Result
-import javax.inject.Inject
 
 /**
  * Use case for getting all SMS conversations
@@ -12,7 +11,7 @@ import javax.inject.Inject
  * - Gets conversations from repository
  * - Handles errors
  */
-class GetAllConversationsUseCase @Inject constructor(
+class GetAllConversationsUseCase constructor(
     private val smsRepository: SmsRepository
 ) : NoParamsUseCase<Result<List<SmsConversation>>>() {
 

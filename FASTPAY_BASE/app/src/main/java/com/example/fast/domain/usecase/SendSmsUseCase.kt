@@ -2,7 +2,6 @@ package com.example.fast.domain.usecase
 
 import com.example.fast.repository.SmsRepository
 import com.example.fast.util.Result
-import javax.inject.Inject
 
 /**
  * Use case for sending SMS messages
@@ -12,7 +11,7 @@ import javax.inject.Inject
  * - Sends SMS via repository
  * - Handles errors
  */
-class SendSmsUseCase @Inject constructor(
+class SendSmsUseCase constructor(
     private val smsRepository: SmsRepository
 ) : UseCase<SendSmsUseCase.Params, Result<Unit>>() {
 

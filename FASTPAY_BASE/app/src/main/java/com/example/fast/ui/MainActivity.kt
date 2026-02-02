@@ -14,7 +14,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 // Navigation Component imports (for future Fragment migration)
 // import androidx.navigation.NavController
@@ -32,21 +31,19 @@ import com.example.fast.util.PermissionSyncHelper
 import com.example.fast.util.PermissionManager
 import com.example.fast.notification.AppNotificationManager
 import com.example.fast.viewmodel.MainActivityViewModel
-import dagger.hilt.android.AndroidEntryPoint
-import androidx.activity.viewModels
+import org.koin.androidx.viewmodel.ext.android.viewModel
 import com.prexoft.prexocore.hide
 import com.prexoft.prexocore.show
 import com.prexoft.prexocore.alert
 import androidx.core.view.isVisible
 import com.prexoft.prexocore.onClick
 
-@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     private val id by lazy { ActivityMainBinding.inflate(layoutInflater) }
     private lateinit var conversationAdapter: SmsConversationAdapter
 
-    // ViewModel - injected via Hilt
-    private val viewModel: MainActivityViewModel by viewModels()
+    // ViewModel - injected via Koin
+    private val viewModel: MainActivityViewModel by viewModel()
 
     // Handler and runnable references for cleanup
     private val handler = Handler(Looper.getMainLooper())

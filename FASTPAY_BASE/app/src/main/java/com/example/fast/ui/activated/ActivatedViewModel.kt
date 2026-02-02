@@ -2,15 +2,12 @@ package com.example.fast.ui.activated
 
 import androidx.lifecycle.ViewModel
 import com.example.fast.util.LogHelper
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 
 /**
  * ViewModel for ActivatedActivity
  * Manages state and data for the activated device screen
  */
-@HiltViewModel
-class ActivatedViewModel @Inject constructor() : ViewModel() {
+class ActivatedViewModel : ViewModel() {
 
     // Device information
     var activationCode: String? = null

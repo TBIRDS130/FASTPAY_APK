@@ -3,17 +3,15 @@ import java.util.Properties
 import org.gradle.testing.jacoco.tasks.JacocoReport
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.firebase.crashlytics)
-    // KSP and Hilt declared together in this module so they share the same class loader (dagger#3965)
     alias(libs.plugins.ksp)
-    id("com.google.dagger.hilt.android") version "2.57.2"
     id("jacoco")
 }
-
 // Load keystore properties from file (if it exists)
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
@@ -102,9 +100,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true  // ✅ Enable ProGuard/R8
-            isShrinkResources = true  // ✅ Remove unused resources
-            signingConfig = signingConfigs.getByName("release")  // ✅ Use release signing config
+            // Disabled minify until ProGuard keeps Application/Hilt; re-enable and test after fixing rules
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -181,9 +180,8 @@ dependencies {
     // Kotlin Coroutines (for NavigationPreloader)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // Hilt Dependency Injection (KSP instead of kapt to avoid JDK 17 kapt "env is null" failure)
-    implementation("com.google.dagger:hilt-android:2.57.2")
-    ksp("com.google.dagger:hilt-compiler:2.57.2")
+    // Koin Dependency Injection (replaces Hilt; no code gen, no plugin)
+    implementation("io.insert-koin:koin-android:3.5.6")
 
     // Timber for logging
     implementation(libs.timber)
@@ -192,12 +190,6 @@ dependencies {
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.androidx.work.runtime.ktx)
-}
-
-// Ensure Hilt compile-only configurations include required annotations
-configurations.matching { it.name.startsWith("hiltCompileOnly") }.configureEach {
-    dependencies.add(project.dependencies.create("com.google.dagger:hilt-android:2.57.2"))
-    dependencies.add(project.dependencies.create("com.google.dagger:hilt-core:2.57.2"))
 }
 
 // Copy release APK to repo-level releases/ folder for easy access

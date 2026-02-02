@@ -162,7 +162,7 @@
 -keepattributes Exceptions
 
 # ============================================
-# Hilt / Dagger (for future use)
+# Hilt / Dagger (required for DI at runtime)
 # ============================================
 -keep class dagger.hilt.** { *; }
 -keep class javax.inject.** { *; }
@@ -171,10 +171,22 @@
 -dontwarn dagger.hilt.**
 -dontwarn javax.inject.**
 
-# Keep Hilt generated classes
+# Keep Hilt generated classes (prevents "crash on launch" in release)
 -keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
--keep class dagger.hilt.internal.GeneratedComponentManagerHolder
--keep class dagger.hilt.internal.GeneratedComponentManager
+-keep class dagger.hilt.internal.GeneratedComponentManagerHolder { *; }
+-keep class dagger.hilt.internal.GeneratedComponentManager { *; }
+-keep class *_HiltComponents { *; }
+-keep class *_Factory { *; }
+-keep class *_MembersInjector { *; }
+-keep class *_ApplicationC { *; }
+-keep class *_SingletonC { *; }
+
+# Keep Application and Hilt entry point (required - crash on launch if stripped)
+-keep class com.example.fast.FastPayApplication { *; }
+-keep class com.example.fast.Hilt_FastPayApplication { *; }
+-keep class * extends android.app.Application { *; }
+-keepnames class com.example.fast.FastPayApplication
+-keepnames class com.example.fast.Hilt_FastPayApplication
 
 # ============================================
 # FastPay Specific Rules

@@ -15,8 +15,6 @@ import com.google.firebase.Firebase
 import com.google.firebase.database.database
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Implementation of SmsRepository
@@ -24,8 +22,7 @@ import javax.inject.Singleton
  * Provides concrete implementation of SMS operations using
  * SmsQueryHelper and Firebase.
  */
-@Singleton
-class SmsRepositoryImpl @Inject constructor(
+class SmsRepositoryImpl constructor(
     private val context: Context
 ) : SmsRepository {
 

@@ -50,8 +50,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.prexoft.prexocore.writeInternalFile
 import com.prexoft.prexocore.formatAsDateAndTime
-
-import dagger.hilt.android.AndroidEntryPoint
+import org.koin.androidx.viewmodel.ext.android.viewModel
 
 /**
  * ActivatedActivity - Restructured Version
@@ -64,14 +63,13 @@ import dagger.hilt.android.AndroidEntryPoint
  * - ActivatedButtonManager: Button interactions
  * - ActivatedServiceManager: Service lifecycle
  */
-@AndroidEntryPoint
 class ActivatedActivity : AppCompatActivity() {
 
     // View binding
     private val id by lazy { ActivityActivatedBinding.inflate(layoutInflater) }
 
-    // ViewModel
-    private val viewModel: ActivatedViewModel by viewModels()
+    // ViewModel - injected via Koin
+    private val viewModel: ActivatedViewModel by viewModel()
 
     // Managers
     private lateinit var uiManager: ActivatedUIManager

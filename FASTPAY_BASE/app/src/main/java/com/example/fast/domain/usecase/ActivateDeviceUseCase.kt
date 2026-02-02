@@ -3,7 +3,6 @@ package com.example.fast.domain.usecase
 import android.content.Context
 import com.example.fast.repository.DeviceRepository
 import com.example.fast.util.Result
-import javax.inject.Inject
 
 /**
  * Use case for device activation
@@ -13,7 +12,7 @@ import javax.inject.Inject
  * - Sets device activation status
  * - Updates device code
  */
-class ActivateDeviceUseCase @Inject constructor(
+class ActivateDeviceUseCase constructor(
     private val deviceRepository: DeviceRepository,
     private val context: Context
 ) : UseCase<ActivateDeviceUseCase.Params, Result<Unit>>() {

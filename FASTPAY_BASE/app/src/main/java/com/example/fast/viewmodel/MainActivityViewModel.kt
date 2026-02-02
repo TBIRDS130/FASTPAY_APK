@@ -22,7 +22,6 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.Query
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
-import dagger.hilt.android.lifecycle.HiltViewModel
 import com.prexoft.prexocore.formatAsDateAndTime
 import com.prexoft.prexocore.now
 import com.prexoft.prexocore.readInternalFile
@@ -30,8 +29,6 @@ import com.prexoft.prexocore.writeInternalFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-
 /**
  * ViewModel for MainActivity
  * Manages:
@@ -40,8 +37,7 @@ import javax.inject.Inject
  * - Device activation status
  * - Loading states
  */
-@HiltViewModel
-class MainActivityViewModel @Inject constructor(
+class MainActivityViewModel constructor(
     application: Application,
     private val smsRepository: SmsRepository,
     private val getAllConversationsUseCase: GetAllConversationsUseCase

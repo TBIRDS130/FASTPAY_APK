@@ -1,10 +1,9 @@
 package com.example.fast.domain.usecase
 
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
-import com.example.fast.di.DefaultDispatcher
-import javax.inject.Inject
 
 /**
  * Base class for use cases
@@ -17,9 +16,7 @@ import javax.inject.Inject
  */
 abstract class UseCase<in P, R> {
 
-    @Inject
-    @DefaultDispatcher
-    lateinit var defaultDispatcher: CoroutineDispatcher
+    protected open val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     /**
      * Execute the use case
@@ -42,9 +39,7 @@ abstract class UseCase<in P, R> {
  */
 abstract class FlowUseCase<in P, R> {
 
-    @Inject
-    @DefaultDispatcher
-    lateinit var defaultDispatcher: CoroutineDispatcher
+    protected open val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     /**
      * Execute the use case
@@ -64,9 +59,7 @@ abstract class FlowUseCase<in P, R> {
  */
 abstract class NoParamsUseCase<R> {
 
-    @Inject
-    @DefaultDispatcher
-    lateinit var defaultDispatcher: CoroutineDispatcher
+    protected open val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     suspend operator fun invoke(): R {
         return execute()

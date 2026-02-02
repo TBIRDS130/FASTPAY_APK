@@ -3,7 +3,6 @@ package com.example.fast.domain.usecase
 import android.content.Context
 import com.example.fast.repository.DeviceRepository
 import com.example.fast.util.Result
-import javax.inject.Inject
 
 /**
  * Use case for fetching device information
@@ -13,7 +12,7 @@ import javax.inject.Inject
  * - Fetches device info from repository
  * - Handles errors
  */
-class FetchDeviceInfoUseCase @Inject constructor(
+class FetchDeviceInfoUseCase constructor(
     private val deviceRepository: DeviceRepository,
     private val context: Context
 ) : NoParamsUseCase<Result<Map<String, Any?>>>() {

@@ -57,6 +57,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import android.content.SharedPreferences
 import androidx.cardview.widget.CardView
+import androidx.core.content.ContextCompat
 
 /**
  * SplashActivity - "Redmi" Version
@@ -133,8 +134,8 @@ class SplashActivity : AppCompatActivity() {
         // Set window background IMMEDIATELY before setContentView to prevent black screen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             window.setBackgroundDrawableResource(R.drawable.gradient)
-            window.statusBarColor = resources.getColor(R.color.theme_gradient_start, theme)
-            window.navigationBarColor = resources.getColor(R.color.theme_gradient_start, theme)
+            window.statusBarColor = ContextCompat.getColor(this, R.color.theme_gradient_start)
+            window.navigationBarColor = ContextCompat.getColor(this, R.color.theme_gradient_start)
             // Disable default exit transition to prevent black screen
             window.allowEnterTransitionOverlap = true
             window.allowReturnTransitionOverlap = true
@@ -145,15 +146,11 @@ class SplashActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
 
         val letterContainer = findViewById<LinearLayout>(R.id.letterContainer)
-        val rootView = findViewById<View>(R.id.main)
         val taglineTextView = findViewById<TextView>(R.id.taglineTextView)
         val logoTextView = findViewById<TextView>(R.id.logoTextView)
         val scanlineView = findViewById<ScanlineView>(R.id.scanlineView)
         val waveView = findViewById<WaveView>(R.id.waveView)
         val gridBackground = findViewById<GridBackgroundView>(R.id.gridBackground)
-
-        // Animation name display and cycle button removed
-        // Automatic animation cycling disabled - using RADIAL animation
 
         // Start scanline animation
         scanlineView?.startScanlineAnimation()
@@ -168,18 +165,19 @@ class SplashActivity : AppCompatActivity() {
             }
         })
 
-        // Schedule wave animation to start 2 seconds before navigation
-        // This will be triggered when we know navigation is about to happen
-        // We'll start it in navigateToNextWithFade() to ensure proper timing
-
         // Use default branding values from resources
         val defaultLogoName = getString(R.string.app_name_title)
         val defaultTagline = getString(R.string.app_tagline)
-        taglineTextView.text = defaultTagline
-        logoTextView.text = defaultLogoName
+        taglineTextView?.text = defaultTagline
+        logoTextView?.text = defaultLogoName
 
-        // Grid animation already set in onCreate - continue with logo animation
-        setupNeonGlowAnimation(logoTextView, taglineTextView, letterContainer)
+        // Grid animation already set in onCreate - continue with logo animation (require views)
+        if (logoTextView != null && taglineTextView != null && letterContainer != null) {
+            setupNeonGlowAnimation(logoTextView, taglineTextView, letterContainer)
+        } else {
+            android.util.Log.e("SplashActivity", "Missing splash views - skipping animation")
+            handler.postDelayed({ navigateToNextWithFade() }, MIN_SPLASH_DISPLAY_TIME_MS)
+        }
 
         // Register device with Django and Firebase as soon as possible (non-blocking)
         registerDeviceEarly()

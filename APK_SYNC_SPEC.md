@@ -168,7 +168,7 @@ Creates `apk-config.js` from `colors.xml`, `strings.xml`, `dimens.xml`.
 
 **Current approach:** Manual sync using APK_SYNC_SPEC checklist + optional extract script.
 
-**Alternative for future:** 
+**Alternative for future:**
 1. **CI check** – GitHub Action that compares APK resources vs apk-config.js, fails if out of sync.
 2. **Pre-commit hook** – Run extract script before commit when APK resource files change.
 3. **Single HTML with config** – HTML always loads apk-config.js; developers run extract script after APK updates.

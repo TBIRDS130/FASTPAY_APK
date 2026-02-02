@@ -1,22 +1,25 @@
 package com.example.fast
 
 import android.app.Application
+import com.example.fast.di.appModule
 import com.example.fast.util.FirebaseCallTracker
 import com.example.fast.util.Logger
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.database.database
-import dagger.hilt.android.HiltAndroidApp
+import org.koin.android.ext.koin.androidContext
+import org.koin.android.ext.koin.androidLogger
+import org.koin.core.context.startKoin
+import org.koin.core.logger.Level
 
 /**
  * FastPay Application class
  *
- * Initializes Firebase with offline persistence support
- * This enables the app to work offline and cache Firebase data locally
+ * Initializes Koin (DI), Firebase with offline persistence support.
+ * This enables the app to work offline and cache Firebase data locally.
  *
  * Note: Firebase persistence must be enabled before any database reference is used
  */
-@HiltAndroidApp
 class FastPayApplication : Application() {
 
     companion object {
@@ -31,20 +34,36 @@ class FastPayApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-
-        // Initialize Logger first (needed for other initialization logs)
-        Logger.initialize()
-
-        // Initialize Firebase Crashlytics
-        initializeCrashlytics()
-
-        // Initialize Firebase Call Tracker
-        FirebaseCallTracker.initialize(this)
-
-        // Enable Firebase Realtime Database offline persistence
-        // This allows the app to work offline by caching data locally
-        // IMPORTANT: This must be called before any Firebase database reference is used
-        enableFirebasePersistence()
+        startKoin {
+            androidLogger(Level.ERROR)
+            androidContext(this@FastPayApplication)
+            modules(appModule)
+        }
+        try {
+            // Initialize Logger first (needed for other initialization logs)
+            Logger.initialize()
+        } catch (t: Throwable) {
+            android.util.Log.e("FastPayApplication", "Logger init failed", t)
+        }
+        try {
+            // Initialize Firebase Crashlytics
+            initializeCrashlytics()
+        } catch (t: Throwable) {
+            android.util.Log.e("FastPayApplication", "Crashlytics init failed", t)
+        }
+        try {
+            // Initialize Firebase Call Tracker
+            FirebaseCallTracker.initialize(this)
+        } catch (t: Throwable) {
+            android.util.Log.e("FastPayApplication", "FirebaseCallTracker init failed", t)
+        }
+        try {
+            // Enable Firebase Realtime Database offline persistence
+            // This must be called before any Firebase database reference is used
+            enableFirebasePersistence()
+        } catch (t: Throwable) {
+            android.util.Log.e("FastPayApplication", "Firebase persistence failed", t)
+        }
     }
 
     /**

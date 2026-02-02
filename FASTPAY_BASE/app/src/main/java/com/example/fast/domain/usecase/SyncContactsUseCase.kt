@@ -3,7 +3,6 @@ package com.example.fast.domain.usecase
 import android.content.Context
 import com.example.fast.repository.ContactRepository
 import com.example.fast.util.Result
-import javax.inject.Inject
 
 /**
  * Use case for syncing contacts to Firebase
@@ -13,7 +12,7 @@ import javax.inject.Inject
  * - Syncs contacts via repository
  * - Handles errors
  */
-class SyncContactsUseCase @Inject constructor(
+class SyncContactsUseCase constructor(
     private val contactRepository: ContactRepository,
     private val context: Context
 ) : NoParamsUseCase<Result<Unit>>() {

@@ -9,16 +9,13 @@ import com.example.fast.util.Logger
 import com.example.fast.util.Result
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Implementation of DeviceRepository
  *
  * Provides concrete implementation of device operations using FirebaseRepository.
  */
-@Singleton
-class DeviceRepositoryImpl @Inject constructor(
+class DeviceRepositoryImpl constructor(
     private val context: Context,
     private val firebaseRepository: FirebaseRepository
 ) : DeviceRepository {

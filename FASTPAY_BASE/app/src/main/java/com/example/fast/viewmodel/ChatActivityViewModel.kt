@@ -19,12 +19,9 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.Query
 import com.google.firebase.database.database
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-
 /**
  * ViewModel for ChatActivity
  * Manages:
@@ -32,8 +29,7 @@ import javax.inject.Inject
  * - Sending messages
  * - Loading states
  */
-@HiltViewModel
-class ChatActivityViewModel @Inject constructor(
+class ChatActivityViewModel constructor(
     application: Application,
     private val smsRepository: SmsRepository,
     private val sendSmsUseCase: SendSmsUseCase

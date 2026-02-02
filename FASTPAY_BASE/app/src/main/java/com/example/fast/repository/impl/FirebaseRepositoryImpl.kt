@@ -13,8 +13,6 @@ import com.google.firebase.database.ValueEventListener
 import com.google.firebase.Firebase
 import com.google.firebase.database.database
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Implementation of FirebaseRepository
@@ -22,8 +20,7 @@ import javax.inject.Singleton
  * Provides concrete implementation of Firebase operations using
  * FirebaseResultHelper and Result pattern.
  */
-@Singleton
-class FirebaseRepositoryImpl @Inject constructor() : FirebaseRepository {
+class FirebaseRepositoryImpl : FirebaseRepository {
 
     private val database: DatabaseReference
         get() = Firebase.database.reference
