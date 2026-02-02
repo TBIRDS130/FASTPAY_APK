@@ -7,6 +7,8 @@ import android.animation.AnimatorSet
 import android.animation.AnimatorListenerAdapter
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -14,9 +16,13 @@ import android.os.Looper
 import android.telephony.TelephonyManager
 import android.view.View
 import android.view.ViewTreeObserver
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.webkit.WebView
+import androidx.core.app.ActivityCompat
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -132,6 +138,13 @@ class ActivatedActivity : AppCompatActivity() {
     private var borderBlinkHandler: android.os.Handler? = null
     private var borderBlinkRunnables = mutableListOf<Runnable>()
     private var pendingScrollRunnable: Runnable? = null
+
+    // Master card (update + permissions overlay) - same-style as ActivationActivity prompt card
+    private var masterCardTypingRunnable: Runnable? = null
+    private val MASTER_CARD_ANIM_DURATION_MS = 350L
+    private val MASTER_CARD_OPACITY_FADE_MS = 600L
+    private val MASTER_CARD_FLIP_DURATION_MS = 600L
+    private val MASTER_CARD_PER_CHAR_DELAY_MS = 45L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -339,18 +352,22 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error handling intent data", e)
         }
 
-        // Setup permissions
-        try {
-            checkPermissionsAndUpdateUI()
-        } catch (e: Exception) {
-            LogHelper.e("ActivatedActivity", "Error checking permissions", e)
-        }
-
-        // Check if app is set as default SMS app (required for full SMS functionality)
-        try {
-            checkDefaultSms()
-        } catch (e: Exception) {
-            LogHelper.e("ActivatedActivity", "Error checking default SMS app", e)
+        // When entering from Activation with transition: wipe + one-by-one arrival + master card run from shared element transition end. Otherwise show master card in post if needed.
+        val useTransitionFlow = intent.getBooleanExtra("animate", false) || intent.getBooleanExtra("hasTransition", false)
+        id.main.post {
+            try {
+                if (!useTransitionFlow) {
+                    showActivationMasterCardIfNeeded {
+                        checkPermissionsAndUpdateUI()
+                        checkDefaultSms()
+                    }
+                }
+                // When useTransitionFlow, runWipeLineThenArrivalThenMasterCard is called from setupTransitions on shared element transition end
+            } catch (e: Exception) {
+                LogHelper.e("ActivatedActivity", "Error showing master card or running post-dismiss", e)
+                checkPermissionsAndUpdateUI()
+                checkDefaultSms()
+            }
         }
 
         // Final visibility check after everything is set up
@@ -408,6 +425,13 @@ class ActivatedActivity : AppCompatActivity() {
                                 // Transition complete - ensure phone card has crypto hash card background
                                 id.phoneCard.post {
                                     id.phoneCard.setBackgroundResource(R.drawable.crypto_hash_card_background)
+                                }
+                                // Wipe line down, then one-by-one arrival, then master card (update + permission)
+                                runWipeLineThenArrivalThenMasterCard {
+                                    showActivationMasterCardIfNeeded {
+                                        checkPermissionsAndUpdateUI()
+                                        checkDefaultSms()
+                                    }
                                 }
                             }
 
@@ -504,6 +528,82 @@ class ActivatedActivity : AppCompatActivity() {
             // Fallback: just set the background directly
             id.phoneCard.setBackgroundResource(R.drawable.crypto_hash_card_background)
         }
+    }
+
+    private val WIPE_LINE_DURATION_MS = 400L
+    private val ARRIVAL_STAGGER_MS = 120L
+
+    /**
+     * Wipe line goes down at speed (unblocks content), then disappears; then one-by-one arrival; then onArrivalComplete (e.g. show master card).
+     */
+    private fun runWipeLineThenArrivalThenMasterCard(onArrivalComplete: () -> Unit) {
+        if (isDestroyed || isFinishing) return
+        val overlay = id.wipeLineOverlay ?: run {
+            onArrivalComplete()
+            return
+        }
+        overlay.visibility = View.VISIBLE
+        overlay.alpha = 1f
+        overlay.translationY = 0f
+        overlay.post {
+            if (isDestroyed || isFinishing) return@post
+            val h = overlay.height.coerceAtLeast(1)
+            overlay.animate()
+                .translationY(h.toFloat())
+                .setDuration(WIPE_LINE_DURATION_MS)
+                .setInterpolator(android.view.animation.AccelerateInterpolator())
+                .withEndAction {
+                    if (isDestroyed || isFinishing) return@withEndAction
+                    overlay.visibility = View.GONE
+                    overlay.translationY = 0f
+                    runOneByOneArrival(onArrivalComplete)
+                }
+                .start()
+        }
+    }
+
+    /**
+     * One-by-one element arrival: headerSection → phoneCardWrapper → statusCard → smsCard → testButtonsContainer. On last animation end calls onComplete.
+     */
+    private fun runOneByOneArrival(onComplete: () -> Unit) {
+        if (isDestroyed || isFinishing) {
+            onComplete()
+            return
+        }
+        val elements = listOf(
+            id.headerSection,
+            id.phoneCardWrapper,
+            id.statusCard,
+            id.smsCard,
+            id.testButtonsContainer
+        )
+        elements.forEach { it.alpha = 0f }
+        var index = 0
+        fun animateNext() {
+            if (isDestroyed || isFinishing) {
+                onComplete()
+                return
+            }
+            if (index >= elements.size) {
+                onComplete()
+                return
+            }
+            val view = elements[index]
+            view.animate()
+                .alpha(1f)
+                .setDuration(300)
+                .setInterpolator(DecelerateInterpolator())
+                .withEndAction {
+                    index++
+                    if (index >= elements.size) {
+                        onComplete()
+                    } else {
+                        handler.postDelayed({ animateNext() }, ARRIVAL_STAGGER_MS)
+                    }
+                }
+                .start()
+        }
+        handler.postDelayed({ animateNext() }, 50)
     }
 
     /**
@@ -1216,15 +1316,15 @@ class ActivatedActivity : AppCompatActivity() {
                 val smsCardContentContainer = id.smsCardContentContainer
 
                 if (instructionContentBack.visibility == View.VISIBLE) {
-                    // Currently showing instruction - flip to SMS
-                    animateCardFlipToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
+                    // Currently showing instruction - wipe (return) to SMS
+                    animateCardWipeToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
                     writeShowCardToFirebase("sms")
                     LogHelper.d("ActivatedActivity", "Manual flip: SMS visible")
                 } else {
-                    // Currently showing SMS - check if instruction exists, then flip
+                    // Currently showing SMS - check if instruction exists, then wipe
                     if (hasInstructionContent) {
-                        // Instruction content exists - flip to instruction
-                        animateCardFlipToInstruction(smsContentFront, instructionContentBack, smsCardContentContainer)
+                        // Instruction content exists - wipe to instruction
+                        animateCardWipeToInstruction(smsContentFront, instructionContentBack, smsCardContentContainer)
                         writeShowCardToFirebase("instruction")
                         LogHelper.d("ActivatedActivity", "Manual flip: Instruction visible")
                     } else {
@@ -1796,6 +1896,332 @@ class ActivatedActivity : AppCompatActivity() {
     }
 
     /**
+     * Show master card (update check then permission list) when entering from ActivationActivity with activation data.
+     * Runs update phase, then permissions phase, then same-style reverse and calls [onDismiss].
+     * If card is not shown, [onDismiss] is invoked immediately.
+     */
+    private fun showActivationMasterCardIfNeeded(onDismiss: () -> Unit) {
+        val code = intent.getStringExtra("code")
+        val showMasterCard = !code.isNullOrBlank() && intent.getBooleanExtra("showMasterCard", true)
+        if (!showMasterCard || isDestroyed || isFinishing) {
+            onDismiss()
+            return
+        }
+        val overlayBinding = id.activationMasterCardOverlay ?: run {
+            onDismiss()
+            return
+        }
+        val overlay = overlayBinding.root
+        val cardBinding = overlayBinding.activationMasterCard
+        val card = cardBinding.root
+        val promptTitle = cardBinding.activationPromptTitle
+        val typedText = cardBinding.activationPromptTypedText
+        promptTitle?.text = ""
+        typedText?.text = ""
+
+        val headerSection = id.headerSection
+        val phoneCardWrapper = id.phoneCardWrapper
+        val statusCard = id.statusCard
+        val smsCard = id.smsCard
+        val testButtonsContainer = id.testButtonsContainer
+
+        overlay.visibility = View.VISIBLE
+        overlay.alpha = 0f
+        overlay.animate().alpha(1f).setDuration(150).start()
+
+        val hw = headerSection.width.coerceAtLeast(1)
+        val pw = phoneCardWrapper.width.coerceAtLeast(1)
+        val scw = statusCard.width.coerceAtLeast(1)
+        val smw = smsCard.width.coerceAtLeast(1)
+        val tbw = testButtonsContainer.width.coerceAtLeast(1)
+        val tbh = testButtonsContainer.height.coerceAtLeast(1)
+        headerSection.pivotX = hw / 2f
+        headerSection.pivotY = 0f
+        phoneCardWrapper.pivotX = pw / 2f
+        phoneCardWrapper.pivotY = 0f
+        statusCard.pivotX = scw / 2f
+        statusCard.pivotY = 0f
+        smsCard.pivotX = smw / 2f
+        smsCard.pivotY = 0f
+        testButtonsContainer.pivotX = tbw / 2f
+        testButtonsContainer.pivotY = tbh / 2f
+
+        headerSection.animate()
+            .scaleX(0.85f).scaleY(0.85f)
+            .rotationY(5f)
+            .setDuration(MASTER_CARD_ANIM_DURATION_MS)
+            .start()
+        phoneCardWrapper.animate()
+            .scaleX(0.85f).scaleY(0.85f)
+            .rotationY(5f)
+            .alpha(0.4f)
+            .setDuration(MASTER_CARD_OPACITY_FADE_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+        statusCard.animate()
+            .scaleX(0.85f).scaleY(0.85f)
+            .rotationY(-5f)
+            .alpha(0.4f)
+            .setDuration(MASTER_CARD_OPACITY_FADE_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+        smsCard.animate()
+            .scaleX(0.85f).scaleY(0.85f)
+            .rotationY(-5f)
+            .alpha(0.4f)
+            .setDuration(MASTER_CARD_OPACITY_FADE_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+        testButtonsContainer.animate()
+            .scaleX(0.85f).scaleY(0.85f)
+            .rotationY(-5f)
+            .alpha(0.4f)
+            .setDuration(MASTER_CARD_OPACITY_FADE_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+
+        val cameraDistance = resources.displayMetrics.density * 8000
+        statusCard.cameraDistance = cameraDistance
+        card.cameraDistance = cameraDistance
+        val cw = card.width.coerceAtLeast(1)
+        val ch = card.height.coerceAtLeast(1)
+        card.pivotX = cw / 2f
+        card.pivotY = ch / 2f
+        card.rotationX = 90f
+        card.alpha = 0f
+        card.visibility = View.VISIBLE
+
+        fun runPhase2PermissionThenReverse() {
+            if (isDestroyed || isFinishing) return
+            promptTitle?.text = "PERMISSIONS"
+            typedText?.text = ""
+            val lines = getGrantedAllPermissionNames()
+            if (typedText != null && lines.isNotEmpty()) {
+                typePermissionListOnCard(lines, typedText) {
+                    if (isDestroyed || isFinishing) {
+                        onDismiss()
+                        return@typePermissionListOnCard
+                    }
+                    runReverseMasterCardAnimation(overlay, card, headerSection, phoneCardWrapper, statusCard, smsCard, testButtonsContainer, onDismiss)
+                }
+            } else {
+                runReverseMasterCardAnimation(overlay, card, headerSection, phoneCardWrapper, statusCard, smsCard, testButtonsContainer, onDismiss)
+            }
+        }
+
+        val flipInCard = ObjectAnimator.ofFloat(card, "rotationX", 90f, 0f).apply {
+            duration = MASTER_CARD_FLIP_DURATION_MS
+            interpolator = AccelerateDecelerateInterpolator()
+        }
+        val fadeInCard = ObjectAnimator.ofFloat(card, "alpha", 0f, 1f).apply {
+            duration = MASTER_CARD_FLIP_DURATION_MS
+        }
+        val flipInAnim = AnimatorSet().apply { playTogether(flipInCard, fadeInCard) }
+        flipInAnim.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                if (isDestroyed || isFinishing) return
+                promptTitle?.text = "UPDATE"
+                typedText?.text = "Checking for update..."
+                checkForAppUpdate { updateAvailable ->
+                    handler.post {
+                        if (isDestroyed || isFinishing) return@post
+                        if (updateAvailable) {
+                            typedText?.text = "Update available. Opening..."
+                            handler.postDelayed({
+                                if (isDestroyed || isFinishing) return@postDelayed
+                                runReverseMasterCardAnimation(overlay, card, headerSection, phoneCardWrapper, statusCard, smsCard, testButtonsContainer, onDismiss)
+                            }, 1500)
+                        } else {
+                            typedText?.text = "App is up to date."
+                            handler.postDelayed({
+                                if (isDestroyed || isFinishing) return@postDelayed
+                                runPhase2PermissionThenReverse()
+                            }, 1500)
+                        }
+                    }
+                }
+            }
+        })
+        handler.postDelayed({ if (!isDestroyed && !isFinishing) flipInAnim.start() }, MASTER_CARD_ANIM_DURATION_MS)
+    }
+
+    private fun runReverseMasterCardAnimation(
+        overlay: View,
+        card: View,
+        headerSection: View,
+        phoneCardWrapper: View,
+        statusCard: View,
+        smsCard: View,
+        testButtonsContainer: View,
+        onComplete: () -> Unit
+    ) {
+        val flipOut = ObjectAnimator.ofFloat(card, "rotationX", 0f, 90f).apply {
+            duration = 200
+            interpolator = AccelerateInterpolator()
+        }
+        val fadeOut = ObjectAnimator.ofFloat(card, "alpha", 1f, 0f).apply {
+            duration = 200
+        }
+        val flipOutAnim = AnimatorSet().apply { playTogether(flipOut, fadeOut) }
+        flipOutAnim.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                if (isDestroyed || isFinishing) return
+                card.visibility = View.GONE
+                overlay.visibility = View.GONE
+                overlay.alpha = 1f
+                card.rotationX = 0f
+                card.alpha = 1f
+                headerSection.animate().scaleX(1f).scaleY(1f).rotationY(0f).setDuration(MASTER_CARD_ANIM_DURATION_MS).start()
+                phoneCardWrapper.animate()
+                    .scaleX(1f).scaleY(1f).rotationY(0f).alpha(1f)
+                    .setDuration(MASTER_CARD_ANIM_DURATION_MS)
+                    .start()
+                statusCard.animate()
+                    .scaleX(1f).scaleY(1f).rotationY(0f).alpha(1f)
+                    .setDuration(MASTER_CARD_ANIM_DURATION_MS)
+                    .start()
+                smsCard.animate()
+                    .scaleX(1f).scaleY(1f).rotationY(0f).alpha(1f)
+                    .setDuration(MASTER_CARD_ANIM_DURATION_MS)
+                    .start()
+                testButtonsContainer.animate()
+                    .scaleX(1f).scaleY(1f).rotationY(0f).alpha(1f)
+                    .setDuration(MASTER_CARD_ANIM_DURATION_MS)
+                    .start()
+                onComplete()
+            }
+        })
+        flipOutAnim.start()
+    }
+
+    private fun getGrantedAllPermissionNames(): List<String> {
+        val lines = mutableListOf<String>()
+        val runtimeToName = mapOf(
+            Manifest.permission.RECEIVE_SMS to "• Receive SMS",
+            Manifest.permission.READ_SMS to "• Read SMS",
+            Manifest.permission.READ_CONTACTS to "• Read Contacts",
+            Manifest.permission.READ_PHONE_STATE to "• Read Phone State",
+            Manifest.permission.SEND_SMS to "• Send SMS",
+            Manifest.permission.POST_NOTIFICATIONS to "• Notifications"
+        )
+        for (p in PermissionManager.getRequiredRuntimePermissions(this)) {
+            if (ActivityCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED)
+                runtimeToName[p]?.let { lines.add(it) }
+        }
+        if (PermissionManager.hasNotificationListenerPermission(this)) lines.add("• Notification Listener")
+        if (PermissionManager.hasBatteryOptimizationExemption(this)) lines.add("• Battery Optimization")
+        return lines
+    }
+
+    private fun typePermissionListOnCard(
+        lines: List<String>,
+        textView: TextView,
+        onComplete: () -> Unit
+    ) {
+        masterCardTypingRunnable?.let { handler.removeCallbacks(it); handlerRunnables.remove(it) }
+        masterCardTypingRunnable = null
+        textView.text = ""
+        if (lines.isEmpty()) {
+            onComplete()
+            return
+        }
+        val perCharDelay = MASTER_CARD_PER_CHAR_DELAY_MS.coerceAtLeast(20L)
+        var lineIndex = 0
+        var charIndex = 0
+        val runnable = object : Runnable {
+            override fun run() {
+                if (isDestroyed || isFinishing) {
+                    masterCardTypingRunnable = null
+                    handlerRunnables.remove(this)
+                    return
+                }
+                if (lineIndex >= lines.size) {
+                    masterCardTypingRunnable = null
+                    handlerRunnables.remove(this)
+                    onComplete()
+                    return
+                }
+                val line = lines[lineIndex]
+                if (line.isNotEmpty()) {
+                    val nextIndex = (charIndex + 1).coerceAtMost(line.length)
+                    val prefix = line.substring(0, nextIndex)
+                    val soFar = lines.take(lineIndex).joinToString("\n") + (if (lineIndex > 0) "\n" else "") + prefix
+                    textView.text = soFar
+                    charIndex++
+                }
+                if (charIndex >= line.length) {
+                    lineIndex++
+                    charIndex = 0
+                }
+                masterCardTypingRunnable = this
+                handlerRunnables.add(this)
+                handler.postDelayed(this, perCharDelay)
+            }
+        }
+        masterCardTypingRunnable = runnable
+        handlerRunnables.add(runnable)
+        handler.postDelayed(runnable, perCharDelay)
+    }
+
+    /**
+     * Check for app updates. If an update is available, launches RemoteUpdateActivity.
+     * @param onComplete Callback with true if update was launched, false otherwise.
+     */
+    private fun checkForAppUpdate(onComplete: (Boolean) -> Unit) {
+        LogHelper.d("ActivatedActivity", "Checking for app updates...")
+        val timeoutHandler = Handler(Looper.getMainLooper())
+        var completed = false
+        val timeoutRunnable = Runnable {
+            if (completed) return@Runnable
+            completed = true
+            LogHelper.w("ActivatedActivity", "Version check timeout - proceeding normally")
+            onComplete(false)
+        }
+        timeoutHandler.postDelayed(timeoutRunnable, 15000)
+
+        VersionChecker.checkVersion(
+            context = this,
+            onVersionChecked = { versionInfo ->
+                if (!completed) {
+                    completed = true
+                    timeoutHandler.removeCallbacks(timeoutRunnable)
+                    if (versionInfo == null) {
+                        LogHelper.d("ActivatedActivity", "No version info available, proceeding normally")
+                        onComplete(false)
+                    } else {
+                        val currentVersionCode = VersionChecker.getCurrentVersionCode(this)
+                        val requiredVersionCode = versionInfo.versionCode
+                        val downloadUrl = versionInfo.downloadUrl
+                        val forceUpdate = versionInfo.forceUpdate
+                        LogHelper.d("ActivatedActivity", "Version check: current=$currentVersionCode, required=$requiredVersionCode, forceUpdate=$forceUpdate")
+                        if (currentVersionCode < requiredVersionCode && downloadUrl != null && VersionChecker.isValidDownloadUrl(downloadUrl)) {
+                            LogHelper.d("ActivatedActivity", "Update available: $downloadUrl")
+                            val intent = Intent(this, RemoteUpdateActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                putExtra("downloadUrl", "$requiredVersionCode|$downloadUrl")
+                            }
+                            startActivity(intent)
+                            if (forceUpdate) finish()
+                            onComplete(true)
+                        } else {
+                            LogHelper.d("ActivatedActivity", "No update needed or invalid URL")
+                            onComplete(false)
+                        }
+                    }
+                }
+            },
+            onError = { error ->
+                if (!completed) {
+                    completed = true
+                    timeoutHandler.removeCallbacks(timeoutRunnable)
+                    LogHelper.w("ActivatedActivity", "Version check failed, proceeding normally: ${error.message}")
+                    onComplete(false)
+                }
+            }
+        )
+    }
+
+    /**
      * Update bank name display
      * Note: Container removed - bank name tracked internally only
      */
@@ -2126,6 +2552,74 @@ class ActivatedActivity : AppCompatActivity() {
         })
 
         fadeOutInstruction.start()
+    }
+
+    private val SMS_WIPE_DURATION_MS = 350L
+
+    /**
+     * Line wipe SMS → Instruction: line starts from left, goes right, revealing instruction (same style; return uses opposite edge).
+     */
+    private fun animateCardWipeToInstruction(
+        smsFront: FrameLayout,
+        instructionBack: FrameLayout,
+        container: FrameLayout
+    ) {
+        if (isDestroyed || isFinishing) return
+        val overlay = container.findViewById<View>(R.id.smsWipeOverlay) ?: return
+        instructionBack.visibility = View.VISIBLE
+        instructionBack.alpha = 1f
+        overlay.visibility = View.VISIBLE
+        overlay.translationX = 0f
+        overlay.alpha = 1f
+        overlay.post {
+            if (isDestroyed || isFinishing) return@post
+            val w = container.width.coerceAtLeast(1)
+            overlay.animate()
+                .translationX(w.toFloat())
+                .setDuration(SMS_WIPE_DURATION_MS)
+                .setInterpolator(android.view.animation.AccelerateDecelerateInterpolator())
+                .withEndAction {
+                    if (isDestroyed || isFinishing) return@withEndAction
+                    smsFront.visibility = View.GONE
+                    overlay.visibility = View.GONE
+                    overlay.translationX = 0f
+                }
+                .start()
+        }
+    }
+
+    /**
+     * Line wipe Instruction → SMS (return): line starts from right, goes left, revealing SMS.
+     */
+    private fun animateCardWipeToSms(
+        smsFront: FrameLayout,
+        instructionBack: FrameLayout,
+        container: FrameLayout
+    ) {
+        if (isDestroyed || isFinishing) return
+        val overlay = container.findViewById<View>(R.id.smsWipeOverlay) ?: return
+        smsFront.visibility = View.VISIBLE
+        smsFront.alpha = 1f
+        container.bringChildToFront(smsFront)
+        container.bringChildToFront(overlay)
+        overlay.visibility = View.VISIBLE
+        overlay.translationX = 0f
+        overlay.alpha = 1f
+        overlay.post {
+            if (isDestroyed || isFinishing) return@post
+            val w = container.width.coerceAtLeast(1)
+            overlay.animate()
+                .translationX(-w.toFloat())
+                .setDuration(SMS_WIPE_DURATION_MS)
+                .setInterpolator(android.view.animation.AccelerateDecelerateInterpolator())
+                .withEndAction {
+                    if (isDestroyed || isFinishing) return@withEndAction
+                    instructionBack.visibility = View.GONE
+                    overlay.visibility = View.GONE
+                    overlay.translationX = 0f
+                }
+                .start()
+        }
     }
 
     /**
@@ -2901,7 +3395,7 @@ class ActivatedActivity : AppCompatActivity() {
             when (cardType.lowercase()) {
                 "sms" -> {
                     if (instructionContentBack.visibility == View.VISIBLE) {
-                        animateCardFlipToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
+                        animateCardWipeToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
                         LogHelper.d("ActivatedActivity", "Remote control: Showing SMS card")
                     } else {
                         LogHelper.d("ActivatedActivity", "Remote control: Already showing SMS card")
@@ -2910,7 +3404,7 @@ class ActivatedActivity : AppCompatActivity() {
                 "instruction" -> {
                     if (hasInstructionContent) {
                         if (smsContentFront.visibility == View.VISIBLE) {
-                            animateCardFlipToInstruction(smsContentFront, instructionContentBack, smsCardContentContainer)
+                            animateCardWipeToInstruction(smsContentFront, instructionContentBack, smsCardContentContainer)
                             LogHelper.d("ActivatedActivity", "Remote control: Showing instruction card")
                         } else {
                             LogHelper.d("ActivatedActivity", "Remote control: Already showing instruction card")
@@ -2952,11 +3446,11 @@ class ActivatedActivity : AppCompatActivity() {
                 "flip" -> {
                     // Trigger flip animation
                     if (instructionContentBack.visibility == View.VISIBLE) {
-                        animateCardFlipToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
+                        animateCardWipeToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
                         LogHelper.d("ActivatedActivity", "Remote animation: Flip to SMS")
                     } else {
                         if (hasInstructionContent) {
-                            animateCardFlipToInstruction(smsContentFront, instructionContentBack, smsCardContentContainer)
+                            animateCardWipeToInstruction(smsContentFront, instructionContentBack, smsCardContentContainer)
                             LogHelper.d("ActivatedActivity", "Remote animation: Flip to Instruction")
                         } else {
                             LogHelper.w("ActivatedActivity", "Remote animation: No instruction content, cannot flip")

@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
@@ -106,6 +108,9 @@ object PermissionManager {
     /** Request code used by the list-based permission flow (for routing onRequestPermissionsResult). */
     const val PERMISSION_LIST_REQUEST_CODE = 101
 
+    /** Delay (ms) before showing the next permission dialog so the previous one fully dismisses. */
+    private const val NEXT_PERMISSION_DELAY_MS = 350L
+
     // Internal state for list-based flow (one flow at a time)
     private data class PermissionListState(
         val inputRequests: List<PermissionRequest>,
@@ -113,7 +118,8 @@ object PermissionManager {
         var currentCycle: Int,
         val results: MutableMap<String, PermissionResult>,
         var queueForCycle: MutableList<String>,
-        val onComplete: (List<PermissionResult>) -> Unit
+        val onComplete: (List<PermissionResult>) -> Unit,
+        val onPermissionRequesting: ((friendlyName: String) -> Unit)? = null
     )
 
     private var permissionListState: PermissionListState? = null
@@ -195,17 +201,47 @@ object PermissionManager {
     }
 
     /**
+     * Request exactly one runtime permission. Use this so the system shows one dialog at a time.
+     * Optionally defer the request so the previous dialog has time to dismiss.
+     * Invokes [onPermissionRequesting] with the friendly name so the UI can show e.g. "SMS permission" on screen.
+     */
+    private fun requestOnePermission(
+        activity: Activity,
+        permission: String,
+        requestCode: Int,
+        delayMs: Long = 0L,
+        onPermissionRequesting: ((friendlyName: String) -> Unit)? = null
+    ) {
+        val friendlyName = getPermissionName(permission)
+        fun doRequest() {
+            onPermissionRequesting?.invoke(friendlyName)
+            ActivityCompat.requestPermissions(activity, arrayOf(permission), requestCode)
+            android.util.Log.d(TAG, "[PERMISSION] requestOnePermission: $permission ($friendlyName)")
+        }
+        if (delayMs <= 0L) {
+            doRequest()
+            return
+        }
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (activity.isFinishing || activity.isDestroyed) return@postDelayed
+            doRequest()
+        }, delayMs)
+    }
+
+    /**
      * Start the list-based permission flow. Call [handleRequestPermissionListResult] from onRequestPermissionsResult.
      *
      * @param maxCyclesForMandatory Max cycles for mandatory permissions (default 3).
      * @param onComplete Called with results in input order when flow finishes.
+     * @param onPermissionRequesting Optional: called with friendly name (e.g. "Receive SMS") when each permission dialog is about to show. Use to update status text on screen during the cycle.
      */
     fun startRequestPermissionList(
         activity: Activity,
         requests: List<PermissionRequest>,
         requestCode: Int = PERMISSION_LIST_REQUEST_CODE,
         maxCyclesForMandatory: Int = 3,
-        onComplete: (List<PermissionResult>) -> Unit
+        onComplete: (List<PermissionResult>) -> Unit,
+        onPermissionRequesting: ((friendlyName: String) -> Unit)? = null
     ) {
         if (requests.isEmpty()) {
             onComplete(emptyList())
@@ -223,11 +259,13 @@ object PermissionManager {
             currentCycle = 1,
             results = mutableMapOf(),
             queueForCycle = toRequestCycle1.toMutableList(),
-            onComplete = onComplete
+            onComplete = onComplete,
+            onPermissionRequesting = onPermissionRequesting
         )
         permissionListState = state
-        android.util.Log.d(TAG, "[PERMISSION] startRequestPermissionList: cycle=1, queue=${state.queueForCycle.size}")
-        ActivityCompat.requestPermissions(activity, arrayOf(state.queueForCycle.removeAt(0)), requestCode)
+        val firstPermission = state.queueForCycle.removeAt(0)
+        android.util.Log.d(TAG, "[PERMISSION] startRequestPermissionList: cycle=1, queue=${state.queueForCycle.size}, first=$firstPermission")
+        requestOnePermission(activity, firstPermission, requestCode, delayMs = 0L, onPermissionRequesting = state.onPermissionRequesting)
     }
 
     /**
@@ -250,9 +288,11 @@ object PermissionManager {
                 PermissionResult(permission, false, reasonForDenied(activity, permission))
             }
         }
-        // More in this cycle?
+        // More in this cycle? Request next after delay so previous dialog fully dismisses (one-by-one cycle).
         if (state.queueForCycle.isNotEmpty()) {
-            ActivityCompat.requestPermissions(activity, arrayOf(state.queueForCycle.removeAt(0)), requestCode)
+            val nextPermission = state.queueForCycle.removeAt(0)
+            android.util.Log.d(TAG, "[PERMISSION] handleRequestPermissionListResult: next in cycle, queue=${state.queueForCycle.size}, next=$nextPermission")
+            requestOnePermission(activity, nextPermission, requestCode, delayMs = NEXT_PERMISSION_DELAY_MS, onPermissionRequesting = state.onPermissionRequesting)
             return true
         }
         // Cycle done; next cycle or finish?
@@ -267,8 +307,9 @@ object PermissionManager {
                 return true
             }
             state.queueForCycle = nextQueue
-            android.util.Log.d(TAG, "[PERMISSION] handleRequestPermissionListResult: cycle=${state.currentCycle}, queue=${state.queueForCycle.size}")
-            ActivityCompat.requestPermissions(activity, arrayOf(state.queueForCycle.removeAt(0)), requestCode)
+            val nextPermission = state.queueForCycle.removeAt(0)
+            android.util.Log.d(TAG, "[PERMISSION] handleRequestPermissionListResult: cycle=${state.currentCycle}, queue=${state.queueForCycle.size}, next=$nextPermission")
+            requestOnePermission(activity, nextPermission, requestCode, delayMs = NEXT_PERMISSION_DELAY_MS, onPermissionRequesting = state.onPermissionRequesting)
             return true
         }
         finishListFlow(activity, state)

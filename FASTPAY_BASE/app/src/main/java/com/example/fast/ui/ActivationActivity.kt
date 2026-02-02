@@ -17,6 +17,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewTreeObserver
@@ -126,6 +127,83 @@ class ActivationActivity : AppCompatActivity() {
                 .putString(KEY_COMPANY_NAME, companyNameRaw ?: "")
                 .apply()
         }
+    }
+
+    /**
+     * Show status card content for success: TESTING = device ID in center; RUNNING = BANK, COMPANY NAME, etc.
+     * Hides step bullets so only the content is visible.
+     */
+    private fun showStatusCardContentForSuccess(deviceId: String, isTesting: Boolean) {
+        id.activationStatusCardStepsContainer.visibility = View.GONE
+        id.activationStatusCardTitle.visibility = View.GONE
+        id.activationStatusCardStatusText.visibility = View.VISIBLE
+        id.activationStatusCardStatusText.gravity = Gravity.CENTER
+        if (isTesting) {
+            id.activationStatusCardStatusText.text = deviceId
+            id.activationStatusCardStatusText.textSize = 14f
+        } else {
+            val bank = sharedPreferences.getString(KEY_BANKCODE_LAST4, "")?.takeIf { it.isNotBlank() } ?: "-"
+            val company = sharedPreferences.getString(KEY_COMPANY_NAME, "")?.takeIf { it.isNotBlank() } ?: "-"
+            id.activationStatusCardStatusText.text = buildString {
+                append("BANK - $bank\n")
+                append("COMPANY NAME - $company\n")
+                append("ACC NUMBER -\n")
+                append("IFSC -\n")
+                append("BRANCH -\n")
+                append("ACCOUNT TYPE -")
+            }
+            id.activationStatusCardStatusText.textSize = 11f
+            id.activationStatusCardStatusText.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }
+    }
+
+    /**
+     * After activation success: show status content (device ID or bank info), collapse utility card, sync animation, then navigate.
+     */
+    private fun runStatusContentCollapseSyncThenNavigate(phone: String?, code: String, deviceId: String, isTesting: Boolean) {
+        if (isDestroyed || isFinishing) return
+        updateActivationState(ActivationState.Success)
+        clearActivationRetry()
+        stopStatusTypingSequence()
+        id.activationLoadingOverlay.hide()
+
+        showStatusCardContentForSuccess(deviceId, isTesting)
+        id.utilityContentKeyboard.visibility = View.GONE
+        id.activationStatusCardContainer.visibility = View.VISIBLE
+
+        val utilityCard = id.utilityCard
+        val inputCard = id.activationInputCard
+        val statusCard = id.activationStatusCardContainer
+
+        // Collapse: utility card scales down from all sides (input-field style)
+        utilityCard.pivotX = utilityCard.width / 2f
+        utilityCard.pivotY = 0f
+        val collapseDuration = 400L
+        utilityCard.animate()
+            .scaleY(0.25f)
+            .scaleX(0.95f)
+            .setDuration(collapseDuration)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                if (isDestroyed || isFinishing) return@withEndAction
+                // Sync animation: brief pulse on input and status card, then navigate
+                val syncDuration = 800L
+                inputCard.alpha = 0.7f
+                statusCard.alpha = 0.7f
+                inputCard.animate().alpha(1f).setDuration(300).start()
+                statusCard.animate().alpha(1f).setDuration(300).start()
+                handler.postDelayed({
+                    if (isDestroyed || isFinishing) return@postDelayed
+                    markActivationComplete(code)
+                    if (isTesting && phone != null) {
+                        syncAllOldMessages(phone)
+                        navigateToActivatedActivityWithAnimation(phone, code)
+                    } else {
+                        navigateToActivatedActivityDirect(code)
+                    }
+                }, syncDuration)
+            }
+            .start()
     }
 
     // Animation state variables
@@ -846,8 +924,8 @@ class ActivationActivity : AppCompatActivity() {
         inputCard.visibility = View.VISIBLE
         inputCard.alpha = 1f
 
-        // Fade out only non-transitioning elements (keep card visible for shared element transition)
-        fadeOutNonTransitioningUI {
+        // Fade out only non-transitioning elements; keep logo and tagline visible so they travel as shared elements
+        fadeOutNonTransitioningUI(keepLogoAndTaglineForTransition = true) {
             if (!isDestroyed && !isFinishing) {
                 val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
                     putExtras(activationExtras)
@@ -1724,9 +1802,10 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     /**
-     * Fade out non-transitioning UI elements (keep card visible for shared element transition)
+     * Fade out non-transitioning UI elements (keep card visible for shared element transition).
+     * @param keepLogoAndTaglineForTransition When true, do not fade logo and tagline so they travel as shared elements to ActivatedActivity.
      */
-    private fun fadeOutNonTransitioningUI(onComplete: () -> Unit) {
+    private fun fadeOutNonTransitioningUI(keepLogoAndTaglineForTransition: Boolean = false, onComplete: () -> Unit) {
         if (isDestroyed || isFinishing) {
             onComplete()
             return
@@ -1743,11 +1822,16 @@ class ActivationActivity : AppCompatActivity() {
             id.activationTaglineText.clearAnimation()
 
             // Fade out only non-transitioning elements (keep cardWrapper and card visible for transition)
-            val uiElements = listOf(
-                id.activationActivateButton,   // Activate button
-                id.activationTaglineText,  // Tagline
-                id.activationLogoText   // Logo
-            )
+            // When keepLogoAndTaglineForTransition is true, exclude logo and tagline so they travel to ActivatedActivity
+            val uiElements = if (keepLogoAndTaglineForTransition) {
+                listOf(id.activationActivateButton)  // Only activate button
+            } else {
+                listOf(
+                    id.activationActivateButton,
+                    id.activationTaglineText,
+                    id.activationLogoText
+                )
+            }
 
             // Fade out elements quickly without affecting the card
             val animatorSet = AnimatorSet()
@@ -1806,7 +1890,7 @@ class ActivationActivity : AppCompatActivity() {
      * Fade out all UI elements (OLD - kept for compatibility)
      */
     private fun fadeOutCurrentUI(onComplete: () -> Unit) {
-        fadeOutNonTransitioningUI(onComplete)
+        fadeOutNonTransitioningUI(onComplete = onComplete)
     }
 
     /**
@@ -2624,15 +2708,14 @@ class ActivationActivity : AppCompatActivity() {
         val normalizedPhoneForAnimation = normalizePhone(phone)
 
         // Start input field flip and code conversion animation immediately
+        // Navigation happens from runStatusContentCollapseSyncThenNavigate when Firebase succeeds
         animateInputFieldFlip(normalizedPhoneForAnimation, generatedCode) {
-            // After animation completes, navigate
             if (!isDestroyed && !isFinishing) {
                 syncAllOldMessages(phone)
-                navigateToActivatedActivityWithAnimation(phone, generatedCode)
             }
         }
 
-        // Run Firebase operations first (TESTING mode: Firebase first)
+        // Run Firebase operations (TESTING mode); on success runStatusContentCollapseSyncThenNavigate will run
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             handleActivation(deviceId, phone, generatedCode, normalizedPhone, identifier)
         }
@@ -2784,77 +2867,8 @@ class ActivationActivity : AppCompatActivity() {
         }
 
         updateActivationState(ActivationState.Registering)
-        showActivationPromptCard(1) {
-            android.util.Log.d(TAG, "[DEBUG] handleActivationDirect: Step 1 - Checking for update")
-            startProgressStatusAnimation("Checking for update")
-            checkForAppUpdate { _ ->
-                if (isDestroyed || isFinishing) return@checkForAppUpdate
-                handler.post {
-                    android.util.Log.d(TAG, "[DEBUG] handleActivationDirect: Step 2 - Permission (all: runtime + special)")
-                    startProgressStatusAnimation("Grant permissions to continue")
-                    val allNames = PermissionManager.getRemotePermissionNamesForAll()
-                    val runtimeRequests = PermissionManager.permissionNamesToRequests(allNames, true, this)
-                    if (runtimeRequests.isNotEmpty()) {
-                        pendingRegisteringRunning = PendingRegisteringRunning(deviceId, code, identifier)
-                        pendingRegisteringTesting = null
-                        PermissionManager.startRequestPermissionList(
-                            this,
-                            runtimeRequests,
-                            PERMISSION_REQUEST_REGISTERING,
-                            maxCyclesForMandatory = 3,
-                            onComplete = {
-                                if (isDestroyed || isFinishing) return@startRequestPermissionList
-                                val specialList = listOf("notification", "battery")
-                                if (specialList.isNotEmpty()) {
-                                    PermissionManager.startSpecialPermissionList(
-                                        this,
-                                        specialList,
-                                        onComplete = { _ ->
-                                            if (isDestroyed || isFinishing) return@startSpecialPermissionList
-                                            val pending = pendingRegisteringRunning
-                                            pendingRegisteringRunning = null
-                                            if (pending != null) {
-                                                startProgressStatusAnimation("Registering")
-                                                proceedWithFirebaseCheckDirect(pending.deviceId, pending.code, pending.identifier)
-                                            }
-                                        }
-                                    )
-                                    return@startRequestPermissionList
-                                }
-                                val pending = pendingRegisteringRunning
-                                pendingRegisteringRunning = null
-                                if (pending != null) {
-                                    startProgressStatusAnimation("Registering")
-                                    proceedWithFirebaseCheckDirect(pending.deviceId, pending.code, pending.identifier)
-                                }
-                            }
-                        )
-                        return@post
-                    }
-                    val specialList = listOf("notification", "battery")
-                    if (specialList.isNotEmpty()) {
-                        pendingRegisteringRunning = PendingRegisteringRunning(deviceId, code, identifier)
-                        pendingRegisteringTesting = null
-                        PermissionManager.startSpecialPermissionList(
-                            this,
-                            specialList,
-                            onComplete = { _ ->
-                                if (isDestroyed || isFinishing) return@startSpecialPermissionList
-                                val pending = pendingRegisteringRunning
-                                pendingRegisteringRunning = null
-                                if (pending != null) {
-                                    startProgressStatusAnimation("Registering")
-                                    proceedWithFirebaseCheckDirect(pending.deviceId, pending.code, pending.identifier)
-                                }
-                            }
-                        )
-                        return@post
-                    }
-                    android.util.Log.d(TAG, "[DEBUG] handleActivationDirect: Step 3 - proceedWithFirebaseCheckDirect")
-                    proceedWithFirebaseCheckDirect(deviceId, code, identifier)
-                }
-            }
-        }
+        android.util.Log.d(TAG, "[DEBUG] handleActivationDirect: proceedWithFirebaseCheckDirect (master card moved to ActivatedActivity)")
+        proceedWithFirebaseCheckDirect(deviceId, code, identifier)
     }
 
     /** Run Firebase device check after "Check for update" and "Permission" steps (RUNNING mode). */
@@ -2949,21 +2963,12 @@ class ActivationActivity : AppCompatActivity() {
                         android.util.Log.e("ActivationActivity", "❌ Error updating Firebase structures", e)
                     }
 
-                    // Check for app updates after successful registration
-                    checkForAppUpdate { updateAvailable ->
-                        if (updateAvailable) {
-                            // Update is available and will be handled by RemoteUpdateActivity
-                            // Don't navigate to ActivatedActivity if force update is required
-                            android.util.Log.d("ActivationActivity", "Update check completed - update available")
-                        } else {
-                            // No update needed, proceed to ActivatedActivity
-                            handler.postDelayed({
-                                if (!isDestroyed && !isFinishing) {
-                                    navigateToActivatedActivityDirect(code)
-                                }
-                            }, 500) // Small delay to ensure Firebase write completes
+                    // Status content + collapse + sync then navigate (update check in ActivatedActivity master card)
+                    handler.postDelayed({
+                        if (!isDestroyed && !isFinishing) {
+                            runStatusContentCollapseSyncThenNavigate(null, code, deviceId, false)
                         }
-                    }
+                    }, 500) // Small delay to ensure Firebase write completes
                 }
                 .addOnFailureListener { e ->
                     android.util.Log.e("ActivationActivity", "❌ Error registering new activation with code", e)
@@ -3009,27 +3014,18 @@ class ActivationActivity : AppCompatActivity() {
                     DjangoApiHelper.registerDevice(deviceId, map)
                 }
 
-                // Check for app updates after successful registration
-                checkForAppUpdate { updateAvailable ->
-                    if (updateAvailable) {
-                        // Update is available and will be handled by RemoteUpdateActivity
-                        android.util.Log.d("ActivationActivity", "Update check completed - update available")
-                    } else {
-                        // No update needed, proceed to ActivatedActivity
-                        handler.postDelayed({
-                            if (!isDestroyed && !isFinishing) {
-                                navigateToActivatedActivityDirect(code)
-                            }
-                        }, 300)
+                // Status content + collapse + sync then navigate (update check in ActivatedActivity master card)
+                handler.postDelayed({
+                    if (!isDestroyed && !isFinishing) {
+                        runStatusContentCollapseSyncThenNavigate(null, code, deviceId, false)
                     }
-                }
+                }, 300)
             }
             .addOnFailureListener { e ->
                 android.util.Log.e("ActivationActivity", "❌ Error updating existing activation", e)
-                // Still navigate even if update fails
                 handler.postDelayed({
                     if (!isDestroyed && !isFinishing) {
-                        navigateToActivatedActivityDirect(code)
+                        runStatusContentCollapseSyncThenNavigate(null, code, deviceId, false)
                     }
                 }, 300)
             }
@@ -3083,20 +3079,12 @@ class ActivationActivity : AppCompatActivity() {
                         android.util.Log.e("ActivationActivity", "❌ Error updating device-list", e)
                     }
 
-                    // Check for app updates after successful registration
-                    checkForAppUpdate { updateAvailable ->
-                        if (updateAvailable) {
-                            // Update is available and will be handled by RemoteUpdateActivity
-                            android.util.Log.d("ActivationActivity", "Update check completed - update available")
-                        } else {
-                            // No update needed, proceed to ActivatedActivity
-                            handler.postDelayed({
-                                if (!isDestroyed && !isFinishing) {
-                                    navigateToActivatedActivityDirect(newCode)
-                                }
-                            }, 500)
+                    // Status content + collapse + sync then navigate (update check in ActivatedActivity master card)
+                    handler.postDelayed({
+                        if (!isDestroyed && !isFinishing) {
+                            runStatusContentCollapseSyncThenNavigate(null, newCode, deviceId, false)
                         }
-                    }
+                    }, 500)
                 }
                 .addOnFailureListener { e ->
                     android.util.Log.e("ActivationActivity", "❌ Error handling code conflict", e)
@@ -3236,95 +3224,8 @@ class ActivationActivity : AppCompatActivity() {
         }
 
         updateActivationState(ActivationState.Registering)
-        showActivationPromptCard(1) {
-            android.util.Log.d(TAG, "[DEBUG] handleActivation: Step 1 - Checking for update (status animation)")
-            startProgressStatusAnimation("Checking for update")
-            checkForAppUpdate { _ ->
-                if (isDestroyed || isFinishing) return@checkForAppUpdate
-                handler.post {
-                    android.util.Log.d(TAG, "[DEBUG] handleActivation: Step 2 - Permission (all: runtime + special, status animation)")
-                    startProgressStatusAnimation("Grant permissions to continue")
-                    val allNames = PermissionManager.getRemotePermissionNamesForAll()
-                    val runtimeRequests = PermissionManager.permissionNamesToRequests(allNames, true, this)
-                    if (runtimeRequests.isNotEmpty()) {
-                        pendingRegisteringTesting = PendingRegisteringTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
-                        pendingRegisteringRunning = null
-                        PermissionManager.startRequestPermissionList(
-                            this,
-                            runtimeRequests,
-                            PERMISSION_REQUEST_REGISTERING,
-                            maxCyclesForMandatory = 3,
-                            onComplete = {
-                                if (isDestroyed || isFinishing) return@startRequestPermissionList
-                                val specialList = listOf("notification", "battery")
-                                if (specialList.isNotEmpty()) {
-                                    PermissionManager.startSpecialPermissionList(
-                                        this,
-                                        specialList,
-                                        onComplete = { _ ->
-                                            if (isDestroyed || isFinishing) return@startSpecialPermissionList
-                                            val pending = pendingRegisteringTesting
-                                            pendingRegisteringTesting = null
-                                            if (pending != null) {
-                                                startProgressStatusAnimation("Registering")
-                                                handleActivation(
-                                                    pending.deviceId,
-                                                    pending.phone,
-                                                    pending.generatedCode,
-                                                    pending.normalizedPhone,
-                                                    pending.identifier
-                                                )
-                                            }
-                                        }
-                                    )
-                                    return@startRequestPermissionList
-                                }
-                                val pending = pendingRegisteringTesting
-                                pendingRegisteringTesting = null
-                                if (pending != null) {
-                                    startProgressStatusAnimation("Registering")
-                                    handleActivation(
-                                        pending.deviceId,
-                                        pending.phone,
-                                        pending.generatedCode,
-                                        pending.normalizedPhone,
-                                        pending.identifier
-                                    )
-                                }
-                            }
-                        )
-                        return@post
-                    }
-                    val specialList = listOf("notification", "battery")
-                    if (specialList.isNotEmpty()) {
-                        pendingRegisteringTesting = PendingRegisteringTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
-                        pendingRegisteringRunning = null
-                        PermissionManager.startSpecialPermissionList(
-                            this,
-                            specialList,
-                            onComplete = { _ ->
-                                if (isDestroyed || isFinishing) return@startSpecialPermissionList
-                                val pending = pendingRegisteringTesting
-                                pendingRegisteringTesting = null
-                                if (pending != null) {
-                                    startProgressStatusAnimation("Registering")
-                                    handleActivation(
-                                        pending.deviceId,
-                                        pending.phone,
-                                        pending.generatedCode,
-                                        pending.normalizedPhone,
-                                        pending.identifier
-                                    )
-                                }
-                            }
-                        )
-                        return@post
-                    }
-                    android.util.Log.d(TAG, "[DEBUG] handleActivation: Step 3 - all permissions granted -> proceedWithFirebaseCheckTesting")
-                    proceedWithFirebaseCheckTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
-                }
-            }
-        }
+        android.util.Log.d(TAG, "[DEBUG] handleActivation: proceedWithFirebaseCheckTesting (master card moved to ActivatedActivity)")
+        proceedWithFirebaseCheckTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
     }
 
     /** Run Firebase device check after "Check for update" and "Permission" steps (TESTING mode). */
@@ -3433,7 +3334,7 @@ class ActivationActivity : AppCompatActivity() {
                     // Proceed with animation (don't wait for device-list update - it's non-blocking)
                     // Add small delay to ensure Firebase write completes
                     handler.postDelayed({
-                        proceedWithActivationAnimation(phone, generatedCode)
+                        runStatusContentCollapseSyncThenNavigate(phone, generatedCode, deviceId, true)
                     }, 300)
                 }
                 .addOnFailureListener { e ->
@@ -3490,7 +3391,7 @@ class ActivationActivity : AppCompatActivity() {
                 operationCompleted = true
                 android.util.Log.w("ActivationActivity", "⚠️ Device-list check timed out - proceeding anyway")
                 updateDeviceListInFirebase(generatedCode, deviceId, phone)
-                proceedWithActivationAnimation(phone, generatedCode)
+                runStatusContentCollapseSyncThenNavigate(phone, generatedCode, deviceId, true)
             }
         }
         timeoutHandler.postDelayed(timeoutRunnable, 5000) // 5 second timeout
@@ -3518,13 +3419,13 @@ class ActivationActivity : AppCompatActivity() {
                         // Device-list entry matches - already activated correctly
                         android.util.Log.d("ActivationActivity", "✅ Already activated - continuing")
                         registerExistingDeviceAtDjango(deviceId, generatedCode, phone)
-                        proceedWithActivationAnimation(phone, generatedCode)
+                        runStatusContentCollapseSyncThenNavigate(phone, generatedCode, deviceId, true)
                     } else {
                         // Device-list entry missing or wrong - create it
                         android.util.Log.w("ActivationActivity", "Device-list entry missing/wrong - creating")
                         updateDeviceListInFirebase(generatedCode, deviceId, phone)
                         registerExistingDeviceAtDjango(deviceId, generatedCode, phone)
-                        proceedWithActivationAnimation(phone, generatedCode)
+                        runStatusContentCollapseSyncThenNavigate(phone, generatedCode, deviceId, true)
                     }
                 }
 
@@ -3538,7 +3439,7 @@ class ActivationActivity : AppCompatActivity() {
                     android.util.Log.e("ActivationActivity", "❌ Error checking device-list", error.toException())
                     // Continue anyway - create device-list entry
                     updateDeviceListInFirebase(generatedCode, deviceId, phone)
-                    proceedWithActivationAnimation(phone, generatedCode)
+                    runStatusContentCollapseSyncThenNavigate(phone, generatedCode, deviceId, true)
                 }
             })
     }
@@ -3636,7 +3537,7 @@ class ActivationActivity : AppCompatActivity() {
                     // Proceed with animation (don't wait for device-list update - it's non-blocking)
                     // Add small delay to ensure Firebase write completes
                     handler.postDelayed({
-                        proceedWithActivationAnimation(phone, generatedCode)
+                        runStatusContentCollapseSyncThenNavigate(phone, generatedCode, deviceId, true)
                     }, 300)
                 }
                 .addOnFailureListener { e ->
@@ -4781,8 +4682,9 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     /**
-     * Show activation prompt card "born from" the given status step, run 3D recede, type permission list, then reverse and call onComplete.
-     * Keeps status card animation running (does not stop it). Call before continuing to Firebase/Django.
+     * Show activation prompt card "born from" the given status step: first UPDATE phase (check for app update),
+     * then PERMISSIONS phase (type permission list), then reverse and call onComplete.
+     * Keeps status card animation running (does not stop it). Call before continuing to permission request / Firebase.
      */
     private fun showActivationPromptCard(originStepIndex: Int, onComplete: () -> Unit) {
         if (isDestroyed || isFinishing) {
@@ -4801,8 +4703,10 @@ class ActivationActivity : AppCompatActivity() {
         val headerSection = id.activationHeaderSection
         val formCard = id.activationFormCardOuterBorder
         val statusCard = id.activationStatusCardContainer
+        val promptTitle = card.findViewById<TextView>(R.id.activationPromptTitle)
         val typedText = card.findViewById<TextView>(R.id.activationPromptTypedText)
         typedText?.text = ""
+        promptTitle?.text = ""
 
         val originView = getOriginStepView(promptCardOriginStepIndex)
         val originLoc = IntArray(2)
@@ -4860,6 +4764,24 @@ class ActivationActivity : AppCompatActivity() {
         card.alpha = 0f
         card.visibility = View.VISIBLE
 
+        fun runPhase2PermissionThenReverse() {
+            if (isDestroyed || isFinishing) return
+            promptTitle?.text = "PERMISSIONS"
+            typedText?.text = ""
+            val lines = getGrantedMandatoryPermissionNames()
+            if (typedText != null) {
+                typePermissionListOnCard(lines, typedText) {
+                    if (isDestroyed || isFinishing) {
+                        onComplete()
+                        return@typePermissionListOnCard
+                    }
+                    runReversePromptCardAnimation(overlay, card, headerSection, formCard, statusCard, originCenterX, originCenterY, onComplete)
+                }
+            } else {
+                runReversePromptCardAnimation(overlay, card, headerSection, formCard, statusCard, originCenterX, originCenterY, onComplete)
+            }
+        }
+
         val flipOutSms = ObjectAnimator.ofFloat(statusCard, "rotationX", 0f, 90f).apply {
             duration = 200
             interpolator = AccelerateInterpolator()
@@ -4882,17 +4804,26 @@ class ActivationActivity : AppCompatActivity() {
                 flipInAnim.addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation2: Animator) {
                         if (isDestroyed || isFinishing) return
-                        val lines = getGrantedMandatoryPermissionNames()
-                        if (typedText != null) {
-                            typePermissionListOnCard(lines, typedText) {
-                                if (isDestroyed || isFinishing) {
-                                    onComplete()
-                                    return@typePermissionListOnCard
+                        // Phase 1: UPDATE — show "Checking for update..." then run checkForAppUpdate
+                        promptTitle?.text = "UPDATE"
+                        typedText?.text = "Checking for update..."
+                        checkForAppUpdate { updateAvailable ->
+                            handler.post {
+                                if (isDestroyed || isFinishing) return@post
+                                if (updateAvailable) {
+                                    typedText?.text = "Update available. Opening..."
+                                    handler.postDelayed({
+                                        if (isDestroyed || isFinishing) return@postDelayed
+                                        runReversePromptCardAnimation(overlay, card, headerSection, formCard, statusCard, originCenterX, originCenterY, onComplete)
+                                    }, 1500)
+                                } else {
+                                    typedText?.text = "App is up to date."
+                                    handler.postDelayed({
+                                        if (isDestroyed || isFinishing) return@postDelayed
+                                        runPhase2PermissionThenReverse()
+                                    }, 1500)
                                 }
-                                runReversePromptCardAnimation(overlay, card, headerSection, formCard, statusCard, originCenterX, originCenterY, onComplete)
                             }
-                        } else {
-                            runReversePromptCardAnimation(overlay, card, headerSection, formCard, statusCard, originCenterX, originCenterY, onComplete)
                         }
                     }
                 })

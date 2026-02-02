@@ -448,6 +448,14 @@
                     android:fontFamily="monospace"
                     android:letterSpacing="0.05" />
             </FrameLayout>
+
+            <!-- Wipe overlay for SMS↔Instruction line wipe (4 edges, return) -->
+            <View
+                android:id="@+id/smsWipeOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/crypto_hash_card_background"
+                android:visibility="gone" />
         </FrameLayout>
     </FrameLayout>
 
@@ -683,5 +691,29 @@
             android:fontFamily="monospace"
             android:letterSpacing="0.05" />
     </FrameLayout>
+
+    <!-- Wipe line overlay - slides down to unblock content when entering from ActivationActivity -->
+    <View
+        android:id="@+id/wipeLineOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/gradient2"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Master card overlay (update + permissions) - shown when entering from ActivationActivity -->
+    <include
+        android:id="@+id/activationMasterCardOverlay"
+        layout="@layout/activation_master_card_overlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

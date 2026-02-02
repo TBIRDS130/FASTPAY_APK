@@ -321,8 +321,8 @@ class PermissionFlowActivity : AppCompatActivity() {
     }
 
     /**
-     * Handle permission request result
-     * All permissions were requested at once, so we just need to update status
+     * Handle permission request result.
+     * Permissions are requested one by one; each callback updates state and triggers the next after a short delay.
      */
     override fun onRequestPermissionsResult(
         requestCode: Int,
