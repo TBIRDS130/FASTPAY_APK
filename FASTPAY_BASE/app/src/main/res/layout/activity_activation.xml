@@ -104,29 +104,21 @@
         app:layout_constraintGuide_percent="0.22" />
 
         <!-- Center Content - Phone input & Activate button -->
-    <ScrollView
-        android:id="@+id/activationContentScrollView"
+    <LinearLayout
+        android:id="@+id/activationContentContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:fillViewport="true"
-        android:scrollbars="none"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="32dp"
+        android:paddingBottom="32dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@+id/activationContentPositionGuide">
-
-        <LinearLayout
-            android:id="@+id/activationContentContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_horizontal"
-            android:orientation="vertical"
-            android:paddingHorizontal="16dp"
-            android:paddingTop="32dp"
-            android:paddingBottom="32dp"
-            android:layout_gravity="center"
-            android:clipChildren="false"
-            android:clipToPadding="false">
 
         <!-- Crypto Hash Card - #948, TESTING/RUNNING, input, ACTIVATE, CLEAR -->
         <FrameLayout
@@ -351,14 +343,16 @@
             </FrameLayout>
         </FrameLayout>
 
-        <!-- Utility Card - keyboard (default) / status text (on ACTIVATE). Same concept as SMS & instruction card in ActivatedActivity. -->
+        <!-- Utility Card - keyboard (default) / status text (on ACTIVATE). Same concept as SMS & instruction card in ActivatedActivity.
+             Elevation above form card so status stays visible when crypto hash card glow/pulse animation runs (form card elev goes up to ~16dp). -->
         <FrameLayout
             android:id="@+id/utilityCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="0dp"
+            android:layout_marginTop="16dp"
             android:background="@drawable/crypto_hash_card_background"
             android:padding="16dp"
+            android:elevation="20dp"
             android:clipChildren="false"
             android:clipToPadding="false">
 
@@ -376,11 +370,20 @@
                     android:layout_height="wrap_content"
                     android:visibility="gone">
 
+                    <!-- Numeric keypad (0-9) for TESTING mode -->
                     <include
                         android:id="@+id/activationKeypadInclude"
                         layout="@layout/activation_keypad"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content" />
+
+                    <!-- Alphabet keypad (A-Z) for RUNNING mode -->
+                    <include
+                        android:id="@+id/activationKeypadAlphaInclude"
+                        layout="@layout/keypad_alphabet"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone" />
                 </FrameLayout>
 
                 <!-- Back: Status Text (default – shown by default) -->
@@ -540,8 +543,7 @@
             </FrameLayout>
         </FrameLayout>
 
-        </LinearLayout>
-    </ScrollView>
+    </LinearLayout>
 
     <!-- Activated State Container -->
     <LinearLayout

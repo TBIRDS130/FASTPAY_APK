@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- Transparent background -->
+    <solid android:color="@android:color/transparent" />
+    <!-- Corner radius -->
+    <corners android:radius="@dimen/instruction_card_corner_radius" />
+    <!-- Red border -->
+    <stroke
+        android:width="3dp"
+        android:color="#FF0000" />
+</shape>

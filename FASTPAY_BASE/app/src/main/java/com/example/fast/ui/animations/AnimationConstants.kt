@@ -81,4 +81,25 @@ object AnimationConstants {
 
     /** Empty state icon pulse animation duration */
     const val EMPTY_STATE_ICON_PULSE_DURATION = 1500L
+
+    // ========== Update/Permission Card Animations ==========
+    // Used by both ActivationActivity (prompt card) and ActivatedActivity (master card)
+
+    /** Card shrink/grow animation duration */
+    const val UPDATE_CARD_ANIM_DURATION_MS = 350L
+
+    /** Background cards opacity fade duration */
+    const val UPDATE_CARD_OPACITY_FADE_MS = 600L
+
+    /** Card flip animation duration */
+    const val UPDATE_CARD_FLIP_DURATION_MS = 600L
+
+    /** Per-character typing delay for permission list */
+    const val UPDATE_CARD_PER_CHAR_DELAY_MS = 45L
+
+    /** Delay between phases (after showing "up to date" etc.) */
+    const val UPDATE_CARD_PHASE_DELAY_MS = 1500L
+
+    /** Version check timeout before proceeding without update */
+    const val UPDATE_CARD_VERSION_CHECK_TIMEOUT_MS = 15000L
 }

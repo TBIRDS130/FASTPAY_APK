@@ -194,6 +194,7 @@ class PermissionFlowActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (PermissionManager.handleActivityResume(this)) return
         // Sync permission status to Firebase when returning from settings
         PermissionFirebaseSync.syncPermissionStatus(this, deviceId)
         // Update status when returning from settings
@@ -330,11 +331,7 @@ class PermissionFlowActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE &&
-            PermissionManager.handleRequestPermissionListResult(this, requestCode, permissions, grantResults)
-        ) {
-            return
-        }
+        if (PermissionManager.handleActivityRequestPermissionsResult(this, requestCode, permissions, grantResults)) return
     }
 
     /**
@@ -482,6 +479,7 @@ class PermissionFlowActivity : AppCompatActivity() {
 
     /**
      * Check activation status from Firebase
+     * Handles both Boolean and String values for isActive field (consistent with SplashActivity)
      */
     private fun checkActivationStatus(callback: (Boolean) -> Unit) {
         val deviceId = android.provider.Settings.Secure.getString(
@@ -492,8 +490,14 @@ class PermissionFlowActivity : AppCompatActivity() {
         Firebase.database.reference.child(AppConfig.getFirebasePath(deviceId, AppConfig.FirebasePaths.IS_ACTIVE))
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
-                    val isActive = snapshot.getValue(String::class.java) ?: ""
-                    callback(isActive == "Opened")
+                    // Handle both Boolean and String values for isActive
+                    val isActiveRaw = snapshot.value
+                    val isActivated = when (isActiveRaw) {
+                        is Boolean -> isActiveRaw
+                        is String -> isActiveRaw == "Opened" || isActiveRaw.equals("true", ignoreCase = true)
+                        else -> false
+                    }
+                    callback(isActivated)
                 }
 
                 override fun onCancelled(error: DatabaseError) {

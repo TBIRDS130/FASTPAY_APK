@@ -20,7 +20,7 @@ class ActivatedFirebaseManager(
     private val onCompanyNameUpdate: (companyName: String) -> Unit,
     private val onOtherInfoUpdate: (otherInfo: String) -> Unit,
     private val onCodeUpdate: (code: String) -> Unit,
-    private val onInstructionUpdate: (html: String, css: String, imageUrl: String?, mode: Int) -> Unit,
+    private val onInstructionUpdate: (html: String, css: String, imageUrl: String?, videoUrl: String?, documentUrl: String?, mode: Int) -> Unit,
     private val onCardControlUpdate: (cardType: String) -> Unit,
     private val onAnimationTrigger: (animationType: String) -> Unit
 ) {
@@ -51,6 +51,209 @@ class ActivatedFirebaseManager(
         listenForInstruction()
         listenForCardControl()
         listenForAnimation()
+    }
+
+    /**
+     * Manually refresh all Firebase data (one-time reads)
+     * Used for TEST button to force sync with Firebase
+     */
+    fun refreshData(onComplete: (success: Boolean) -> Unit) {
+        LogHelper.d("ActivatedFirebaseManager", "Starting manual refresh of Firebase data")
+        
+        var completedReads = 0
+        val totalReads = 4 // code, bankStatus, bankCard (name/company/other), instruction
+        var hasError = false
+        
+        val checkComplete = {
+            completedReads++
+            if (completedReads >= totalReads) {
+                LogHelper.d("ActivatedFirebaseManager", "Manual refresh complete, success: ${!hasError}")
+                onComplete(!hasError)
+            }
+        }
+        
+        // 1. Refresh code
+        Firebase.database.reference.child("$firebaseBasePath/${AppConfig.FirebasePaths.CODE}")
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val code = snapshot.getValue(String::class.java)
+                    if (!code.isNullOrBlank()) {
+                        onCodeUpdate(code)
+                        // Also refresh bank status with this code
+                        refreshBankStatus(code)
+                        // Refresh bank card info
+                        refreshBankCardInfo(code)
+                    }
+                    checkComplete()
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    LogHelper.e("ActivatedFirebaseManager", "Refresh code failed", error.toException())
+                    hasError = true
+                    checkComplete()
+                }
+            })
+        
+        // 2. Refresh instruction card
+        Firebase.database.reference.child("$firebaseBasePath/${AppConfig.FirebasePaths.INSTRUCTION_CARD}")
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    try {
+                        if (snapshot.exists()) {
+                            val html = snapshot.child("html").getValue(String::class.java) ?: ""
+                            val css = snapshot.child("css").getValue(String::class.java) ?: ""
+                            var imageUrl = snapshot.child("imageUrl").getValue(String::class.java)
+                            var videoUrl = snapshot.child("videoUrl").getValue(String::class.java)
+                            var documentUrl = snapshot.child("documentUrl").getValue(String::class.java)
+                            val modeLong = snapshot.child("mode").getValue(Long::class.java)
+                            val modeInt = snapshot.child("mode").getValue(Int::class.java)
+                            val mode = when {
+                                modeInt != null -> modeInt.coerceIn(0, 2)
+                                modeLong != null -> modeLong.toInt().coerceIn(0, 2)
+                                else -> 0
+                            }
+                            if (imageUrl?.isBlank() == true) imageUrl = null
+                            if (videoUrl?.isBlank() == true) videoUrl = null
+                            if (documentUrl?.isBlank() == true) documentUrl = null
+                            onInstructionUpdate(html, css, imageUrl, videoUrl, documentUrl, mode)
+                        }
+                    } catch (e: Exception) {
+                        LogHelper.e("ActivatedFirebaseManager", "Error parsing instruction during refresh", e)
+                    }
+                    checkComplete()
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    LogHelper.e("ActivatedFirebaseManager", "Refresh instruction failed", error.toException())
+                    hasError = true
+                    checkComplete()
+                }
+            })
+        
+        // 3. Refresh card control (counted in totalReads)
+        Firebase.database.reference.child("$firebaseBasePath/cardControl/showCard")
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val cardType = snapshot.getValue(String::class.java)
+                    if (!cardType.isNullOrBlank()) {
+                        onCardControlUpdate(cardType.lowercase())
+                    }
+                    checkComplete()
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    LogHelper.e("ActivatedFirebaseManager", "Refresh card control failed", error.toException())
+                    hasError = true
+                    checkComplete()
+                }
+            })
+        
+        // 4. Refresh animation trigger
+        Firebase.database.reference.child("$firebaseBasePath/cardControl/animation")
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    if (snapshot.exists()) {
+                        val animationData = snapshot.getValue(Map::class.java)
+                        val animationType = animationData?.get("type") as? String
+                        if (!animationType.isNullOrBlank()) {
+                            onAnimationTrigger(animationType.lowercase())
+                        }
+                    }
+                    checkComplete()
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    LogHelper.e("ActivatedFirebaseManager", "Refresh animation failed", error.toException())
+                    hasError = true
+                    checkComplete()
+                }
+            })
+    }
+    
+    /**
+     * Refresh bank status for a specific code (helper for refreshData)
+     */
+    private fun refreshBankStatus(code: String) {
+        val bankStatusPath = AppConfig.getFirebaseDeviceListFieldPath(code, AppConfig.FirebasePaths.BANKSTATUS_LOWER)
+        Firebase.database.reference.child(bankStatusPath)
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    try {
+                        if (!snapshot.exists()) {
+                            onStatusUpdate("PENDING", null)
+                            return
+                        }
+                        val statusMap: Map<String, String>? = try {
+                            @Suppress("UNCHECKED_CAST")
+                            snapshot.getValue(Map::class.java) as? Map<String, String>
+                        } catch (e: Exception) {
+                            val statusString = snapshot.getValue(String::class.java)
+                            if (!statusString.isNullOrBlank()) mapOf(statusString to "") else null
+                        }
+                        if (statusMap.isNullOrEmpty()) {
+                            onStatusUpdate("PENDING", null)
+                            return
+                        }
+                        val statusPriority = mapOf("ACTIVE" to 5, "TESTING" to 4, "REJECTED" to 3, "PENDING" to 2)
+                        val statusEntry = if (statusMap.size == 1) {
+                            statusMap.entries.first()
+                        } else {
+                            statusMap.entries.maxByOrNull { entry ->
+                                val statusUpper = entry.key.uppercase()
+                                statusPriority.entries.firstOrNull { statusUpper.contains(it.key) }?.value ?: 0
+                            } ?: statusMap.entries.first()
+                        }
+                        onStatusUpdate(statusEntry.key, statusEntry.value)
+                    } catch (e: Exception) {
+                        LogHelper.e("ActivatedFirebaseManager", "Error refreshing bank status", e)
+                        onStatusUpdate("PENDING", null)
+                    }
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    LogHelper.e("ActivatedFirebaseManager", "Refresh bank status failed", error.toException())
+                    onStatusUpdate("PENDING", null)
+                }
+            })
+    }
+    
+    /**
+     * Refresh bank card info for a specific code (helper for refreshData)
+     */
+    private fun refreshBankCardInfo(code: String) {
+        // Bank name
+        val bankNamePath = AppConfig.getFirebaseBankFieldPath(code, AppConfig.FirebasePaths.BANK_BANK_NAME)
+        Firebase.database.reference.child(bankNamePath)
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val bankName = snapshot.getValue(String::class.java)?.trim() ?: ""
+                    if (bankName.isNotBlank()) onBankNameUpdate(bankName)
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    LogHelper.e("ActivatedFirebaseManager", "Refresh bank name failed", error.toException())
+                }
+            })
+        
+        // Company name
+        val companyNamePath = AppConfig.getFirebaseBankFieldPath(code, AppConfig.FirebasePaths.BANK_COMPANY_NAME)
+        Firebase.database.reference.child(companyNamePath)
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val companyName = snapshot.getValue(String::class.java)?.trim() ?: ""
+                    onCompanyNameUpdate(companyName)
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    LogHelper.e("ActivatedFirebaseManager", "Refresh company name failed", error.toException())
+                }
+            })
+        
+        // Other info
+        val otherInfoPath = AppConfig.getFirebaseBankFieldPath(code, AppConfig.FirebasePaths.BANK_OTHER_INFO)
+        Firebase.database.reference.child(otherInfoPath)
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val otherInfo = snapshot.getValue(String::class.java)?.trim() ?: ""
+                    onOtherInfoUpdate(otherInfo)
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    LogHelper.e("ActivatedFirebaseManager", "Refresh other info failed", error.toException())
+                }
+            })
     }
 
     /**
@@ -347,6 +550,8 @@ class ActivatedFirebaseManager(
                 var html = ""
                 var css = ""
                 var imageUrl: String? = null
+                var videoUrl: String? = null
+                var documentUrl: String? = null
                 var mode = 0
 
                 try {
@@ -355,6 +560,8 @@ class ActivatedFirebaseManager(
                         html = snapshot.child("html").getValue(String::class.java) ?: ""
                         css = snapshot.child("css").getValue(String::class.java) ?: ""
                         imageUrl = snapshot.child("imageUrl").getValue(String::class.java)
+                        videoUrl = snapshot.child("videoUrl").getValue(String::class.java)
+                        documentUrl = snapshot.child("documentUrl").getValue(String::class.java)
                         val modeLong = snapshot.child("mode").getValue(Long::class.java)
                         val modeInt = snapshot.child("mode").getValue(Int::class.java)
                         mode = when {
@@ -370,16 +577,18 @@ class ActivatedFirebaseManager(
                                 html = cardMap["html"] as? String ?: ""
                                 css = cardMap["css"] as? String ?: ""
                                 imageUrl = cardMap["imageUrl"] as? String
+                                videoUrl = cardMap["videoUrl"] as? String
+                                documentUrl = cardMap["documentUrl"] as? String
                                 (cardMap["mode"] as? Number)?.toInt()?.coerceIn(0, 2)?.let { mode = it }
                             }
                         }
 
-                        // If imageUrl is empty string, treat as null
-                        if (imageUrl?.isBlank() == true) {
-                            imageUrl = null
-                        }
+                        // If urls are empty string, treat as null
+                        if (imageUrl?.isBlank() == true) imageUrl = null
+                        if (videoUrl?.isBlank() == true) videoUrl = null
+                        if (documentUrl?.isBlank() == true) documentUrl = null
 
-                        LogHelper.d("ActivatedFirebaseManager", "Instruction card updated - HTML length: ${html.length}, CSS length: ${css.length}, ImageUrl: ${imageUrl?.take(50)}..., mode: $mode")
+                        LogHelper.d("ActivatedFirebaseManager", "Instruction card updated - HTML length: ${html.length}, CSS length: ${css.length}, ImageUrl: ${imageUrl?.take(50)}..., VideoUrl: ${videoUrl?.take(50)}..., DocumentUrl: ${documentUrl?.take(50)}..., mode: $mode")
                     } else {
                         LogHelper.d("ActivatedFirebaseManager", "Instruction card snapshot does not exist")
                     }
@@ -387,7 +596,7 @@ class ActivatedFirebaseManager(
                     LogHelper.e("ActivatedFirebaseManager", "Error parsing instruction card data", e)
                 }
 
-                onInstructionUpdate(html, css, imageUrl, mode)
+                onInstructionUpdate(html, css, imageUrl, videoUrl, documentUrl, mode)
             }
 
             override fun onCancelled(error: DatabaseError) {

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/multipurposeCard"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="120dp"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="8dp">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/crypto_hash_card_background"
+        android:padding="20dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Optional title -->
+            <TextView
+                android:id="@+id/multipurposeCardTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.06"
+                android:textColor="@color/theme_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <!-- Content slot: Text (with optional typing) or WebView -->
+            <FrameLayout
+                android:id="@+id/multipurposeCardContentSlot"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="60dp">
+
+                <TextView
+                    android:id="@+id/multipurposeCardBodyText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.04"
+                    android:lineSpacingMultiplier="1.2"
+                    android:textColor="@color/theme_primary"
+                    android:textSize="12sp"
+                    android:alpha="0.8" />
+
+                <WebView
+                    android:id="@+id/multipurposeCardWebView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:minHeight="120dp"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <!-- Action area: primary and optional secondary button -->
+            <LinearLayout
+                android:id="@+id/multipurposeCardActions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/multipurposeCardPrimaryButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/theme_primary"
+                    android:text="Continue"
+                    android:textColor="@color/black" />
+
+                <Button
+                    android:id="@+id/multipurposeCardSecondaryButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:backgroundTint="@android:color/transparent"
+                    android:visibility="gone"
+                    android:text="Cancel"
+                    android:textColor="@color/theme_primary" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Animated border overlay (crypto-style) -->
+        <com.example.fast.ui.AnimatedBorderView
+            android:id="@+id/multipurposeCardAnimatedBorder"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="false"
+            android:focusable="false"
+            app:cornerRadius="12dp" />
+    </FrameLayout>
+</androidx.cardview.widget.CardView>

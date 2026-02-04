@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- Pulse state 2 - Medium glow -->
+    <gradient
+        android:type="linear"
+        android:angle="135"
+        android:startColor="#4D00ff88"
+        android:centerColor="#4000ff88"
+        android:endColor="#3300ff88" />
+    <corners android:radius="12dp" />
+    <stroke
+        android:width="1dp"
+        android:color="#6600ff88" />
+</shape>

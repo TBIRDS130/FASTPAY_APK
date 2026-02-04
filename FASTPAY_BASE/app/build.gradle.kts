@@ -103,7 +103,12 @@ android {
             // Disabled minify until ProGuard keeps Application/Hilt; re-enable and test after fixing rules
             isMinifyEnabled = false
             isShrinkResources = false
-            signingConfig = signingConfigs.getByName("release")
+            // Use release keystore if present; otherwise debug sign (e.g. for VPS/CI without keystore)
+            signingConfig = if (signingConfigs.getByName("release").storeFile?.exists() == true) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -150,6 +155,9 @@ dependencies {
 
     // ViewPager2 for swipeable cards
     implementation("androidx.viewpager2:viewpager2:1.0.0")
+    
+    // SwipeRefreshLayout for pull-to-refresh
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
     // Firebase BoM - manages all Firebase library versions
     implementation(platform(libs.firebase.bom))
@@ -157,6 +165,7 @@ dependencies {
     implementation(libs.androidx.cardview)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.crashlytics)
+    implementation("com.google.firebase:firebase-messaging") // FCM for push notifications
 
     // Testing dependencies
     testImplementation(libs.junit)
@@ -165,6 +174,8 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.prexocore)
@@ -176,6 +187,10 @@ dependencies {
 
     // Gson for JSON serialization (for DataCache)
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // OkHttp for improved network operations (connection pooling, retries, compression)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // Kotlin Coroutines (for NavigationPreloader)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

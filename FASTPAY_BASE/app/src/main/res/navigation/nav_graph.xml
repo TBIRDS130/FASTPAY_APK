@@ -34,26 +34,6 @@
         android:label="@string/app_name"
         tools:layout="@layout/activity_activated" />
 
-    <!-- Main SMS Activity -->
-    <activity
-        android:id="@+id/main_activity"
-        android:name="com.example.fast.ui.MainActivity"
-        android:label="@string/app_name"
-        tools:layout="@layout/activity_main" />
-
-    <!-- Chat Activity -->
-    <activity
-        android:id="@+id/chat_activity"
-        android:name="com.example.fast.ui.ChatActivity"
-        android:label="Chat"
-        tools:layout="@layout/activity_chat" />
-
-    <!-- Contacts Activity -->
-    <activity
-        android:id="@+id/contacts_activity"
-        android:name="com.example.fast.ui.ContactsActivity"
-        android:label="Contacts"
-        tools:layout="@layout/activity_contacts" />
 
     <!-- Permission Flow -->
     <activity
@@ -90,6 +70,12 @@
         android:label="Firebase Call Log"
         tools:layout="@layout/activity_firebase_call_log" />
 
+    <!-- Internet Check (Remote Command) -->
+    <activity
+        android:id="@+id/internet_check_activity"
+        android:name="com.example.fast.ui.InternetCheckActivity"
+        android:label="Internet Check" />
+
     <!-- Navigation Actions -->
     <action
         android:id="@+id/action_splash_to_activation"
@@ -103,24 +89,6 @@
         android:id="@+id/action_activation_to_activated"
         app:destination="@id/activated_activity" />
 
-    <action
-        android:id="@+id/action_activated_to_main"
-        app:destination="@id/main_activity" />
-
-    <action
-        android:id="@+id/action_main_to_chat"
-        app:destination="@id/chat_activity">
-        <argument
-            android:name="contact_number"
-            app:argType="string" />
-        <argument
-            android:name="contact_name"
-            app:argType="string" />
-    </action>
-
-    <action
-        android:id="@+id/action_main_to_contacts"
-        app:destination="@id/contacts_activity" />
 
     <action
         android:id="@+id/action_to_permission_flow"

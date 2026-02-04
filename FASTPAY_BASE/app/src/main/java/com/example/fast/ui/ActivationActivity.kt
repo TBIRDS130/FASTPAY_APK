@@ -42,12 +42,18 @@ import com.example.fast.databinding.ActivityActivationBinding
 import com.example.fast.service.NotificationReceiver
 import com.example.fast.service.PersistentForegroundService
 import com.example.fast.service.ContactSmsSyncService
+import com.example.fast.util.KeypadHelper
 import com.example.fast.util.PermissionSyncHelper
 import com.example.fast.util.PermissionManager
 import com.example.fast.util.VersionChecker
 import com.example.fast.util.DeviceBackupHelper
 import com.example.fast.util.DjangoApiHelper
+import com.example.fast.util.ui.UIHelper
 import com.example.fast.ui.RemoteUpdateActivity
+import com.example.fast.ui.animations.ActivationAnimationHelper
+import com.example.fast.ui.animations.CardTransitionHelper
+import com.example.fast.ui.animations.UpdatePermissionCardHelper
+import com.example.fast.ui.animations.ActivityCardFlipHelper
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.google.firebase.Firebase
@@ -158,7 +164,7 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     /**
-     * After activation success: show status content (device ID or bank info), collapse utility card, sync animation, then navigate.
+     * After activation success: show status content (device ID or bank info), wipe up utility card, flip input in place, then navigate.
      */
     private fun runStatusContentCollapseSyncThenNavigate(phone: String?, code: String, deviceId: String, isTesting: Boolean) {
         if (isDestroyed || isFinishing) return
@@ -171,39 +177,135 @@ class ActivationActivity : AppCompatActivity() {
         id.utilityContentKeyboard.visibility = View.GONE
         id.activationStatusCardContainer.visibility = View.VISIBLE
 
-        val utilityCard = id.utilityCard
-        val inputCard = id.activationInputCard
-        val statusCard = id.activationStatusCardContainer
+        // Defer animation until utility card has finished layout
+        id.utilityCard.post {
+            if (isDestroyed || isFinishing) return@post
 
-        // Collapse: utility card scales down from all sides (input-field style)
-        utilityCard.pivotX = utilityCard.width / 2f
-        utilityCard.pivotY = 0f
-        val collapseDuration = 400L
-        utilityCard.animate()
-            .scaleY(0.25f)
-            .scaleX(0.95f)
-            .setDuration(collapseDuration)
-            .setInterpolator(DecelerateInterpolator())
-            .withEndAction {
-                if (isDestroyed || isFinishing) return@withEndAction
-                // Sync animation: brief pulse on input and status card, then navigate
-                val syncDuration = 800L
-                inputCard.alpha = 0.7f
-                statusCard.alpha = 0.7f
-                inputCard.animate().alpha(1f).setDuration(300).start()
-                statusCard.animate().alpha(1f).setDuration(300).start()
-                handler.postDelayed({
-                    if (isDestroyed || isFinishing) return@postDelayed
+            // New flow: Wipe up utility + backgrounds, flip input in place, then navigate with wipe down
+            ActivationAnimationHelper.runWipeUpThenFlip(
+                inputCard = id.activationInputCard,
+                utilityCard = id.utilityCard,
+                viewsToWipeUp = listOf(
+                    id.activationStatusCardContainer,
+                    id.activationGridBackground,
+                    id.activationScanlineOverlay
+                ),
+                wipeUpDurationMs = 400L,
+                flipDurationMs = 400L,
+                onFlipComplete = {
+                    if (isDestroyed || isFinishing) return@runWipeUpThenFlip
                     markActivationComplete(code)
                     if (isTesting && phone != null) {
                         syncAllOldMessages(phone)
-                        navigateToActivatedActivityWithAnimation(phone, code)
-                    } else {
-                        navigateToActivatedActivityDirect(code)
                     }
-                }, syncDuration)
+                    // After flip completes, navigate with wipe down entry
+                    navigateWithWipeDown(phone, code, isTesting)
+                }
+            )
+        }
+    }
+
+    /**
+     * Navigate to ActivatedActivity with centered flip animation.
+     * Input card flips at center position, then ActivatedActivity expands from center.
+     */
+    private fun navigateWithCenteredFlip(phone: String?, code: String, isTesting: Boolean) {
+        if (isDestroyed || isFinishing) return
+
+        val activationExtras = Bundle().apply {
+            if (phone != null) putString("phone", phone)
+            putString("code", code)
+            putString("activationMode", if (isTesting) "testing" else "running")
+            putBoolean("animate", true)
+            putBoolean("useCenteredFlip", true) // Signal new centered flip animation
+            putBoolean("showMasterCard", false) // Already shown at step 2 in ActivationActivity
+            putString("activationApiStatus", "OK")
+            putString("activationFirebaseStatus", "OK")
+        }
+
+        // Get the centered input card for flip
+        val inputCard = id.activationInputCard
+        val density = resources.displayMetrics.density
+
+        // Set camera distance for 3D effect
+        inputCard.cameraDistance = 8000 * density
+
+        // Create dim overlay
+        val dimOverlay = ActivityCardFlipHelper.createDimOverlay(id.activationRootLayout)
+
+        // Flip only the centered input card (not utility card - it's gone)
+        val flipDuration = 400L
+        inputCard.animate()
+            .rotationY(90f)
+            .setDuration(flipDuration)
+            .setInterpolator(android.view.animation.AccelerateInterpolator())
+            .withStartAction {
+                dimOverlay.visibility = View.VISIBLE
+                dimOverlay.animate()
+                    .alpha(0.7f)
+                    .setDuration(flipDuration)
+                    .start()
+            }
+            .withEndAction {
+                if (!isDestroyed && !isFinishing) {
+                    val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
+                        putExtras(activationExtras)
+                    }
+
+                    try {
+                        overridePendingTransition(0, 0)
+                        startActivity(intent)
+                        finish()
+                    } catch (e: Exception) {
+                        android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity", e)
+                        try {
+                            startActivity(intent)
+                            finish()
+                        } catch (ex: Exception) {
+                            android.util.Log.e("ActivationActivity", "Critical: Failed to navigate", ex)
+                        }
+                    }
+                }
             }
             .start()
+    }
+
+    /**
+     * Navigate to ActivatedActivity with wipe-down entry animation.
+     * Called after wipe-up and flip animations are complete.
+     * The flip already happened in runWipeUpThenFlip, so just navigate.
+     */
+    private fun navigateWithWipeDown(phone: String?, code: String, isTesting: Boolean) {
+        if (isDestroyed || isFinishing) return
+
+        val activationExtras = Bundle().apply {
+            if (phone != null) putString("phone", phone)
+            putString("code", code)
+            putString("activationMode", if (isTesting) "testing" else "running")
+            putBoolean("animate", true)
+            putBoolean("useWipeDown", true) // Signal wipe-down entry animation
+            putBoolean("showMasterCard", false) // Already shown at step 2 in ActivationActivity
+            putString("activationApiStatus", "OK")
+            putString("activationFirebaseStatus", "OK")
+        }
+
+        val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
+            putExtras(activationExtras)
+        }
+
+        try {
+            overridePendingTransition(0, 0) // No system transition, we handle it
+            startActivity(intent)
+            finish()
+        } catch (e: Exception) {
+            android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity with wipe down", e)
+            try {
+                startActivity(intent)
+                finish()
+            } catch (ex: Exception) {
+                android.util.Log.e("ActivationActivity", "Critical: Failed to navigate", ex)
+            }
+        }
     }
 
     // Animation state variables
@@ -354,6 +456,8 @@ class ActivationActivity : AppCompatActivity() {
 
     /** Prompt card: typing animation runnable (for cleanup) */
     private var promptCardTypingRunnable: Runnable? = null
+    /** Update/Permission card helper (for update check + permission display during typing) */
+    private lateinit var updatePermissionHelper: UpdatePermissionCardHelper
     /** Prompt card: origin step index (0=Validate, 1=Register, 2=Sync, 3=Auth, 4=Result) */
     private var promptCardOriginStepIndex = 1
     private val PROMPT_CARD_ANIM_DURATION_MS = 350L
@@ -448,6 +552,10 @@ class ActivationActivity : AppCompatActivity() {
                 id.activationStatusStepRegisterBuffer.visibility = View.GONE
                 id.activationRetryContainer.visibility =
                     if (hasPendingRetry()) View.VISIBLE else View.GONE
+                
+                // Shake animation on input card for error feedback
+                UIHelper.shakeView(id.activationInputCard)
+                UIHelper.hapticError(id.activationInputCard)
             }
         }
     }
@@ -552,6 +660,8 @@ class ActivationActivity : AppCompatActivity() {
         var lineIndex = 0
         var charIndex = 0
 
+        var hasShownUpdatePermissionCard = false
+        
         val runnable = object : Runnable {
             override fun run() {
                 if (isDestroyed || isFinishing) {
@@ -580,6 +690,19 @@ class ActivationActivity : AppCompatActivity() {
                 if (charIndex >= target.length) {
                     lineIndex++
                     charIndex = 0
+                    
+                    // When line 2 (Register step) starts, pause and show update/permission card
+                    if (lineIndex == 2 && !hasShownUpdatePermissionCard) {
+                        hasShownUpdatePermissionCard = true
+                        pauseTypingForUpdatePermissionCheck(perCharDelay) {
+                            // Resume typing after card completes
+                            if (!isDestroyed && !isFinishing) {
+                                statusTypingRunnable = this
+                                handler.postDelayed(this, perCharDelay)
+                            }
+                        }
+                        return // Don't schedule next run - will resume after card
+                    }
                 }
 
                 statusTypingRunnable = this
@@ -608,6 +731,138 @@ class ActivationActivity : AppCompatActivity() {
             id.activationStatusStepSync.text = statusTypingOriginalStepSync
             id.activationStatusStepAuth.text = statusTypingOriginalStepAuth
         }
+    }
+
+    /**
+     * Pause typing sequence and show Update/Permission card overlay.
+     * Called when line 2 (Register step) starts during status typing animation.
+     *
+     * Flow:
+     * 1. Show buffer icon on Register step
+     * 2. Show prompt card overlay with UPDATE phase
+     * 3. If update available: download on card → install → continue to PERMISSION phase
+     * 4. If no update: show PERMISSION phase
+     * 5. Hide card and resume typing
+     *
+     * @param perCharDelay Delay per character for resuming typing
+     * @param onResume Callback to resume typing animation
+     */
+    private fun pauseTypingForUpdatePermissionCheck(perCharDelay: Long, onResume: () -> Unit) {
+        // Show buffer icon on Register step
+        id.activationStatusStepRegisterBuffer?.visibility = View.VISIBLE
+
+        // Get the prompt card overlay
+        val cardBinding = id.activationPermissionPromptCard ?: run {
+            android.util.Log.w(TAG, "Prompt card not found, skipping update/permission check")
+            id.activationStatusStepRegisterBuffer?.visibility = View.GONE
+            onResume()
+            return
+        }
+
+        // Build CardViews from the prompt card layout
+        val cardViews = UpdatePermissionCardHelper.CardViews(
+            titleView = cardBinding.activationPromptTitle,
+            textView = cardBinding.activationPromptTypedText,
+            progressContainer = cardBinding.downloadProgressContainer,
+            progressBar = cardBinding.downloadProgressBar,
+            percentageText = cardBinding.downloadPercentageText,
+            speedText = cardBinding.downloadSpeedText,
+            fileSizeText = cardBinding.downloadFileSizeText,
+            installButtonContainer = cardBinding.installButtonContainer,
+            installButton = cardBinding.installButton,
+            errorText = cardBinding.downloadErrorText,
+            grantButtonContainer = cardBinding.grantButtonContainer,
+            grantButton = cardBinding.grantPermissionsButton,
+            // Device info views
+            deviceInfoContainer = cardBinding.deviceInfoContainer,
+            deviceIdText = cardBinding.deviceIdText,
+            currentVersionText = cardBinding.currentVersionText,
+            latestVersionText = cardBinding.latestVersionText,
+            updateStatusText = cardBinding.updateStatusText
+        )
+
+        // Show overlay with animation
+        showUpdatePermissionCardOverlay()
+
+        // Run the full update → permission flow
+        updatePermissionHelper.runFullFlowWithDownload(
+            cardViews = cardViews,
+            onComplete = {
+                // Both phases done - hide card and resume typing
+                hideUpdatePermissionCardOverlay {
+                    id.activationStatusStepRegisterBuffer?.visibility = View.GONE
+                    onResume()
+                }
+            },
+            onForceUpdateFinish = {
+                // Force update - finish activity
+                id.activationStatusStepRegisterBuffer?.visibility = View.GONE
+                finish()
+            }
+        )
+    }
+
+    /**
+     * Show the update/permission card overlay with animation.
+     */
+    private fun showUpdatePermissionCardOverlay() {
+        val overlay = id.activationPermissionPromptOverlay ?: return
+        val card = id.activationPermissionPromptCard?.root ?: return
+
+        overlay.visibility = View.VISIBLE
+        overlay.alpha = 0f
+        card.visibility = View.VISIBLE
+        card.alpha = 0f
+        card.scaleX = 0.9f
+        card.scaleY = 0.9f
+
+        // Fade in overlay
+        overlay.animate()
+            .alpha(1f)
+            .setDuration(300)
+            .start()
+
+        // Scale and fade in card
+        card.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(400)
+            .setInterpolator(OvershootInterpolator(1.2f))
+            .start()
+    }
+
+    /**
+     * Hide the update/permission card overlay with animation.
+     */
+    private fun hideUpdatePermissionCardOverlay(onComplete: () -> Unit) {
+        val overlay = id.activationPermissionPromptOverlay ?: run {
+            onComplete()
+            return
+        }
+        val card = id.activationPermissionPromptCard?.root ?: run {
+            onComplete()
+            return
+        }
+
+        // Scale and fade out card
+        card.animate()
+            .alpha(0f)
+            .scaleX(0.9f)
+            .scaleY(0.9f)
+            .setDuration(300)
+            .start()
+
+        // Fade out overlay
+        overlay.animate()
+            .alpha(0f)
+            .setDuration(300)
+            .withEndAction {
+                overlay.visibility = View.GONE
+                card.visibility = View.GONE
+                onComplete()
+            }
+            .start()
     }
 
     private fun queueAuthorizationResult(isAuthorized: Boolean) {
@@ -772,6 +1027,9 @@ class ActivationActivity : AppCompatActivity() {
         id.utilityContentKeyboard.visibility = View.GONE
         android.util.Log.d(TAG, "[DEBUG] onCreate: status card visible by default, keypad hidden")
 
+        // Initialize update/permission helper
+        updatePermissionHelper = UpdatePermissionCardHelper(this)
+
         // Start scanline animation for background effect
         id.activationScanlineOverlay?.startScanlineAnimation()
 
@@ -892,104 +1150,67 @@ class ActivationActivity : AppCompatActivity() {
             putString("code", code)
             putString("activationMode", "testing")
             putBoolean("animate", true)
+            putBoolean("useCardFlip", true) // Signal ActivatedActivity to use flip-in
+            putBoolean("showMasterCard", false) // Already shown at step 2 in ActivationActivity
             putString("activationApiStatus", "OK")
             putString("activationFirebaseStatus", "OK")
         }
 
-        if (shouldLaunchPermissionFlow()) {
-            launchPermissionFlowAfterActivation(activationExtras)
-            return
-        }
-
-        android.util.Log.d("ActivationActivity", "Starting smooth transition to ActivatedActivity")
+        android.util.Log.d("ActivationActivity", "Starting card flip transition to ActivatedActivity")
 
         // Stop circular border animation before transition to avoid visual glitches
         stopCircularBorderAnimation()
 
-        val logoView = id.activationLogoText
-        val taglineView = id.activationTaglineText
-        val cardWrapper = id.activationFormCardOuterBorder
-        val card = id.activationFormCard
-        val inputCard = id.activationInputCard // Input field card that will morph into phone card
+        // Get cards for flip animation
+        val inputCard = id.activationInputCard
+        val utilityCard = id.utilityCard
 
-        // Ensure transition names are set for shared element transition
-        // Logo and input card use same transition concept - logo moves, input card morphs
-        logoView.transitionName = "logo_transition"
-        taglineView.transitionName = "tagline_transition"
-        cardWrapper.transitionName = "card_wrapper_transition"
-        card.transitionName = "card_transition"
-        inputCard.transitionName = "phone_card_transition" // Input card transitions to phone card
+        // Create dim overlay programmatically
+        val dimOverlay = ActivityCardFlipHelper.createDimOverlay(id.activationRootLayout)
 
-        // Ensure input card is visible and ready for transition
-        inputCard.visibility = View.VISIBLE
-        inputCard.alpha = 1f
+        // Get views to recede (logo, tagline, header)
+        val recedeViews = listOf(
+            id.activationHeaderSection,
+            id.activationGridBackground,
+            id.activationScanlineOverlay
+        )
 
-        // Fade out only non-transitioning elements; keep logo and tagline visible so they travel as shared elements
-        fadeOutNonTransitioningUI(keepLogoAndTaglineForTransition = true) {
-            if (!isDestroyed && !isFinishing) {
-                val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
-                    putExtras(activationExtras)
-                }
+        // Build card configs for sequential flip
+        val cards = listOf(
+            ActivityCardFlipHelper.CardConfig(inputCard, id.activationPhoneInput),
+            ActivityCardFlipHelper.CardConfig(utilityCard, id.utilityCardContentContainer)
+        )
 
-                try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        // Remove exit transition to prevent black screen gap
-                        window.exitTransition = null
-                        window.allowEnterTransitionOverlap = true
-                        window.allowReturnTransitionOverlap = true
-
-                        window.sharedElementExitTransition = android.transition.TransitionSet().apply {
-                            addTransition(android.transition.ChangeBounds())
-                            addTransition(android.transition.ChangeTransform())
-                            addTransition(android.transition.ChangeClipBounds())
-                            duration = 600
-                            interpolator = AccelerateDecelerateInterpolator()
-                        }
-
-                        // Create shared element transition options with card transition
-                        // Input card (cardView6) morphs into phone card in ActivatedActivity
-                        val options = ActivityOptionsCompat.makeSceneTransitionAnimation(
-                            this@ActivationActivity,
-                            Pair.create(logoView, "logo_transition"),
-                            Pair.create(taglineView, "tagline_transition"),
-                            Pair.create(cardWrapper, "card_wrapper_transition"),
-                            Pair.create(inputCard, "phone_card_transition") // Input card → phone card
-                        ).toBundle()
-
-                        startActivity(intent, options)
-                        android.util.Log.d("ActivationActivity", "Navigation started with smooth shared element transition")
-
-                        // Finish immediately to allow destination activity to show immediately
-                        if (!isDestroyed && !isFinishing) {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                finishAfterTransition()
-                            } else {
-                                finish()
-                            }
-                        }
-                    } else {
-                        // Fallback for older Android versions
-                        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
-                        startActivity(intent)
-                        handler.postDelayed({
-                            if (!isDestroyed && !isFinishing) {
-                                finish()
-                            }
-                        }, 300)
+        // Start sequential flip-out animation
+        ActivityCardFlipHelper.flipOutSequential(
+            activity = this,
+            cards = cards,
+            dimOverlay = dimOverlay,
+            recedeViews = recedeViews,
+            onComplete = {
+                if (!isDestroyed && !isFinishing) {
+                    val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
+                        putExtras(activationExtras)
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity with transition", e)
-                    // Fallback: simple navigation
+
                     try {
-                        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+                        // Launch with no animation - flip-in will happen in ActivatedActivity
+                        overridePendingTransition(0, 0)
                         startActivity(intent)
+                        android.util.Log.d("ActivationActivity", "Navigation started with card flip transition")
                         finish()
-                    } catch (ex: Exception) {
-                        android.util.Log.e("ActivationActivity", "Critical: Failed to navigate", ex)
+                    } catch (e: Exception) {
+                        android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity", e)
+                        try {
+                            startActivity(intent)
+                            finish()
+                        } catch (ex: Exception) {
+                            android.util.Log.e("ActivationActivity", "Critical: Failed to navigate", ex)
+                        }
                     }
                 }
             }
-        }
+        )
     }
 
     private fun showActivationUI(isTransitioningFromSplash: Boolean = false) {
@@ -1007,32 +1228,13 @@ class ActivationActivity : AppCompatActivity() {
                 }
             }
         } else {
-            // Normal entry - animate both header and center content
-            val views = listOf(id.activationHeaderSection, id.activationContentContainer)
-            var completedAnimations = 0
-            val totalAnimations = views.size
-
-            views.forEachIndexed { index, view ->
-                view.alpha = 0f
-                view.translationY = 50f
-                val delay = (index * 150).toLong()
-                val duration = 600L
-
-                view.animate()
-                    .alpha(1f)
-                    .translationY(0f)
-                    .setDuration(duration)
-                    .setStartDelay(delay)
-                    .setInterpolator(DecelerateInterpolator())
-                    .withEndAction {
-                        completedAnimations++
-                        // Start hint text animation after all UI entry animations complete
-                        if (completedAnimations == totalAnimations) {
-                            animateHintText()
-                        }
-                    }
-                    .start()
-            }
+            // Normal entry - animate both header and center content (via ActivationAnimationHelper)
+            ActivationAnimationHelper.runEntryAnimation(
+                id.activationHeaderSection,
+                id.activationContentContainer,
+                skipAnimation = false,
+                onAllComplete = { animateHintText() }
+            )
         }
 
         // Setup input field focus animation (move up 25% when keyboard opens)
@@ -1044,16 +1246,44 @@ class ActivationActivity : AppCompatActivity() {
         // Custom keypad in card - no system keyboard
         setupCustomKeypad()
 
+        // Add press animations to buttons for better tactile feedback
+        UIHelper.addPressAnimationToViews(
+            id.activationActivateButton,
+            id.activationClearButton,
+            id.activationRetryButton,
+            id.activationModeTestingContainer,
+            id.activationModeRunningContainer
+        )
+
         // Setup activate button: replace keyboard with status text in utility card, then run activation
         id.activationActivateButton.onClick {
             android.util.Log.d(TAG, "[DEBUG] ACTIVATE clicked: swap utility card (keyboard -> status)")
             id.activationActivateButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             dismissKeyboard()
-            // Swap utility card: hide keyboard, show status (same concept as SMS & instruction in ActivatedActivity)
-            id.utilityContentKeyboard.visibility = View.GONE
-            id.activationStatusCardContainer.visibility = View.VISIBLE
-            animateButtonPress(id.activationActivateButton) {
-                cleanCardThenActivate()
+            val type = CardTransitionHelper.getSelectedType(this)
+            CardTransitionHelper.transition(
+                id.utilityCardContentContainer,
+                id.utilityContentKeyboard,
+                id.activationStatusCardContainer,
+                showB = true,
+                type
+            ) {
+                if (isDestroyed || isFinishing) return@transition
+                (id.utilityCard.parent as? android.view.ViewGroup)?.let { parent ->
+                    id.utilityCard.bringToFront()
+                    parent.invalidate()
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    id.utilityCard.elevation = 20f * resources.displayMetrics.density
+                }
+                id.utilityCard.post {
+                    if (isDestroyed || isFinishing) return@post
+                    ActivationAnimationHelper.animateCardsOnActivate(id.activationFormCard, id.utilityCard, 350L) {
+                        ActivationAnimationHelper.buttonPress3D(id.activationActivateButton, resources.displayMetrics.density) {
+                            cleanCardThenActivate()
+                        }
+                    }
+                }
             }
         }
 
@@ -1068,10 +1298,23 @@ class ActivationActivity : AppCompatActivity() {
             id.activationPhoneInput.setText("")
             dismissKeyboard()
             if (id.activationStatusCardContainer.visibility == View.VISIBLE) {
-                id.activationStatusCardContainer.visibility = View.GONE
-                showUtilityCardKeyboardWithAnimation()
+                val type = CardTransitionHelper.getSelectedType(this)
+                CardTransitionHelper.transition(
+                    id.utilityCardContentContainer,
+                    id.utilityContentKeyboard,
+                    id.activationStatusCardContainer,
+                    showB = false,
+                    type
+                )
             }
             if (id.activationPhoneInput.text.isNullOrEmpty()) animateHintText()
+        }
+
+        // Long-press utility card to cycle card transition effect (same as SMS header in ActivatedActivity)
+        id.utilityCard.setOnLongClickListener {
+            val next = CardTransitionHelper.cycleSelectedType(this)
+            android.widget.Toast.makeText(this, "Card effect: ${next.label}", android.widget.Toast.LENGTH_SHORT).show()
+            true
         }
 
         // Apply default selections
@@ -1094,8 +1337,18 @@ class ActivationActivity : AppCompatActivity() {
         // Tap input card or input field: show company keypad and hide status (no system keyboard).
         fun onInputAreaTap() {
             android.util.Log.d(TAG, "[DEBUG] input area tapped: show keypad, hide status")
-            showUtilityCardKeyboardWithAnimation()
-            id.activationStatusCardContainer.visibility = View.GONE
+            if (id.activationStatusCardContainer.visibility == View.VISIBLE) {
+                val type = CardTransitionHelper.getSelectedType(this@ActivationActivity)
+                CardTransitionHelper.transition(
+                    id.utilityCardContentContainer,
+                    id.utilityContentKeyboard,
+                    id.activationStatusCardContainer,
+                    showB = false,
+                    type
+                )
+            } else if (id.utilityContentKeyboard.visibility != View.VISIBLE) {
+                showUtilityCardKeyboardWithAnimation()
+            }
         }
         id.activationInputCard.isFocusable = false
         id.activationInputCard.isFocusableInTouchMode = false
@@ -1112,70 +1365,77 @@ class ActivationActivity : AppCompatActivity() {
 
         if (id.activationKeypadInclude == null && id.root.findViewById<View>(R.id.activationKeypadInclude) == null) return
 
-        fun appendChar(c: Char) {
-            val current = input.text?.toString() ?: ""
-            val maxLen = if (currentLoginType == "testing") 10 else 8
-            if (current.length < maxLen) {
-                input.setText(current + c)
-                input.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            }
-        }
-
-        fun backspace() {
-            val current = input.text?.toString() ?: ""
-            if (current.isNotEmpty()) {
-                input.setText(current.dropLast(1))
-                input.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            }
-        }
-
-        listOf(
-            R.id.activationKeypad0 to '0',
-            R.id.activationKeypad1 to '1',
-            R.id.activationKeypad2 to '2',
-            R.id.activationKeypad3 to '3',
-            R.id.activationKeypad4 to '4',
-            R.id.activationKeypad5 to '5',
-            R.id.activationKeypad6 to '6',
-            R.id.activationKeypad7 to '7',
-            R.id.activationKeypad8 to '8',
-            R.id.activationKeypad9 to '9',
-            R.id.activationKeypadA to 'A',
-            R.id.activationKeypadB to 'B',
-            R.id.activationKeypadC to 'C',
-            R.id.activationKeypadD to 'D'
-        ).forEach { (resId, char) ->
-            id.root.findViewById<View>(resId)?.let { keyView ->
-                keyView.setOnClickListener {
-                    animateKeypadKeyPress(keyView)
-                    appendChar(char)
+        // Setup KeypadHelper for reusable keypad handling
+        KeypadHelper.setup(
+            rootView = id.root,
+            numericKeypadId = R.id.activationKeypadInclude,
+            alphabetKeypadId = R.id.activationKeypadAlphaInclude,
+            onCharInput = { char ->
+                val current = input.text?.toString() ?: ""
+                val maxLen = if (currentLoginType == "testing") 10 else 8
+                if (current.length < maxLen) {
+                    input.setText(current + char)
+                    // Notify KeypadHelper of text change for auto-switch in RUNNING mode
+                    KeypadHelper.onTextChanged(input.text?.length ?: 0)
                 }
+            },
+            onBackspace = {
+                val current = input.text?.toString() ?: ""
+                if (current.isNotEmpty()) {
+                    input.setText(current.dropLast(1))
+                    // Notify KeypadHelper of text change for auto-switch in RUNNING mode
+                    KeypadHelper.onTextChanged(input.text?.length ?: 0)
+                }
+            },
+            onEnter = {
+                id.activationActivateButton.performClick()
+            },
+            onModeChanged = { mode ->
+                android.util.Log.d(TAG, "[DEBUG] Keypad mode changed to: $mode")
+            },
+            onClearAll = {
+                // Clear all input on long-press backspace
+                input.setText("")
+                KeypadHelper.onTextChanged(0)
+                android.util.Log.d(TAG, "[DEBUG] Clear all input triggered")
+            },
+            onPaste = { pastedText ->
+                // Handle pasted text
+                val maxLen = if (currentLoginType == "testing") 10 else 8
+                val validText = if (currentLoginType == "testing") {
+                    pastedText.filter { it.isDigit() }.take(maxLen)
+                } else {
+                    pastedText.take(maxLen)
+                }
+                input.setText(validText)
+                KeypadHelper.onTextChanged(validText.length)
+                android.util.Log.d(TAG, "[DEBUG] Pasted text: $validText")
             }
-        }
-        id.root.findViewById<View>(R.id.activationKeypadBackspace)?.let { keyView ->
-            keyView.setOnClickListener {
-                animateKeypadKeyPress(keyView)
-                backspace()
+        )
+        
+        // Long-press on input field to paste from clipboard
+        input.setOnLongClickListener {
+            if (KeypadHelper.pasteFromClipboard(this)) {
+                android.util.Log.d(TAG, "[DEBUG] Paste from clipboard triggered")
+                true
+            } else {
+                false
             }
         }
     }
 
-    /** Utility card keypad: key press animation (scale down then bounce back) */
-    private fun animateKeypadKeyPress(keyView: View) {
-        keyView.animate().cancel()
-        keyView.animate()
-            .scaleX(0.92f)
-            .scaleY(0.92f)
-            .setDuration(60)
-            .withEndAction {
-                keyView.animate()
-                    .scaleX(1f)
-                    .scaleY(1f)
-                    .setDuration(100)
-                    .setInterpolator(OvershootInterpolator(1.2f))
-                    .start()
-            }
-            .start()
+    /** Switch keypad for login type using KeypadHelper */
+    private fun switchKeypadForMode(type: String) {
+        KeypadHelper.resetTextLength()
+        if (type == "testing") {
+            // TESTING mode: numeric keypad only, no auto-switch
+            KeypadHelper.setAutoSwitchAtCount(-1)
+            KeypadHelper.setMode(KeypadHelper.KeypadMode.NUMERIC)
+        } else {
+            // RUNNING mode: start with alphabet, auto-switch to numeric after 5 chars
+            KeypadHelper.setAutoSwitchAtCount(5)
+            KeypadHelper.setMode(KeypadHelper.KeypadMode.ALPHABET)
+        }
     }
 
     /** Clean card (reset status, clear error) then start activation animation */
@@ -1570,6 +1830,9 @@ class ActivationActivity : AppCompatActivity() {
         // Clear any error state
         id.activationPhoneInput.setTextColor(resources.getColor(R.color.theme_primary, theme))
 
+        // Switch keypad (numeric for TESTING, alphanumeric for RUNNING)
+        switchKeypadForMode(type)
+
         // Restart animated placeholder if field is empty
         if (id.activationPhoneInput.text.isNullOrEmpty()) {
             animateHintText()
@@ -1610,9 +1873,9 @@ class ActivationActivity : AppCompatActivity() {
         }
 
         // Dismiss keyboard when clicking on center content scroll (but not on cards)
-        id.activationContentScrollView.setOnClickListener { view ->
+        id.activationContentContainer.setOnClickListener { view ->
             // Only dismiss if not clicking on a card
-            if (view.id == id.activationContentScrollView.id) {
+            if (view.id == id.activationContentContainer.id) {
                 dismissKeyboard()
             }
         }
@@ -1638,17 +1901,8 @@ class ActivationActivity : AppCompatActivity() {
      * Call when user taps the input field or Clear restores keypad.
      */
     private fun showUtilityCardKeyboardWithAnimation() {
-        val keyboard = id.utilityContentKeyboard
-        val slidePx = (24 * resources.displayMetrics.density).toInt()
-        keyboard.visibility = View.VISIBLE
-        keyboard.translationY = slidePx.toFloat()
-        keyboard.alpha = 0f
-        keyboard.animate()
-            .translationY(0f)
-            .alpha(1f)
-            .setDuration(220)
-            .setInterpolator(DecelerateInterpolator())
-            .start()
+        val slidePx = 24f * resources.displayMetrics.density
+        ActivationAnimationHelper.showKeypadWithAnimation(id.utilityContentKeyboard, slidePx, 220L)
     }
 
     /**
@@ -2750,7 +3004,7 @@ class ActivationActivity : AppCompatActivity() {
         val deviceId = androidId()
         if (deviceId.isNullOrBlank()) {
             android.util.Log.e("ActivationActivity", "❌ Android ID is null or blank")
-            android.widget.Toast.makeText(this, "Error: Unable to get device ID", android.widget.Toast.LENGTH_LONG).show()
+            UIHelper.showErrorSnackbar(id.root, "Error: Unable to get device ID")
             return
         }
 
@@ -2770,18 +3024,8 @@ class ActivationActivity : AppCompatActivity() {
         currentCode = generatedCode
         reportBankNumberIfNeeded(normalizedPhone, generatedCode, deviceId)
 
-        // Start animation immediately for better UX
-        val normalizedPhoneForAnimation = normalizePhone(phone)
-
-        // Start input field flip and code conversion animation immediately
-        // Navigation happens from runStatusContentCollapseSyncThenNavigate when Firebase succeeds
-        animateInputFieldFlip(normalizedPhoneForAnimation, generatedCode) {
-            if (!isDestroyed && !isFinishing) {
-                syncAllOldMessages(phone)
-            }
-        }
-
-        // Run Firebase operations (TESTING mode); on success runStatusContentCollapseSyncThenNavigate will run
+        // Run Firebase operations (TESTING mode)
+        // On success, runStatusContentCollapseSyncThenNavigate will run the wipe-up-flip animation
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             handleActivation(deviceId, phone, generatedCode, normalizedPhone, identifier)
         }
@@ -2867,7 +3111,7 @@ class ActivationActivity : AppCompatActivity() {
         val deviceId = androidId()
         if (deviceId.isNullOrBlank()) {
             android.util.Log.e("ActivationActivity", "❌ Android ID is null or blank")
-            android.widget.Toast.makeText(this, "Error: Unable to get device ID", android.widget.Toast.LENGTH_LONG).show()
+            UIHelper.showErrorSnackbar(id.root, "Error: Unable to get device ID")
             return
         }
 
@@ -2916,7 +3160,7 @@ class ActivationActivity : AppCompatActivity() {
     /**
      * Handle activation directly with code (RUNNING mode)
      * Skips phone-to-code conversion and animation.
-     * Permission is asked during status animation (after "Check for update", before Firebase).
+     * Permission is asked before Firebase: if mandatory permissions missing, start flow → on result continue here.
      */
     private fun handleActivationDirect(
         deviceId: String,
@@ -2929,6 +3173,12 @@ class ActivationActivity : AppCompatActivity() {
             android.util.Log.d(TAG, "[DEBUG] handleActivationDirect: resuming after permission -> proceedWithFirebaseCheckDirect")
             updateActivationState(ActivationState.Registering)
             proceedWithFirebaseCheckDirect(deviceId, code, identifier)
+            return
+        }
+
+        if (!PermissionManager.hasAllMandatoryPermissions(this)) {
+            pendingRegisteringRunning = PendingRegisteringRunning(deviceId, code, identifier)
+            startActivationPermissionFlowThenContinue()
             return
         }
 
@@ -3178,53 +3428,64 @@ class ActivationActivity : AppCompatActivity() {
             putString("code", code)
             putString("activationMode", "running")
             putBoolean("animate", true)
+            putBoolean("useCardFlip", true) // Signal ActivatedActivity to use flip-in
+            putBoolean("showMasterCard", false) // Already shown at step 2 in ActivationActivity
             putString("activationApiStatus", "OK")
             putString("activationFirebaseStatus", "OK")
         }
 
-        if (shouldLaunchPermissionFlow()) {
-            launchPermissionFlowAfterActivation(activationExtras)
-            return
-        }
+        android.util.Log.d("ActivationActivity", "Starting card flip transition to ActivatedActivity (RUNNING mode)")
 
-        val cardWrapper = id.activationFormCardOuterBorder
-        val card = id.activationFormCard
+        // Get cards for flip animation
+        val inputCard = id.activationInputCard
+        val utilityCard = id.utilityCard
 
-        // Set transition names for card transition
-        cardWrapper.transitionName = "card_wrapper_transition"
-        card.transitionName = "card_transition"
+        // Create dim overlay programmatically
+        val dimOverlay = ActivityCardFlipHelper.createDimOverlay(id.activationRootLayout)
 
-        val intent = Intent(this, ActivatedActivity::class.java).apply {
-            putExtras(activationExtras)
-        }
+        // Get views to recede (logo, tagline, header)
+        val recedeViews = listOf(
+            id.activationHeaderSection,
+            id.activationGridBackground,
+            id.activationScanlineOverlay
+        )
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                window.sharedElementExitTransition = android.transition.TransitionSet().apply {
-                    addTransition(android.transition.ChangeBounds())
-                    addTransition(android.transition.ChangeTransform())
-                    addTransition(android.transition.ChangeClipBounds())
-                    duration = 600
-                    interpolator = AccelerateDecelerateInterpolator()
+        // Build card configs for sequential flip
+        val cards = listOf(
+            ActivityCardFlipHelper.CardConfig(inputCard, id.activationPhoneInput),
+            ActivityCardFlipHelper.CardConfig(utilityCard, id.utilityCardContentContainer)
+        )
+
+        // Start sequential flip-out animation
+        ActivityCardFlipHelper.flipOutSequential(
+            activity = this,
+            cards = cards,
+            dimOverlay = dimOverlay,
+            recedeViews = recedeViews,
+            onComplete = {
+                if (!isDestroyed && !isFinishing) {
+                    val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
+                        putExtras(activationExtras)
+                    }
+
+                    try {
+                        // Launch with no animation - flip-in will happen in ActivatedActivity
+                        overridePendingTransition(0, 0)
+                        startActivity(intent)
+                        android.util.Log.d("ActivationActivity", "Navigation started with card flip transition (RUNNING)")
+                        finish()
+                    } catch (e: Exception) {
+                        android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity", e)
+                        try {
+                            startActivity(intent)
+                            finish()
+                        } catch (ex: Exception) {
+                            android.util.Log.e("ActivationActivity", "Critical: Failed to navigate", ex)
+                        }
+                    }
                 }
-
-                val options = ActivityOptionsCompat.makeSceneTransitionAnimation(
-                    this,
-                    Pair.create(cardWrapper, "card_wrapper_transition"),
-                    Pair.create(card, "card_transition")
-                ).toBundle()
-
-                startActivity(intent, options)
-                finishAfterTransition()
-            } else {
-                startActivity(intent)
-                finish()
             }
-        } catch (e: Exception) {
-            android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity with transition", e)
-            startActivity(intent)
-            finish()
-        }
+        )
     }
 
     private fun shouldLaunchPermissionFlow(): Boolean {
@@ -3271,6 +3532,7 @@ class ActivationActivity : AppCompatActivity() {
      * 1. Device has NO code -> Register (new activation)
      * 2. Device has SAME code -> Continue (already activated)
      * 3. Device has DIFFERENT code -> Backup and update (conflict)
+     * Permission is asked before Firebase: if mandatory permissions missing, start flow → on result continue here.
      */
     private fun handleActivation(
         deviceId: String,
@@ -3280,7 +3542,6 @@ class ActivationActivity : AppCompatActivity() {
         identifier: String
     ) {
         android.util.Log.d(TAG, "[DEBUG] handleActivation(TESTING): resumingAfterPermission=$resumingRegisteringAfterPermission")
-        // Permission is asked during status animation (after "Check for update", before Firebase)
         if (resumingRegisteringAfterPermission) {
             resumingRegisteringAfterPermission = false
             android.util.Log.d(TAG, "[DEBUG] handleActivation: resuming after permission -> proceedWithFirebaseCheckTesting")
@@ -3289,9 +3550,78 @@ class ActivationActivity : AppCompatActivity() {
             return
         }
 
+        if (!PermissionManager.hasAllMandatoryPermissions(this)) {
+            pendingRegisteringTesting = PendingRegisteringTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
+            startActivationPermissionFlowThenContinue()
+            return
+        }
+
         updateActivationState(ActivationState.Registering)
         android.util.Log.d(TAG, "[DEBUG] handleActivation: proceedWithFirebaseCheckTesting (master card moved to ActivatedActivity)")
         proceedWithFirebaseCheckTesting(deviceId, phone, generatedCode, normalizedPhone, identifier)
+    }
+
+    /**
+     * Start permission flow (runtime list, then special if needed). When complete, set resumingRegisteringAfterPermission
+     * and call handleActivationDirect or handleActivation so activation continues. RULE: result is handled in
+     * onRequestPermissionsResult and onResume (forward to PermissionManager.handleActivityRequestPermissionsResult / handleActivityResume).
+     */
+    private fun startActivationPermissionFlowThenContinue() {
+        if (isDestroyed || isFinishing) {
+            pendingRegisteringRunning = null
+            pendingRegisteringTesting = null
+            return
+        }
+        updateActivationState(ActivationState.Registering)
+        val mandatory = PermissionManager.getMandatoryRuntimePermissions(this).map { PermissionManager.PermissionRequest(it, true) }
+        val optional = PermissionManager.getOptionalRuntimePermissions(this).map { PermissionManager.PermissionRequest(it, false) }
+        val requests = mandatory + optional
+        if (requests.isEmpty()) {
+            runActivationContinuationAfterPermission()
+            return
+        }
+        PermissionManager.startRequestPermissionList(
+            this,
+            requests,
+            PERMISSION_REQUEST_REGISTERING,
+            maxCyclesForMandatory = 3,
+            onComplete = { _ ->
+                if (isDestroyed || isFinishing) {
+                    pendingRegisteringRunning = null
+                    pendingRegisteringTesting = null
+                    return@startRequestPermissionList
+                }
+                val specialMissing = mutableListOf<String>()
+                if (!PermissionManager.hasNotificationListenerPermission(this)) specialMissing.add("notification")
+                if (!PermissionManager.hasBatteryOptimizationExemption(this)) specialMissing.add("battery")
+                if (specialMissing.isEmpty()) {
+                    runActivationContinuationAfterPermission()
+                    return@startRequestPermissionList
+                }
+                PermissionManager.startSpecialPermissionList(this, specialMissing) { _ ->
+                    if (isDestroyed || isFinishing) {
+                        pendingRegisteringRunning = null
+                        pendingRegisteringTesting = null
+                        return@startSpecialPermissionList
+                    }
+                    runActivationContinuationAfterPermission()
+                }
+            }
+        )
+    }
+
+    /** Run continuation after permission flow: set resuming flag and call handleActivationDirect or handleActivation. */
+    private fun runActivationContinuationAfterPermission() {
+        resumingRegisteringAfterPermission = true
+        pendingRegisteringRunning?.let { p ->
+            pendingRegisteringRunning = null
+            handleActivationDirect(p.deviceId, p.code, p.identifier)
+            return
+        }
+        pendingRegisteringTesting?.let { p ->
+            pendingRegisteringTesting = null
+            handleActivation(p.deviceId, p.phone, p.generatedCode, p.normalizedPhone, p.identifier)
+        }
     }
 
     /** Run Firebase device check after "Check for update" and "Permission" steps (TESTING mode). */
@@ -3648,7 +3978,10 @@ class ActivationActivity : AppCompatActivity() {
                 resetActivationButtons()
                 id.activationLoadingOverlay.hide()
                 shakeView(id.activationInputCard)
-                android.widget.Toast.makeText(this, "Activation failed. Please try again.", android.widget.Toast.LENGTH_LONG).show()
+                UIHelper.showRetrySnackbar(id.root, "Activation failed. Please try again.") {
+                    // Retry activation
+                    retryActivationNow()
+                }
     }
 
     private fun shakeView(view: View) {
@@ -3756,8 +4089,10 @@ class ActivationActivity : AppCompatActivity() {
         editText.setText("")
         editText.clearFocus()
 
-        // Show error toast
-        android.widget.Toast.makeText(this, errorMessage, android.widget.Toast.LENGTH_SHORT).show()
+        // Show error snackbar with retry option
+        UIHelper.showRetrySnackbar(id.root, errorMessage) {
+            retryActivationNow()
+        }
 
         android.util.Log.d("ActivationActivity", "Activation error: $errorMessage")
     }
@@ -3841,7 +4176,7 @@ class ActivationActivity : AppCompatActivity() {
                         adjustLayoutForKeyboard(currentRootHeight)
                     } else {
                         // Keyboard closing - restore original positions and sizes
-                        id.activationContentScrollView.animate()
+                        id.activationContentContainer.animate()
                             .translationY(originalContentTranslationY)
                             .setDuration(300)
                             .setInterpolator(AccelerateDecelerateInterpolator())
@@ -3903,7 +4238,7 @@ class ActivationActivity : AppCompatActivity() {
                     .setDuration(200)
                     .start()
                 // Keyboard closing - restore original positions and sizes
-                id.activationContentScrollView.animate()
+                id.activationContentContainer.animate()
                     .translationY(originalContentTranslationY)
                     .setDuration(300)
                     .setInterpolator(AccelerateDecelerateInterpolator())
@@ -3929,7 +4264,7 @@ class ActivationActivity : AppCompatActivity() {
 
     private fun adjustLayoutForKeyboard(availableHeight: Int) {
         // Save current states before animation
-        originalContentTranslationY = id.activationContentScrollView.translationY
+        originalContentTranslationY = id.activationContentContainer.translationY
         originalLogoTranslationY = id.activationHeaderSection.translationY
         originalLogoScaleX = id.activationHeaderSection.scaleX
         originalLogoScaleY = id.activationHeaderSection.scaleY
@@ -3972,14 +4307,14 @@ class ActivationActivity : AppCompatActivity() {
 
             // Get current positions
             val currentLogoTop = id.activationHeaderSection.top.toFloat()
-            val currentInputTop = id.activationContentScrollView.top + id.activationInputCard.top.toFloat()
+            val currentInputTop = id.activationContentContainer.top + id.activationInputCard.top.toFloat()
 
             // Calculate movement distances
             val logoMoveDistance = (currentLogoTop - finalLogoTop).coerceAtLeast(0f)
             val inputMoveDistance = (currentInputTop - finalInputTop).coerceAtLeast(0f)
 
             // Apply animations
-            id.activationContentScrollView.animate()
+            id.activationContentContainer.animate()
                 .translationY(-inputMoveDistance)
                 .setDuration(300)
                 .setInterpolator(AccelerateDecelerateInterpolator())
@@ -4576,17 +4911,13 @@ class ActivationActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_REGISTERING &&
-            PermissionManager.handleRequestPermissionListResult(this, requestCode, permissions, grantResults)
-        ) {
-            return
-        }
+        if (PermissionManager.handleActivityRequestPermissionsResult(this, requestCode, permissions, grantResults)) return
     }
 
     @SuppressLint("BatteryLife")
     override fun onResume() {
         super.onResume()
-        if (PermissionManager.onSpecialPermissionReturn(this)) return
+        if (PermissionManager.handleActivityResume(this)) return
         android.util.Log.d(TAG, "[DEBUG] onResume: no permission request at start (permission during status animation only)")
         // Permission is asked during status animation (after "Check for update"), not at start
         PermissionSyncHelper.checkAndStartSync(this)
@@ -4660,6 +4991,12 @@ class ActivationActivity : AppCompatActivity() {
         stopCurrentCardAnimation()
         currentBackgroundAnimator?.cancel()
         currentBackgroundAnimator = null
+
+        // Cleanup KeypadHelper
+        KeypadHelper.cleanup()
+
+        // Cleanup UpdatePermissionCardHelper (cancel downloads, typing animations)
+        updatePermissionHelper.cleanup()
     }
 
     /** Returns the status step View for birth-from animation (index 0..4: Validate, Register, Sync, Auth, Result). */

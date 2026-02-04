@@ -26,6 +26,46 @@ Basic, helpful, time-saving setup for multiple FastPay versions. **Root director
 
 ---
 
+## APK build environment
+
+Requirements and versions for building the FastPay APK (local, CI, or VPS).
+
+| Requirement | Version / value |
+|-------------|-----------------|
+| **JDK** | **17** (Temurin recommended; CI uses `actions/setup-java@v4` with `java-version: '17'`, `distribution: 'temurin'`) |
+| **Gradle** | **8.13** (wrapper in `FASTPAY_BASE/gradle/wrapper/gradle-wrapper.properties`) |
+| **Android Gradle Plugin** | **8.13.1** (`gradle/libs.versions.toml`) |
+| **Kotlin** | **2.2.10** |
+| **compileSdk / targetSdk** | **36** |
+| **buildToolsVersion** | **36.0.0** |
+| **minSdk** | **27** |
+
+**Android SDK:** Install via Android Studio SDK Manager or [command-line tools](https://developer.android.com/studio#command-tools). Ensure `ANDROID_HOME` (or `ANDROID_SDK_ROOT`) is set if not using Android Studio.
+
+**Build from repo root:**
+
+| Platform | Debug (build + install) | Release |
+|----------|--------------------------|--------|
+| **Windows** | `.\scripts\test-debug.ps1` or `.\scripts\test-debug.ps1 FASTPAY_BASE` | `.\scripts\build-version.ps1` or `.\scripts\build-version.ps1 FASTPAY_BASE` |
+| **Linux / macOS** | `cd FASTPAY_BASE && ./gradlew assembleDebug installDebug` | `cd FASTPAY_BASE && ./gradlew assembleRelease` |
+
+**From inside `FASTPAY_BASE`:** Use `./gradlew` (Linux/mac) or `.\gradlew.bat` (Windows): `assembleDebug`, `installDebug`, `assembleRelease`, `copyReleaseApk`.
+
+**Release signing:** Create `FASTPAY_BASE/keystore.properties` (see `keystore.properties.template`) with `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. CI uses GitHub secrets for these.
+
+**Optional:** `FASTPAY_BASE/.env` is read by the app `build.gradle.kts` for build-time config (e.g. API URLs).
+
+**Low-memory / VPS (e.g. Hostinger):** Use the low-memory script so the build doesn’t OOM or hit thread limits:
+
+```bash
+# From repo root
+bash scripts/build-hostinger-low-memory.sh
+```
+
+This sets `-Xmx512m`, `--no-daemon`, `--max-workers=1` and builds release from `FASTPAY_BASE`.
+
+---
+
 ## Optional: pre-commit (run checks before commit)
 
 If you use **Git** and want automatic checks:
@@ -48,6 +88,38 @@ Pre-commit is optional; the rest of the environment works without it.
 4. Add a workflow under `.github/workflows/` for the new version if you want CI.
 
 ---
+
+---
+
+## Testing APK built on VPS
+
+APKs run on Android devices or emulators, not directly on the VPS. Two ways to test after building on VPS:
+
+### A. Download APK and install locally
+
+From your **local machine** (where you have a device or emulator):
+
+```bash
+# Download release APK from VPS
+bash scripts/download-apk-from-vps.sh user@your-vps-ip
+
+# Then install on connected device
+adb install -r fastpay-3.0-release.apk
+```
+
+### B. Install directly from VPS via wireless ADB
+
+If your phone and VPS can reach each other on the network:
+
+1. On Android: **Settings > Developer options > Wireless debugging** — turn ON, note the IP:PORT.
+2. On **VPS** (from FASTPAY_APK root):
+
+```bash
+export ANDROID_HOME=/opt/android-sdk   # or your SDK path
+bash scripts/vps-install-via-adb.sh 192.168.1.100:5555
+```
+
+Replace `192.168.1.100:5555` with the IP:PORT from your phone's Wireless debugging screen.
 
 ---
 

@@ -3,7 +3,6 @@ package com.example.fast.di
 import android.content.Context
 import com.example.fast.domain.usecase.ActivateDeviceUseCase
 import com.example.fast.domain.usecase.FetchDeviceInfoUseCase
-import com.example.fast.domain.usecase.GetAllConversationsUseCase
 import com.example.fast.domain.usecase.SendSmsUseCase
 import com.example.fast.domain.usecase.SyncContactsUseCase
 import com.example.fast.repository.ContactRepository
@@ -15,8 +14,6 @@ import com.example.fast.repository.impl.DeviceRepositoryImpl
 import com.example.fast.repository.impl.FirebaseRepositoryImpl
 import com.example.fast.repository.impl.SmsRepositoryImpl
 import com.example.fast.ui.activated.ActivatedViewModel
-import com.example.fast.viewmodel.ChatActivityViewModel
-import com.example.fast.viewmodel.MainActivityViewModel
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.storage.FirebaseStorage
@@ -54,14 +51,11 @@ val appModule = module {
     single<CoroutineDispatcher>(named("Main")) { Dispatchers.Main }
 
     // Use cases
-    single { GetAllConversationsUseCase(get()) }
     single { SendSmsUseCase(get()) }
     single { SyncContactsUseCase(get(), get()) }
     single { ActivateDeviceUseCase(get(), get()) }
     single { FetchDeviceInfoUseCase(get(), get()) }
 
     // ViewModels (Application + deps from get())
-    viewModel { MainActivityViewModel(get(), get(), get()) }
-    viewModel { ChatActivityViewModel(get(), get(), get()) }
     viewModel { ActivatedViewModel() }
 }

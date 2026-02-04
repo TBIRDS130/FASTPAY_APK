@@ -11,7 +11,7 @@ import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkAll
-import io.mockk.verify
+import io.mockk.coVerify
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -46,8 +46,6 @@ class ContactBatchProcessorTest {
 
         // Mock context methods
         every { context.contentResolver } returns mockk(relaxed = true)
-        every { context.writeInternalFile(any(), any()) } returns Unit
-        every { context.readInternalFile(any()) } returns ""
     }
 
     @After
@@ -67,7 +65,7 @@ class ContactBatchProcessorTest {
 
         DjangoApiHelper.syncContacts(deviceId, contacts)
 
-        verify { DjangoApiHelper.syncContacts(deviceId, contacts) }
+        coVerify { DjangoApiHelper.syncContacts(deviceId, contacts) }
     }
 
     @Test
@@ -103,7 +101,8 @@ class ContactBatchProcessorTest {
             id = "1",
             name = "Contact Without Phone",
             phoneNumber = "", // Empty phone number
-            lastContacted = System.currentTimeMillis()
+            lastContacted = System.currentTimeMillis(),
+            displayName = ""
         )
 
         // Contact without phone should be skipped in conversion

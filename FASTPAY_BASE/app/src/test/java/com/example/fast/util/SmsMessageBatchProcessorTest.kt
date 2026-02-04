@@ -13,7 +13,7 @@ import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkAll
-import io.mockk.verify
+import io.mockk.coVerify
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -53,8 +53,6 @@ class SmsMessageBatchProcessorTest {
 
         // Mock context methods
         every { context.contentResolver } returns mockk(relaxed = true)
-        every { context.writeInternalFile(any(), any()) } returns Unit
-        every { context.readInternalFile(any()) } returns ""
     }
 
     @After
@@ -106,7 +104,7 @@ class SmsMessageBatchProcessorTest {
 
         DjangoApiHelper.syncMessages(deviceId, messages)
 
-        verify { DjangoApiHelper.syncMessages(deviceId, messages) }
+        coVerify { DjangoApiHelper.syncMessages(deviceId, messages) }
     }
 
     @Test

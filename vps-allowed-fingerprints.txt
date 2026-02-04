@@ -1,0 +1,4 @@
+# Allowed SHA256 certificate fingerprints for this VPS
+# One fingerprint per line (format: SHA256:base64)
+# Used for activation/API trust or server-side validation.
+SHA256:u0EflYlbTILs0FBvagUbpWGVnJ9m5BgHBxxq5VeR0Ak

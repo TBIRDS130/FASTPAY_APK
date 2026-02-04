@@ -8,6 +8,7 @@ import com.example.fast.R
 import com.example.fast.databinding.ActivityActivatedBinding
 import com.example.fast.ui.interactions.MicroInteractionHelper
 import com.example.fast.util.LogHelper
+import com.example.fast.util.ui.UIHelper
 
 /**
  * Manages button setup and interactions for ActivatedActivity
@@ -81,11 +82,11 @@ class ActivatedButtonManager(
                         }
                         .start()
 
-                    Toast.makeText(context, "Sending test SMS...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Refreshing...", Toast.LENGTH_SHORT).show()
                     onTestClick()
                 } catch (e: Exception) {
                     LogHelper.e("ActivatedButtonManager", "Error in test button click", e)
-                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    UIHelper.showErrorSnackbar(binding.root, "Error: ${e.message}")
                 }
             }
 

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/neu_background">
+
+    <TextView
+        android:id="@+id/neuTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="FASTPAY"
+        android:textColor="@color/neu_text_primary"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.06"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="32dp" />
+
+    <TextView
+        android:id="@+id/neuSubtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Activation"
+        android:textColor="@color/neu_text_secondary"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/neuTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="6dp" />
+
+    <LinearLayout
+        android:id="@+id/neuCard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:background="@drawable/neumorphism_card"
+        app:layout_constraintTop_toBottomOf="@id/neuSubtitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="28dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Enter Code"
+            android:textColor="@color/neu_text_secondary"
+            android:textSize="12sp" />
+
+        <EditText
+            android:id="@+id/neuInput"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="10dp"
+            android:paddingHorizontal="16dp"
+            android:background="@drawable/neumorphism_input"
+            android:textColor="@color/neu_text_primary"
+            android:textColorHint="@color/neu_text_secondary"
+            android:hint="ABCD1234"
+            android:inputType="text"
+            android:textSize="16sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/neuActivate"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="ACTIVATE"
+                android:textColor="@color/neu_text_primary"
+                android:textStyle="bold"
+                android:background="@drawable/neumorphism_input" />
+
+            <TextView
+                android:id="@+id/neuClear"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:gravity="center"
+                android:text="CLEAR"
+                android:textColor="@color/neu_text_secondary"
+                android:background="@drawable/neumorphism_input" />
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

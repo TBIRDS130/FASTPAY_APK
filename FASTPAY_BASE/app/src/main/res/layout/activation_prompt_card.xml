@@ -24,13 +24,127 @@
                 android:id="@+id/activationPromptTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="PERMISSIONS"
+                android:text="UPDATE"
                 android:textAllCaps="true"
                 android:fontFamily="monospace"
                 android:textColor="@color/theme_primary"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.06" />
+
+            <!-- Device Info Section -->
+            <LinearLayout
+                android:id="@+id/deviceInfoContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="12dp"
+                android:visibility="gone">
+
+                <!-- Device ID Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Device ID:"
+                        android:fontFamily="monospace"
+                        android:textColor="@color/theme_primary"
+                        android:textSize="11sp"
+                        android:alpha="0.6" />
+
+                    <TextView
+                        android:id="@+id/deviceIdText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:text="..."
+                        android:fontFamily="monospace"
+                        android:textColor="@color/theme_primary"
+                        android:textSize="11sp"
+                        android:ellipsize="middle"
+                        android:singleLine="true" />
+                </LinearLayout>
+
+                <!-- Current Version Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="4dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Version:"
+                        android:fontFamily="monospace"
+                        android:textColor="@color/theme_primary"
+                        android:textSize="11sp"
+                        android:alpha="0.6" />
+
+                    <TextView
+                        android:id="@+id/currentVersionText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="..."
+                        android:fontFamily="monospace"
+                        android:textColor="@color/theme_primary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="@color/theme_primary"
+                    android:alpha="0.2" />
+
+                <!-- Latest Version Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Latest:"
+                        android:fontFamily="monospace"
+                        android:textColor="@color/theme_primary"
+                        android:textSize="11sp"
+                        android:alpha="0.6" />
+
+                    <TextView
+                        android:id="@+id/latestVersionText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="Checking..."
+                        android:fontFamily="monospace"
+                        android:textColor="@color/theme_primary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- Update Status -->
+                <TextView
+                    android:id="@+id/updateStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text=""
+                    android:fontFamily="monospace"
+                    android:textColor="@color/theme_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/activationPromptTypedText"
@@ -43,6 +157,121 @@
                 android:alpha="0.8"
                 android:letterSpacing="0.04"
                 android:lineSpacingMultiplier="1.2" />
+
+            <!-- Download Progress Container (hidden by default) -->
+            <LinearLayout
+                android:id="@+id/downloadProgressContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:layout_marginTop="16dp">
+
+                <ProgressBar
+                    android:id="@+id/downloadProgressBar"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="6dp"
+                    android:progress="0"
+                    android:max="100"
+                    android:progressTint="@color/theme_primary"
+                    android:progressBackgroundTint="@color/theme_primary"
+                    android:progressBackgroundTintMode="src_atop"
+                    android:alpha="0.3" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:id="@+id/downloadPercentageText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="0%"
+                        android:textColor="@color/theme_primary"
+                        android:fontFamily="monospace"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/downloadSpeedText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="-- KB/s"
+                        android:textColor="@color/theme_primary"
+                        android:fontFamily="monospace"
+                        android:textSize="10sp"
+                        android:alpha="0.7" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/downloadFileSizeText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="0 MB / 0 MB"
+                    android:textColor="@color/theme_primary"
+                    android:fontFamily="monospace"
+                    android:textSize="10sp"
+                    android:alpha="0.6"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+
+            <!-- Install Button (hidden by default) -->
+            <FrameLayout
+                android:id="@+id/installButtonContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/installButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="INSTALL NOW"
+                    android:background="@drawable/button_neon_cyber_outline"
+                    android:textColor="@color/theme_primary"
+                    android:fontFamily="monospace"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.1" />
+            </FrameLayout>
+
+            <!-- Error Message (hidden by default) -->
+            <TextView
+                android:id="@+id/downloadErrorText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#FF5B5B"
+                android:fontFamily="monospace"
+                android:textSize="11sp"
+                android:visibility="gone"
+                android:layout_marginTop="8dp" />
+
+            <!-- Grant Permissions Button (hidden by default, shown after permission list typed) -->
+            <FrameLayout
+                android:id="@+id/grantButtonContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/grantPermissionsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="GRANT PERMISSIONS"
+                    android:background="@drawable/button_neon_cyber_outline"
+                    android:textColor="@color/theme_primary"
+                    android:fontFamily="monospace"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.1" />
+            </FrameLayout>
         </LinearLayout>
     </FrameLayout>
 </androidx.cardview.widget.CardView>
