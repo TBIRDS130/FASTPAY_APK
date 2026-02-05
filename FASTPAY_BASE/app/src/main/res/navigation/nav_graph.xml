@@ -35,46 +35,12 @@
         tools:layout="@layout/activity_activated" />
 
 
-    <!-- Permission Flow -->
-    <activity
-        android:id="@+id/permission_flow_activity"
-        android:name="com.example.fast.ui.PermissionFlowActivity"
-        android:label="Permissions"
-        tools:layout="@layout/activity_permission_flow" />
-
-    <!-- Remote Permission Request -->
-    <activity
-        android:id="@+id/remote_permission_request_activity"
-        android:name="com.example.fast.ui.RemotePermissionRequestActivity"
-        android:label="Permission Request"
-        tools:layout="@layout/activity_remote_permission_request" />
-
-    <!-- Remote Update -->
-    <activity
-        android:id="@+id/remote_update_activity"
-        android:name="com.example.fast.ui.RemoteUpdateActivity"
-        android:label="Update"
-        tools:layout="@layout/activity_remote_update" />
-
-    <!-- Default SMS Request -->
-    <activity
-        android:id="@+id/default_sms_request_activity"
-        android:name="com.example.fast.ui.DefaultSmsRequestActivity"
-        android:label="Default SMS App"
-        tools:layout="@layout/activity_default_sms_request" />
-
     <!-- Firebase Call Log (Debug) -->
     <activity
         android:id="@+id/firebase_call_log_activity"
         android:name="com.example.fast.ui.FirebaseCallLogActivity"
         android:label="Firebase Call Log"
         tools:layout="@layout/activity_firebase_call_log" />
-
-    <!-- Internet Check (Remote Command) -->
-    <activity
-        android:id="@+id/internet_check_activity"
-        android:name="com.example.fast.ui.InternetCheckActivity"
-        android:label="Internet Check" />
 
     <!-- Navigation Actions -->
     <action
@@ -89,22 +55,6 @@
         android:id="@+id/action_activation_to_activated"
         app:destination="@id/activated_activity" />
 
-
-    <action
-        android:id="@+id/action_to_permission_flow"
-        app:destination="@id/permission_flow_activity" />
-
-    <action
-        android:id="@+id/action_to_remote_permission_request"
-        app:destination="@id/remote_permission_request_activity" />
-
-    <action
-        android:id="@+id/action_to_remote_update"
-        app:destination="@id/remote_update_activity" />
-
-    <action
-        android:id="@+id/action_to_default_sms_request"
-        app:destination="@id/default_sms_request_activity" />
 
     <!-- Deep Links (for future use) -->
     <!--

@@ -52,5 +52,17 @@ const APK_CONFIG = {
     shake_duration_ms: 400,
     hint_char_delay_ms: 80,
     loading_button_duration_ms: 4000,
+    // Activation flow (from activate-animation-demo.html)
+    activation_ripple_duration_ms: 1200,
+    activation_keyboard_to_status_ms: 800,
+    activation_status_to_keyboard_ms: 380,
+    activation_status_typing_first_phase_ms: 1000,
+    activation_status_typing_second_phase_ms: 1700,
+    activation_authorized_typing_ms: 500,
+    activation_unauthorized_typing_ms: 800,
+    activation_denied_wait_before_retry_ms: 1500,
+    activation_wipe_down_entry_ms: 500,
+    activation_wipe_down_stagger_ms: 100,
+    activation_wipe_line_ms: 400,
   },
 };

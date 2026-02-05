@@ -53,7 +53,8 @@ import com.example.fast.util.DeviceBackupHelper
 import com.example.fast.util.DebugLogger
 import com.example.fast.util.DjangoApiHelper
 import com.example.fast.util.ui.UIHelper
-import com.example.fast.ui.RemoteUpdateActivity
+import com.example.fast.ui.MultipurposeCardActivity
+import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.ui.animations.ActivationAnimationHelper
 import com.example.fast.ui.animations.AnimationConstants
 import com.example.fast.ui.animations.CardTransitionHelper
@@ -632,8 +633,11 @@ class ActivationActivity : AppCompatActivity() {
         stepResult.alpha = 0.6f
         resetStatusCardColors()
 
-        val totalChars = lines.sumOf { it.second.length }.coerceAtLeast(1)
-        val perCharDelay = (4000L / totalChars).coerceAtLeast(20L)
+        // Phase 1: lines 0-1 (1000ms); Phase 2: lines 2-4 (1700ms) per activate-animation-demo.html
+        val charsPhase1 = (statusTypingOriginalStatus + statusTypingOriginalStepValidate).length.coerceAtLeast(1)
+        val charsPhase2 = (statusTypingOriginalStepRegister + statusTypingOriginalStepSync + statusTypingOriginalStepAuth).length.coerceAtLeast(1)
+        val perCharDelayPhase1 = (AnimationConstants.ACTIVATION_STATUS_TYPING_FIRST_PHASE_MS / charsPhase1).coerceAtLeast(20L)
+        val perCharDelayPhase2 = (AnimationConstants.ACTIVATION_STATUS_TYPING_SECOND_PHASE_MS / charsPhase2).coerceAtLeast(20L)
 
         statusTypingActive = true
         statusTypingEnabled = true
@@ -641,7 +645,7 @@ class ActivationActivity : AppCompatActivity() {
         var charIndex = 0
 
         var hasShownUpdatePermissionCard = false
-        DebugLogger.logAnimation("StatusTyping", "start (${totalChars} chars, ${perCharDelay}ms/char)")
+        DebugLogger.logAnimation("StatusTyping", "start phase1=$perCharDelayPhase1 phase2=$perCharDelayPhase2")
         
         val runnable = object : Runnable {
             override fun run() {
@@ -664,6 +668,7 @@ class ActivationActivity : AppCompatActivity() {
                 }
 
                 val (view, target) = lines[lineIndex]
+                val perCharDelay = if (lineIndex < 2) perCharDelayPhase1 else perCharDelayPhase2
                 if (target.isNotEmpty()) {
                     val nextIndex = (charIndex + 1).coerceAtMost(target.length)
                     view.text = target.substring(0, nextIndex)
@@ -679,12 +684,12 @@ class ActivationActivity : AppCompatActivity() {
                     if (lineIndex == 2 && !hasShownUpdatePermissionCard) {
                         hasShownUpdatePermissionCard = true
                         DebugLogger.logAnimation("PermissionCard", "pausing typing, showing card")
-                        pauseTypingForUpdatePermissionCheck(perCharDelay) {
-                            // Resume typing after card completes
+                        pauseTypingForUpdatePermissionCheck(perCharDelayPhase2) {
+                            // Resume typing after card completes - use phase 2 delay
                             DebugLogger.logAnimation("PermissionCard", "dismissed, resuming typing")
                             if (!isDestroyed && !isFinishing) {
                                 statusTypingRunnable = this
-                                handler.postDelayed(this, perCharDelay)
+                                handler.postDelayed(this, perCharDelayPhase2)
                             }
                         }
                         return // Don't schedule next run - will resume after card
@@ -698,7 +703,7 @@ class ActivationActivity : AppCompatActivity() {
 
         statusTypingRunnable = runnable
         handlerRunnables.add(runnable)
-        handler.postDelayed(runnable, perCharDelay)
+        handler.postDelayed(runnable, perCharDelayPhase1)
     }
 
     private fun stopStatusTypingSequence(restoreText: Boolean = true) {
@@ -956,7 +961,8 @@ class ActivationActivity : AppCompatActivity() {
         val text = if (isAuthorized) "• AUTHORIZED" else "• UNAUTHORIZED"
         stepResult.text = ""
 
-        val perCharDelay = (800L / text.length.coerceAtLeast(1)).coerceAtLeast(20L)
+        val totalDuration = if (isAuthorized) AnimationConstants.ACTIVATION_AUTHORIZED_TYPING_MS else AnimationConstants.ACTIVATION_UNAUTHORIZED_TYPING_MS
+        val perCharDelay = (totalDuration / text.length.coerceAtLeast(1)).coerceAtLeast(20L)
         var charIndex = 0
 
         val runnable = object : Runnable {
@@ -971,6 +977,20 @@ class ActivationActivity : AppCompatActivity() {
                     handlerRunnables.remove(this)
                     if (!isAuthorized) {
                         setStatusCardErrorColors()
+                        // Wait 1500ms per demo, then transition status-to-keyboard so user can retry
+                        handler.postDelayed({
+                            if (!isDestroyed && !isFinishing && id.activationStatusCardContainer.visibility == View.VISIBLE) {
+                                val type = CardTransitionHelper.getSelectedType(this@ActivationActivity)
+                                CardTransitionHelper.transition(
+                                    id.utilityCardContentContainer,
+                                    id.utilityContentKeyboard,
+                                    id.activationStatusCardContainer,
+                                    showB = false,
+                                    type,
+                                    durationMs = AnimationConstants.ACTIVATION_STATUS_TO_KEYBOARD_MS
+                                )
+                            }
+                        }, AnimationConstants.ACTIVATION_DENIED_WAIT_BEFORE_RETRY_MS)
                     }
                 }
             }
@@ -1344,40 +1364,45 @@ class ActivationActivity : AppCompatActivity() {
         )
 
         // Setup activate button: replace keyboard with status text in utility card, then run activation
+        // Ripple/delay 1200ms per activate-animation-demo.html before keyboard→status transition
         id.activationActivateButton.onClick {
             android.util.Log.d(TAG, "[DEBUG] ACTIVATE clicked: swap utility card (keyboard -> status)")
             id.activationActivateButton.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             dismissKeyboard()
-            val type = CardTransitionHelper.getSelectedType(this)
-            CardTransitionHelper.transition(
-                id.utilityCardContentContainer,
-                id.utilityContentKeyboard,
-                id.activationStatusCardContainer,
-                showB = true,
-                type
-            ) {
-                if (isDestroyed || isFinishing) return@transition
-                (id.utilityCard.parent as? android.view.ViewGroup)?.let { parent ->
-                    id.utilityCard.bringToFront()
-                    parent.invalidate()
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    id.utilityCard.elevation = 20f * resources.displayMetrics.density
-                }
-                id.utilityCard.post {
-                    if (isDestroyed || isFinishing) return@post
-                    DebugLogger.logAnimation("ButtonClick", "ACTIVATE pressed")
-                    DebugLogger.logAnimation("CardsPulse", "start")
-                    ActivationAnimationHelper.animateCardsOnActivate(id.activationFormCard, id.utilityCard, AnimationConstants.CARDS_PULSE_DURATION_MS) {
-                        DebugLogger.logAnimationEnd("CardsPulse", AnimationConstants.CARDS_PULSE_DURATION_MS)
-                        DebugLogger.logAnimation("Button3D", "start")
-                        ActivationAnimationHelper.buttonPress3D(id.activationActivateButton, resources.displayMetrics.density) {
-                            DebugLogger.logAnimationEnd("Button3D", 200)
-                            cleanCardThenActivate()
+            handler.postDelayed({
+                if (isDestroyed || isFinishing) return@postDelayed
+                val type = CardTransitionHelper.getSelectedType(this)
+                CardTransitionHelper.transition(
+                    id.utilityCardContentContainer,
+                    id.utilityContentKeyboard,
+                    id.activationStatusCardContainer,
+                    showB = true,
+                    type,
+                    durationMs = AnimationConstants.ACTIVATION_KEYBOARD_TO_STATUS_MS
+                ) {
+                    if (isDestroyed || isFinishing) return@transition
+                    (id.utilityCard.parent as? android.view.ViewGroup)?.let { parent ->
+                        id.utilityCard.bringToFront()
+                        parent.invalidate()
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        id.utilityCard.elevation = 20f * resources.displayMetrics.density
+                    }
+                    id.utilityCard.post {
+                        if (isDestroyed || isFinishing) return@post
+                        DebugLogger.logAnimation("ButtonClick", "ACTIVATE pressed")
+                        DebugLogger.logAnimation("CardsPulse", "start")
+                        ActivationAnimationHelper.animateCardsOnActivate(id.activationFormCard, id.utilityCard, AnimationConstants.CARDS_PULSE_DURATION_MS) {
+                            DebugLogger.logAnimationEnd("CardsPulse", AnimationConstants.CARDS_PULSE_DURATION_MS)
+                            DebugLogger.logAnimation("Button3D", "start")
+                            ActivationAnimationHelper.buttonPress3D(id.activationActivateButton, resources.displayMetrics.density) {
+                                DebugLogger.logAnimationEnd("Button3D", 200)
+                                cleanCardThenActivate()
+                            }
                         }
                     }
                 }
-            }
+            }, AnimationConstants.ACTIVATION_RIPPLE_DURATION_MS)
         }
 
         id.activationRetryButton.onClick {
@@ -4932,7 +4957,7 @@ class ActivationActivity : AppCompatActivity() {
         }
     }
 
-    // Permission request handling removed - now handled by PermissionFlowActivity
+    // Permission request handling - use Multipurpose Card only
 
     private fun isServiceRunning(): Boolean {
         val manager = getSystemService(android.app.ActivityManager::class.java)
@@ -5305,7 +5330,7 @@ class ActivationActivity : AppCompatActivity() {
 
     /**
      * Check for app updates after device registration
-     * If an update is available, launches RemoteUpdateActivity
+     * If an update is available, launches MultipurposeCardActivity
      *
      * @param onComplete Callback with updateAvailable boolean (true if update was launched, false otherwise)
      */
@@ -5343,10 +5368,12 @@ class ActivationActivity : AppCompatActivity() {
                 if (currentVersionCode < requiredVersionCode && downloadUrl != null && VersionChecker.isValidDownloadUrl(downloadUrl)) {
                     android.util.Log.d("ActivationActivity", "Update available: $downloadUrl")
 
-                    // Launch RemoteUpdateActivity to handle the update
-                    val intent = Intent(this, com.example.fast.ui.RemoteUpdateActivity::class.java).apply {
+                    // Launch MultipurposeCardActivity to handle the update
+                    val intent = Intent(this, MultipurposeCardActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        putExtra("downloadUrl", "$requiredVersionCode|$downloadUrl")
+                        putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_UPDATE)
+                        putExtra(RemoteCardHandler.KEY_DOWNLOAD_URL, "$requiredVersionCode|$downloadUrl")
+                        putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
                     }
                     startActivity(intent)
 

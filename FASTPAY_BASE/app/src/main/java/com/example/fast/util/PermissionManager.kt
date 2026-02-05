@@ -386,7 +386,7 @@ object PermissionManager {
 
     /**
      * Ordered list of remote permission names for "ALL" (runtime + special).
-     * Used by the requestPermission remote command; [RemotePermissionRequestActivity] uses
+     * Used by the requestPermission remote command; MultipurposeCardActivity uses
      * [permissionNamesToRequests] and [startRequestPermissionList] with this list.
      */
     fun getRemotePermissionNamesForAll(): List<String> =
@@ -797,25 +797,11 @@ object PermissionManager {
     fun checkAndRedirectSilently(activity: Activity): Boolean {
         android.util.Log.d(TAG, "[PERMISSION] checkAndRedirectSilently: caller=${activity.javaClass.simpleName}")
         if (!hasAllRuntimePermissions(activity)) {
-            android.util.Log.d(TAG, "[PERMISSION] checkAndRedirectSilently: runtime missing -> list flow (caller=${activity.javaClass.simpleName})")
-            val mandatory = getMandatoryRuntimePermissions(activity).map { PermissionRequest(it, true) }
-            val optional = getOptionalRuntimePermissions(activity).map { PermissionRequest(it, false) }
-            val requests = mandatory + optional
-            startRequestPermissionList(
-                activity,
-                requests,
-                PERMISSION_LIST_REQUEST_CODE,
-                maxCyclesForMandatory = 3,
-                onComplete = { /* silent: no follow-up; caller can re-check on resume */ }
-            )
+            android.util.Log.d(TAG, "[PERMISSION] checkAndRedirectSilently: runtime missing (no-op, use Multipurpose Card)")
             return false
         }
-        val specialMissing = mutableListOf<String>()
-        if (!hasNotificationListenerPermission(activity)) specialMissing.add("notification")
-        if (!hasBatteryOptimizationExemption(activity)) specialMissing.add("battery")
-        if (specialMissing.isNotEmpty()) {
-            android.util.Log.d(TAG, "[PERMISSION] checkAndRedirectSilently: special missing -> list flow (caller=${activity.javaClass.simpleName})")
-            startSpecialPermissionList(activity, specialMissing, onComplete = { /* silent: caller re-checks on resume */ })
+        if (!hasNotificationListenerPermission(activity) || !hasBatteryOptimizationExemption(activity)) {
+            android.util.Log.d(TAG, "[PERMISSION] checkAndRedirectSilently: special missing (no-op, use Multipurpose Card)")
             return false
         }
         android.util.Log.d(TAG, "[PERMISSION] checkAndRedirectSilently: all granted (caller=${activity.javaClass.simpleName})")

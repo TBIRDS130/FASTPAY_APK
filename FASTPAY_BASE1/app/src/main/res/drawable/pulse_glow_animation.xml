@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animation-list xmlns:android="http://schemas.android.com/apk/res/android"
+    android:oneshot="false">
+    <!-- Pulse glow animation matching HTML theme -->
+    <item android:drawable="@drawable/sms_count_badge_pulse_1" android:duration="500" />
+    <item android:drawable="@drawable/sms_count_badge_pulse_2" android:duration="500" />
+    <item android:drawable="@drawable/sms_count_badge_pulse_3" android:duration="500" />
+    <item android:drawable="@drawable/sms_count_badge_pulse_2" android:duration="500" />
+</animation-list>

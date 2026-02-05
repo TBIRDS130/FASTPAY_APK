@@ -55,6 +55,41 @@ object AnimationConstants {
     /** Instruction card animation duration */
     const val ACTIVATION_INSTRUCTION_DURATION = 500L
 
+    // ========== Activation Flow (from activate-animation-demo.html) ==========
+
+    /** Ripple effect duration on ACTIVATE click */
+    const val ACTIVATION_RIPPLE_DURATION_MS = 1200L
+
+    /** Keyboard-to-status card transition duration */
+    const val ACTIVATION_KEYBOARD_TO_STATUS_MS = 800L
+
+    /** Status-to-keyboard card transition duration (retry flow) */
+    const val ACTIVATION_STATUS_TO_KEYBOARD_MS = 380L
+
+    /** Status typing phase 1 (lines 1-2) total duration */
+    const val ACTIVATION_STATUS_TYPING_FIRST_PHASE_MS = 1000L
+
+    /** Status typing phase 2 (lines 3-5) total duration */
+    const val ACTIVATION_STATUS_TYPING_SECOND_PHASE_MS = 1700L
+
+    /** AUTHORIZED result line typing duration */
+    const val ACTIVATION_AUTHORIZED_TYPING_MS = 500L
+
+    /** UNAUTHORIZED result line typing duration */
+    const val ACTIVATION_UNAUTHORIZED_TYPING_MS = 800L
+
+    /** Wait before status-to-keyboard on DENIED (retry) flow */
+    const val ACTIVATION_DENIED_WAIT_BEFORE_RETRY_MS = 1500L
+
+    /** Wipe-down entry animation duration */
+    const val ACTIVATION_WIPE_DOWN_ENTRY_MS = 500L
+
+    /** Stagger between wipe-down elements */
+    const val ACTIVATION_WIPE_DOWN_STAGGER_MS = 100L
+
+    /** Wipe line animation duration */
+    const val ACTIVATION_WIPE_LINE_MS = 400L
+
     // ========== Text Scroll Animations ==========
 
     /** Duration for text to scroll from start to end */

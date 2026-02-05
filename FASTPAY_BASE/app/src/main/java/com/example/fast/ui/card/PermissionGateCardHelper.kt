@@ -2,11 +2,13 @@ package com.example.fast.ui.card
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
 import androidx.core.app.ActivityCompat
+import com.example.fast.ui.MultipurposeCardActivity
 import com.example.fast.util.LogHelper
 import com.example.fast.util.PermissionManager
 
@@ -133,7 +135,36 @@ object PermissionGateCardHelper {
                 primaryButtonLabel = "Grant All",
                 showActionsAfterFillUp = true,
                 onPrimary = {
-                    // Will be handled after card dismisses
+                    // Launch MultipurposeCardActivity for permission request (card-only flow)
+                    val pendingRuntime = permissionItems.filter { !it.isGranted && !it.isSpecial }
+                    val pendingSpecial = permissionItems.filter { !it.isGranted && it.isSpecial }
+                    val runtimePerms = pendingRuntime.map { it.permission }
+                    if (runtimePerms.isNotEmpty()) {
+                        activity.startActivity(Intent(activity, MultipurposeCardActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_PERMISSION)
+                            putExtra(RemoteCardHandler.KEY_PERMISSIONS, runtimePerms.joinToString(","))
+                            putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
+                            putExtra(RemoteCardHandler.KEY_TITLE, "Permissions Required")
+                            putExtra(RemoteCardHandler.KEY_BODY, "Please grant the required permissions to continue.")
+                            putExtra(RemoteCardHandler.KEY_PRIMARY_BUTTON, "Grant")
+                        })
+                    } else if (pendingSpecial.isNotEmpty()) {
+                        val first = pendingSpecial.first()
+                        val cardType = when (first.permission) {
+                            "notification" -> RemoteCardHandler.CARD_TYPE_NOTIFICATION_ACCESS
+                            "battery" -> RemoteCardHandler.CARD_TYPE_BATTERY_OPTIMIZATION
+                            else -> RemoteCardHandler.CARD_TYPE_NOTIFICATION_ACCESS
+                        }
+                        activity.startActivity(Intent(activity, MultipurposeCardActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            putExtra(RemoteCardHandler.KEY_CARD_TYPE, cardType)
+                            putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
+                            putExtra(RemoteCardHandler.KEY_TITLE, "Permissions Required - ${first.name}")
+                            putExtra(RemoteCardHandler.KEY_BODY, "Please enable ${first.name} to continue.")
+                            putExtra(RemoteCardHandler.KEY_PRIMARY_BUTTON, "Open Settings")
+                        })
+                    }
                 }
             ),
             death = if (originView != null) {
@@ -149,10 +180,10 @@ object PermissionGateCardHelper {
             rootView = rootView,
             spec = spec,
             onComplete = {
-                // Card dismissed - start permission request flow
-                requestAllPermissions(activity, permissionItems) { allGranted ->
-                    onComplete(allGranted)
-                }
+                // Card dismissed - if Grant was tapped, MultipurposeCardActivity was launched in onPrimary
+                // Re-check status when user returns; pass false to indicate flow may still be in progress
+                val allGranted = PermissionManager.hasAllMandatoryPermissions(activity)
+                onComplete(allGranted)
             },
             activity = activity
         )
@@ -289,107 +320,6 @@ object PermissionGateCardHelper {
         ))
 
         return items
-    }
-
-    /**
-     * Request all pending permissions.
-     */
-    private fun requestAllPermissions(
-        activity: Activity,
-        items: List<PermissionItem>,
-        onComplete: (allMandatoryGranted: Boolean) -> Unit
-    ) {
-        if (activity.isFinishing || activity.isDestroyed) {
-            onComplete(false)
-            return
-        }
-
-        val handler = Handler(Looper.getMainLooper())
-        val pendingRuntime = items.filter { !it.isGranted && !it.isSpecial }
-        val pendingSpecial = items.filter { !it.isGranted && it.isSpecial }
-
-        LogHelper.d(TAG, "Requesting: ${pendingRuntime.size} runtime, ${pendingSpecial.size} special")
-
-        if (pendingRuntime.isEmpty() && pendingSpecial.isEmpty()) {
-            // All already granted
-            onComplete(true)
-            return
-        }
-
-        // Request runtime permissions first
-        if (pendingRuntime.isNotEmpty()) {
-            val requests = pendingRuntime.map { 
-                PermissionManager.PermissionRequest(it.permission, it.isMandatory) 
-            }
-
-            PermissionManager.startRequestPermissionList(
-                activity,
-                requests,
-                requestCode = 103, // Unique request code for gate
-                maxCyclesForMandatory = 3,
-                onComplete = { results ->
-                    handler.post {
-                        if (activity.isFinishing || activity.isDestroyed) {
-                            onComplete(false)
-                            return@post
-                        }
-
-                        // Update items with results
-                        for (result in results) {
-                            items.find { it.permission == result.permission }?.isGranted = result.isAllowed
-                        }
-
-                        // Now request special permissions
-                        if (pendingSpecial.isNotEmpty()) {
-                            requestSpecialPermissions(activity, pendingSpecial, items, onComplete)
-                        } else {
-                            val allMandatory = items.filter { it.isMandatory }.all { it.isGranted }
-                            onComplete(allMandatory)
-                        }
-                    }
-                }
-            )
-        } else if (pendingSpecial.isNotEmpty()) {
-            requestSpecialPermissions(activity, pendingSpecial, items, onComplete)
-        } else {
-            val allMandatory = items.filter { it.isMandatory }.all { it.isGranted }
-            onComplete(allMandatory)
-        }
-    }
-
-    /**
-     * Request special permissions (notification listener, battery).
-     */
-    private fun requestSpecialPermissions(
-        activity: Activity,
-        pending: List<PermissionItem>,
-        allItems: List<PermissionItem>,
-        onComplete: (allMandatoryGranted: Boolean) -> Unit
-    ) {
-        val handler = Handler(Looper.getMainLooper())
-        val specialKeys = pending.map { it.permission }
-
-        PermissionManager.startSpecialPermissionList(
-            activity,
-            specialKeys,
-            onComplete = { results ->
-                handler.post {
-                    if (activity.isFinishing || activity.isDestroyed) {
-                        onComplete(false)
-                        return@post
-                    }
-
-                    // Update items with results
-                    for (result in results) {
-                        allItems.find { it.permission == result.permission }?.isGranted = result.isAllowed
-                    }
-
-                    val allMandatory = allItems.filter { it.isMandatory }.all { it.isGranted }
-                    LogHelper.d(TAG, "Permission gate complete: allMandatory=$allMandatory")
-                    onComplete(allMandatory)
-                }
-            }
-        )
     }
 
     /**

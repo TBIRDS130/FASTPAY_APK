@@ -40,7 +40,6 @@ object CardTransitionHelper {
 
     private const val PREFS_NAME = "card_transition_prefs"
     private const val KEY_TYPE_INDEX = "type_index"
-    private const val DURATION_MS = 380L
 
     @JvmStatic
     fun getSelectedType(context: Context): Type {
@@ -73,6 +72,7 @@ object CardTransitionHelper {
      * @param faceB Second face (e.g. status / instruction)
      * @param showB true = show faceB, false = show faceA
      * @param type Transition effect
+     * @param durationMs Animation duration in milliseconds. Default 380ms for status-to-keyboard, SMS/instruction.
      * @param onComplete Called when animation ends
      */
     @JvmStatic
@@ -82,6 +82,7 @@ object CardTransitionHelper {
         faceB: View,
         showB: Boolean,
         type: Type,
+        durationMs: Long = AnimationConstants.ACTIVATION_STATUS_TO_KEYBOARD_MS,
         onComplete: (() -> Unit)? = null
     ) {
         faceA.animate().cancel()
@@ -92,16 +93,16 @@ object CardTransitionHelper {
         val w = container.width.coerceAtLeast(1)
 
         when (type) {
-            Type.FLIP_Y -> transitionFlipY(container, faceA, faceB, showB, density, onComplete)
-            Type.FLIP_X -> transitionFlipX(container, faceA, faceB, showB, density, onComplete)
-            Type.SCALE_FADE -> transitionScaleFade(faceA, faceB, showB, onComplete)
-            Type.ROTATE_FADE -> transitionRotateFade(container, faceA, faceB, showB, density, onComplete)
-            Type.ACCORDION -> transitionAccordion(faceA, faceB, showB, onComplete)
-            Type.ELASTIC -> transitionElastic(faceA, faceB, showB, onComplete)
-            Type.REVEAL -> transitionReveal(container, faceA, faceB, showB, w, onComplete)
-            Type.GLOW -> transitionGlow(faceA, faceB, showB, density, onComplete)
-            Type.MORPH -> transitionMorph(faceA, faceB, showB, onComplete)
-            Type.STACK_SLIDE -> transitionStackSlide(faceA, faceB, showB, onComplete)
+            Type.FLIP_Y -> transitionFlipY(container, faceA, faceB, showB, density, durationMs, onComplete)
+            Type.FLIP_X -> transitionFlipX(container, faceA, faceB, showB, density, durationMs, onComplete)
+            Type.SCALE_FADE -> transitionScaleFade(faceA, faceB, showB, durationMs, onComplete)
+            Type.ROTATE_FADE -> transitionRotateFade(container, faceA, faceB, showB, density, durationMs, onComplete)
+            Type.ACCORDION -> transitionAccordion(faceA, faceB, showB, durationMs, onComplete)
+            Type.ELASTIC -> transitionElastic(faceA, faceB, showB, durationMs, onComplete)
+            Type.REVEAL -> transitionReveal(container, faceA, faceB, showB, w, durationMs, onComplete)
+            Type.GLOW -> transitionGlow(faceA, faceB, showB, density, durationMs, onComplete)
+            Type.MORPH -> transitionMorph(faceA, faceB, showB, durationMs, onComplete)
+            Type.STACK_SLIDE -> transitionStackSlide(faceA, faceB, showB, durationMs, onComplete)
         }
     }
 
@@ -111,6 +112,7 @@ object CardTransitionHelper {
         faceB: View,
         showB: Boolean,
         density: Float,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
         container.cameraDistance = density * 8000f
@@ -127,7 +129,7 @@ object CardTransitionHelper {
         container.post {
             container.animate()
                 .rotationY(if (showB) 180f else 0f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(AccelerateDecelerateInterpolator())
                 .withEndAction {
                     faceA.visibility = if (showB) View.GONE else View.VISIBLE
@@ -147,6 +149,7 @@ object CardTransitionHelper {
         faceB: View,
         showB: Boolean,
         density: Float,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
         container.cameraDistance = density * 8000f
@@ -163,7 +166,7 @@ object CardTransitionHelper {
         container.post {
             container.animate()
                 .rotationX(if (showB) 180f else 0f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(AccelerateDecelerateInterpolator())
                 .withEndAction {
                     faceA.visibility = if (showB) View.GONE else View.VISIBLE
@@ -181,13 +184,14 @@ object CardTransitionHelper {
         faceA: View,
         faceB: View,
         showB: Boolean,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
-        if (showB) doScaleFadeToB(faceA, faceB, onComplete)
-        else doScaleFadeToA(faceA, faceB, onComplete)
+        if (showB) doScaleFadeToB(faceA, faceB, durationMs, onComplete)
+        else doScaleFadeToA(faceA, faceB, durationMs, onComplete)
     }
 
-    private fun doScaleFadeToB(faceA: View, faceB: View, onComplete: (() -> Unit)?) {
+    private fun doScaleFadeToB(faceA: View, faceB: View, durationMs: Long, onComplete: (() -> Unit)?) {
         // Bring faceB to front and start crossfade simultaneously
         faceB.bringToFront()
         faceB.visibility = View.VISIBLE
@@ -200,7 +204,7 @@ object CardTransitionHelper {
             .alpha(0f)
             .scaleX(0.95f)
             .scaleY(0.95f)
-            .setDuration(DURATION_MS)
+            .setDuration(durationMs)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 faceA.visibility = View.GONE
@@ -214,13 +218,13 @@ object CardTransitionHelper {
             .alpha(1f)
             .scaleX(1f)
             .scaleY(1f)
-            .setDuration(DURATION_MS)
+            .setDuration(durationMs)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction { onComplete?.invoke() }
             .start()
     }
 
-    private fun doScaleFadeToA(faceA: View, faceB: View, onComplete: (() -> Unit)?) {
+    private fun doScaleFadeToA(faceA: View, faceB: View, durationMs: Long, onComplete: (() -> Unit)?) {
         // Bring faceA to front and start crossfade simultaneously
         faceA.bringToFront()
         faceA.visibility = View.VISIBLE
@@ -233,7 +237,7 @@ object CardTransitionHelper {
             .alpha(0f)
             .scaleX(0.95f)
             .scaleY(0.95f)
-            .setDuration(DURATION_MS)
+            .setDuration(durationMs)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 faceB.visibility = View.GONE
@@ -247,7 +251,7 @@ object CardTransitionHelper {
             .alpha(1f)
             .scaleX(1f)
             .scaleY(1f)
-            .setDuration(DURATION_MS)
+            .setDuration(durationMs)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction { onComplete?.invoke() }
             .start()
@@ -259,13 +263,14 @@ object CardTransitionHelper {
         faceB: View,
         showB: Boolean,
         density: Float,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
-        if (showB) doRotateFadeToB(faceA, faceB, container, density, onComplete)
-        else doRotateFadeToA(faceA, faceB, container, density, onComplete)
+        if (showB) doRotateFadeToB(faceA, faceB, container, density, durationMs, onComplete)
+        else doRotateFadeToA(faceA, faceB, container, density, durationMs, onComplete)
     }
 
-    private fun doRotateFadeToB(faceA: View, faceB: View, container: ViewGroup, density: Float, onComplete: (() -> Unit)?) {
+    private fun doRotateFadeToB(faceA: View, faceB: View, container: ViewGroup, density: Float, durationMs: Long, onComplete: (() -> Unit)?) {
         container.cameraDistance = density * 6000f
         faceB.bringToFront()
         faceB.visibility = View.VISIBLE
@@ -276,7 +281,7 @@ object CardTransitionHelper {
         faceA.animate()
             .alpha(0f)
             .rotationY(45f)
-            .setDuration(DURATION_MS)
+            .setDuration(durationMs)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 faceA.visibility = View.GONE
@@ -288,13 +293,13 @@ object CardTransitionHelper {
         faceB.animate()
             .alpha(1f)
             .rotationY(0f)
-            .setDuration(DURATION_MS)
+            .setDuration(durationMs)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction { onComplete?.invoke() }
             .start()
     }
 
-    private fun doRotateFadeToA(faceA: View, faceB: View, container: ViewGroup, density: Float, onComplete: (() -> Unit)?) {
+    private fun doRotateFadeToA(faceA: View, faceB: View, container: ViewGroup, density: Float, durationMs: Long, onComplete: (() -> Unit)?) {
         container.cameraDistance = density * 6000f
         faceA.bringToFront()
         faceA.visibility = View.VISIBLE
@@ -305,7 +310,7 @@ object CardTransitionHelper {
         faceB.animate()
             .alpha(0f)
             .rotationY(-45f)
-            .setDuration(DURATION_MS)
+            .setDuration(durationMs)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 faceB.visibility = View.GONE
@@ -317,7 +322,7 @@ object CardTransitionHelper {
         faceA.animate()
             .alpha(1f)
             .rotationY(0f)
-            .setDuration(DURATION_MS)
+            .setDuration(durationMs)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction { onComplete?.invoke() }
             .start()
@@ -327,6 +332,7 @@ object CardTransitionHelper {
         faceA: View,
         faceB: View,
         showB: Boolean,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
         faceA.pivotY = 0f
@@ -342,7 +348,7 @@ object CardTransitionHelper {
             faceA.animate()
                 .scaleY(0.3f)
                 .alpha(0f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction {
                     faceA.visibility = View.GONE
@@ -354,7 +360,7 @@ object CardTransitionHelper {
             faceB.animate()
                 .scaleY(1f)
                 .alpha(1f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(OvershootInterpolator(1f))
                 .withEndAction { onComplete?.invoke() }
                 .start()
@@ -369,7 +375,7 @@ object CardTransitionHelper {
             faceB.animate()
                 .scaleY(0.3f)
                 .alpha(0f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction {
                     faceB.visibility = View.GONE
@@ -381,7 +387,7 @@ object CardTransitionHelper {
             faceA.animate()
                 .scaleY(1f)
                 .alpha(1f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(OvershootInterpolator(1f))
                 .withEndAction { onComplete?.invoke() }
                 .start()
@@ -392,10 +398,11 @@ object CardTransitionHelper {
         faceA: View,
         faceB: View,
         showB: Boolean,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
         val overshoot = android.view.animation.OvershootInterpolator(1.2f)
-        val duration = (DURATION_MS * 0.9).toLong()
+        val duration = (durationMs * 0.9).toLong()
         
         if (showB) {
             faceB.bringToFront()
@@ -466,6 +473,7 @@ object CardTransitionHelper {
         faceB: View,
         showB: Boolean,
         w: Int,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -476,7 +484,7 @@ object CardTransitionHelper {
                 faceB.visibility = View.VISIBLE
                 faceB.alpha = 1f
                 val anim = android.view.ViewAnimationUtils.createCircularReveal(faceB, cx, cy, 0f, r)
-                anim.duration = DURATION_MS
+                anim.duration = durationMs
                 anim.interpolator = AccelerateDecelerateInterpolator()
                 anim.addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
@@ -489,7 +497,7 @@ object CardTransitionHelper {
                 faceA.visibility = View.VISIBLE
                 faceA.alpha = 1f
                 val anim = android.view.ViewAnimationUtils.createCircularReveal(faceA, cx, cy, 0f, r)
-                anim.duration = DURATION_MS
+                anim.duration = durationMs
                 anim.interpolator = AccelerateDecelerateInterpolator()
                 anim.addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
@@ -511,6 +519,7 @@ object CardTransitionHelper {
         faceB: View,
         showB: Boolean,
         density: Float,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
         val glow = 24f * density
@@ -523,7 +532,7 @@ object CardTransitionHelper {
             // Crossfade - both run simultaneously
             faceA.animate()
                 .alpha(0f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction {
                     ViewCompat.setElevation(faceA, 0f)
@@ -534,7 +543,7 @@ object CardTransitionHelper {
             
             faceB.animate()
                 .alpha(1f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction { onComplete?.invoke() }
                 .start()
@@ -547,7 +556,7 @@ object CardTransitionHelper {
             // Crossfade - both run simultaneously
             faceB.animate()
                 .alpha(0f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction {
                     ViewCompat.setElevation(faceB, 0f)
@@ -558,7 +567,7 @@ object CardTransitionHelper {
             
             faceA.animate()
                 .alpha(1f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction { onComplete?.invoke() }
                 .start()
@@ -569,6 +578,7 @@ object CardTransitionHelper {
         faceA: View,
         faceB: View,
         showB: Boolean,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
         if (showB) {
@@ -583,7 +593,7 @@ object CardTransitionHelper {
                 .alpha(0f)
                 .scaleX(1.05f)
                 .scaleY(1.05f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction {
                     faceA.visibility = View.GONE
@@ -597,7 +607,7 @@ object CardTransitionHelper {
                 .alpha(1f)
                 .scaleX(1f)
                 .scaleY(1f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction { onComplete?.invoke() }
                 .start()
@@ -613,7 +623,7 @@ object CardTransitionHelper {
                 .alpha(0f)
                 .scaleX(1.05f)
                 .scaleY(1.05f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction {
                     faceB.visibility = View.GONE
@@ -627,7 +637,7 @@ object CardTransitionHelper {
                 .alpha(1f)
                 .scaleX(1f)
                 .scaleY(1f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction { onComplete?.invoke() }
                 .start()
@@ -638,6 +648,7 @@ object CardTransitionHelper {
         faceA: View,
         faceB: View,
         showB: Boolean,
+        durationMs: Long,
         onComplete: (() -> Unit)?
     ) {
         val overshoot = android.view.animation.OvershootInterpolator(1.2f)
@@ -657,7 +668,7 @@ object CardTransitionHelper {
                 .scaleX(0.98f)
                 .scaleY(0.98f)
                 .alpha(0f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction {
                     faceA.visibility = View.GONE
@@ -673,7 +684,7 @@ object CardTransitionHelper {
                 .scaleX(1f)
                 .scaleY(1f)
                 .alpha(1f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(overshoot)
                 .withEndAction { onComplete?.invoke() }
                 .start()
@@ -691,7 +702,7 @@ object CardTransitionHelper {
                 .scaleX(0.98f)
                 .scaleY(0.98f)
                 .alpha(0f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(DecelerateInterpolator())
                 .withEndAction {
                     faceB.visibility = View.GONE
@@ -707,7 +718,7 @@ object CardTransitionHelper {
                 .scaleX(1f)
                 .scaleY(1f)
                 .alpha(1f)
-                .setDuration(DURATION_MS)
+                .setDuration(durationMs)
                 .setInterpolator(overshoot)
                 .withEndAction { onComplete?.invoke() }
                 .start()

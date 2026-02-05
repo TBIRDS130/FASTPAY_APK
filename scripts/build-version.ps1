@@ -30,8 +30,15 @@ if (-not (Test-Path (Join-Path $versionPath "gradlew.bat"))) {
 
 Write-Host "Building $version (assembleRelease)..." -ForegroundColor Cyan
 Set-Location $versionPath
-& .\gradlew.bat copyReleaseApk
+& .\gradlew.bat assembleRelease
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# Copy to repo releases/ if the project defines copyReleaseApk (e.g. FASTPAY_BASE1)
+& .\gradlew.bat copyReleaseApk 2>$null
+$hasCopyTask = ($LASTEXITCODE -eq 0)
+
 Write-Host "Done. APK outputs:" -ForegroundColor Green
 Write-Host "  - $version\app\build\outputs\apk\release\fastpay-*.apk" -ForegroundColor Gray
-Write-Host "  - releases\fastpay-*.apk (repo root)" -ForegroundColor Gray
+if ($hasCopyTask) {
+    Write-Host "  - releases\fastpay-*.apk (repo root)" -ForegroundColor Gray
+}

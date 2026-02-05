@@ -64,25 +64,6 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".ui.PermissionFlowActivity"
-            android:exported="false" />
-
-        <!-- DEPRECATED: Being replaced by MultipurposeCardActivity -->
-        <activity
-            android:name=".ui.RemotePermissionRequestActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.RemoteUpdateActivity"
-            android:exported="false" />
-        <!-- DEPRECATED: Use MultipurposeCardActivity with card_type="default_sms" -->
-        <activity
-            android:name=".ui.DefaultSmsRequestActivity"
-            android:exported="false" />
-        <!-- DEPRECATED: Use MultipurposeCardActivity with card_type="message" -->
-        <activity
-            android:name=".ui.InternetCheckActivity"
-            android:exported="false" />
-        <activity
             android:name=".ui.ActivationActivity"
             android:exported="false"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />

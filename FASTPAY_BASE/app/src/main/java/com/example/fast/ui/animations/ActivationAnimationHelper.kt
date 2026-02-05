@@ -182,7 +182,7 @@ object ActivationAnimationHelper {
         inputCard: View,
         utilityCard: View,
         otherViewsToFade: List<View> = emptyList(),
-        collapseDurationMs: Long = 500L,
+        collapseDurationMs: Long = AnimationConstants.ACTIVATION_WIPE_DOWN_ENTRY_MS,
         onCentered: () -> Unit
     ) {
         val rootHeight = rootView.height
