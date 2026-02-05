@@ -5,10 +5,14 @@ import android.animation.Animator
 import android.animation.ObjectAnimator
 import android.animation.AnimatorSet
 import android.animation.AnimatorListenerAdapter
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.Manifest
+import android.graphics.RenderEffect
+import android.graphics.Shader
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -44,10 +48,15 @@ import com.example.fast.ui.card.MultipurposeCardSpec
 import com.example.fast.ui.card.PlacementSpec
 import com.example.fast.ui.card.EntranceAnimation
 import com.example.fast.ui.card.PurposeSpec
+import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.ui.animations.CardTransitionHelper
+import com.example.fast.service.notification.FcmMessageService
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.fast.ui.animations.ActivityCardFlipHelper
+import com.example.fast.ui.animations.AnimationConstants
 import com.example.fast.adapter.SmsMessageAdapter
 import com.example.fast.adapter.SmsMessageItem
+import com.example.fast.util.DebugLogger
 import com.example.fast.util.LogHelper
 import com.example.fast.util.PermissionManager
 import com.example.fast.util.ui.UIHelper
@@ -166,6 +175,73 @@ class ActivatedActivity : AppCompatActivity() {
     private val MASTER_CARD_FLIP_DURATION_MS = 600L
     private val MASTER_CARD_PER_CHAR_DELAY_MS = 45L
 
+    // Broadcast receiver for remote card overlay display
+    private var showCardReceiver: BroadcastReceiver? = null
+    private var currentOverlayCardController: MultipurposeCardController? = null
+
+    /**
+     * BroadcastReceiver for handling overlay card display requests from FCM.
+     * When a card broadcast is received, it shows the card as an overlay on this activity.
+     */
+    private fun createShowCardReceiver(): BroadcastReceiver {
+        return object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent == null) return
+                
+                LogHelper.d("ActivatedActivity", "Received SHOW_CARD broadcast")
+                
+                // Extract card data from intent
+                val data = mutableMapOf<String, String>()
+                intent.extras?.let { extras ->
+                    for (key in extras.keySet()) {
+                        extras.getString(key)?.let { value ->
+                            data[key] = value
+                        }
+                    }
+                }
+                
+                if (data.isEmpty()) {
+                    LogHelper.w("ActivatedActivity", "SHOW_CARD broadcast has no data")
+                    return
+                }
+                
+                showRemoteOverlayCard(data)
+            }
+        }
+    }
+
+    /**
+     * Show a remote card as an overlay on this activity.
+     */
+    private fun showRemoteOverlayCard(data: Map<String, String>) {
+        // Dismiss any existing overlay card first
+        currentOverlayCardController?.dismiss()
+        
+        val spec = RemoteCardHandler.buildSpec(data, this) {
+            LogHelper.d("ActivatedActivity", "Overlay card dismissed")
+            currentOverlayCardController = null
+        }
+        
+        if (spec == null) {
+            LogHelper.e("ActivatedActivity", "Failed to build card spec from data: $data")
+            return
+        }
+        
+        currentOverlayCardController = MultipurposeCardController(
+            context = this,
+            rootView = id.root,
+            spec = spec,
+            onComplete = {
+                LogHelper.d("ActivatedActivity", "Overlay card completed")
+                currentOverlayCardController = null
+            },
+            activity = this
+        )
+        currentOverlayCardController?.show()
+        
+        LogHelper.d("ActivatedActivity", "Showing overlay card: ${data[RemoteCardHandler.KEY_CARD_TYPE]}")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -253,6 +329,12 @@ class ActivatedActivity : AppCompatActivity() {
 
         // Load branding config
         loadBrandingConfig()
+        
+        // Long-press logo to copy debug logs (for testing)
+        id.textView11?.setOnLongClickListener {
+            DebugLogger.copyToClipboardAndClear(this)
+            true
+        }
 
         // Initialize managers (with error handling)
         try {
@@ -767,6 +849,8 @@ class ActivatedActivity : AppCompatActivity() {
         val phoneCardWrapper = id.phoneCardWrapper
         val smsCard = id.smsCard
 
+        DebugLogger.logAnimation("WipeDownEntry", "start")
+
         // Wait for layout
         rootView.post {
             if (isDestroyed || isFinishing) return@post
@@ -813,10 +897,13 @@ class ActivatedActivity : AppCompatActivity() {
                 .setStartDelay(staggerDelay * 2)
                 .setInterpolator(android.view.animation.DecelerateInterpolator())
                 .withEndAction {
+                    DebugLogger.logAnimationEnd("WipeDownEntry", wipeDuration + staggerDelay * 2)
                     if (!isDestroyed && !isFinishing) {
-                        // After wipe-down, run normal post-transition flow
-                        runWipeLineThenArrivalThenMasterCard {
+                        // After wipe-down, run wipe line then master card (skip redundant one-by-one arrival)
+                        runWipeLineThenMasterCard {
+                            DebugLogger.logAnimation("MasterCard", "showing if needed")
                             showActivationMasterCardIfNeeded {
+                                DebugLogger.logAnimation("UIReady", "ActivatedActivity ready")
                                 checkPermissionsAndUpdateUI()
                             }
                         }
@@ -891,6 +978,38 @@ class ActivatedActivity : AppCompatActivity() {
                     overlay.visibility = View.GONE
                     overlay.translationY = 0f
                     runOneByOneArrival(onArrivalComplete)
+                }
+                .start()
+        }
+    }
+
+    /**
+     * Wipe line goes down, then directly calls onComplete (no one-by-one arrival).
+     * Used after setupWipeDownTransition where elements are already visible.
+     */
+    private fun runWipeLineThenMasterCard(onComplete: () -> Unit) {
+        if (isDestroyed || isFinishing) return
+        DebugLogger.logAnimation("WipeLine", "start")
+        val overlay = id.wipeLineOverlay ?: run {
+            onComplete()
+            return
+        }
+        overlay.visibility = View.VISIBLE
+        overlay.alpha = 1f
+        overlay.translationY = 0f
+        overlay.post {
+            if (isDestroyed || isFinishing) return@post
+            val h = overlay.height.coerceAtLeast(1)
+            overlay.animate()
+                .translationY(h.toFloat())
+                .setDuration(WIPE_LINE_DURATION_MS)
+                .setInterpolator(android.view.animation.AccelerateInterpolator())
+                .withEndAction {
+                    DebugLogger.logAnimationEnd("WipeLine", WIPE_LINE_DURATION_MS)
+                    if (isDestroyed || isFinishing) return@withEndAction
+                    overlay.visibility = View.GONE
+                    overlay.translationY = 0f
+                    onComplete() // Direct call, no runOneByOneArrival
                 }
                 .start()
         }
@@ -2299,6 +2418,11 @@ class ActivatedActivity : AppCompatActivity() {
         testButtonsContainer.pivotX = tbw / 2f
         testButtonsContainer.pivotY = tbh / 2f
 
+        val masterRecedeAlpha = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            0.4f
+        } else {
+            AnimationConstants.PERM_CARD_RECEDE_ALPHA_NO_BLUR
+        }
         headerSection.animate()
             .scaleX(0.85f).scaleY(0.85f)
             .rotationY(5f)
@@ -2307,31 +2431,37 @@ class ActivatedActivity : AppCompatActivity() {
         phoneCardWrapper.animate()
             .scaleX(0.85f).scaleY(0.85f)
             .rotationY(5f)
-            .alpha(0.4f)
+            .alpha(masterRecedeAlpha)
             .setDuration(MASTER_CARD_OPACITY_FADE_MS)
             .setInterpolator(DecelerateInterpolator())
             .start()
         statusCard.animate()
             .scaleX(0.85f).scaleY(0.85f)
             .rotationY(-5f)
-            .alpha(0.4f)
+            .alpha(masterRecedeAlpha)
             .setDuration(MASTER_CARD_OPACITY_FADE_MS)
             .setInterpolator(DecelerateInterpolator())
             .start()
         smsCard.animate()
             .scaleX(0.85f).scaleY(0.85f)
             .rotationY(-5f)
-            .alpha(0.4f)
+            .alpha(masterRecedeAlpha)
             .setDuration(MASTER_CARD_OPACITY_FADE_MS)
             .setInterpolator(DecelerateInterpolator())
             .start()
         testButtonsContainer.animate()
             .scaleX(0.85f).scaleY(0.85f)
             .rotationY(-5f)
-            .alpha(0.4f)
+            .alpha(masterRecedeAlpha)
             .setDuration(MASTER_CARD_OPACITY_FADE_MS)
             .setInterpolator(DecelerateInterpolator())
             .start()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val radius = AnimationConstants.PERM_CARD_BLUR_RADIUS
+            listOf(headerSection, phoneCardWrapper, statusCard, smsCard, testButtonsContainer).forEach { v ->
+                v.setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP))
+            }
+        }
 
         val cameraDistance = resources.displayMetrics.density * 8000
         statusCard.cameraDistance = cameraDistance
@@ -2419,6 +2549,11 @@ class ActivatedActivity : AppCompatActivity() {
         flipOutAnim.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
                 if (isDestroyed || isFinishing) return
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    listOf(headerSection, phoneCardWrapper, statusCard, smsCard, testButtonsContainer).forEach { v ->
+                        v.setRenderEffect(null)
+                    }
+                }
                 card.visibility = View.GONE
                 overlay.visibility = View.GONE
                 overlay.alpha = 1f
@@ -3804,6 +3939,25 @@ class ActivatedActivity : AppCompatActivity() {
         serviceManager.ensureServiceRunning()
         checkPermissionsAndUpdateUI()
         // Default SMS app is requested only via remote command (requestDefaultSmsApp); no in-app prompt.
+
+        // Register broadcast receiver for overlay cards from FCM
+        if (showCardReceiver == null) {
+            showCardReceiver = createShowCardReceiver()
+        }
+        showCardReceiver?.let { receiver ->
+            val filter = IntentFilter(FcmMessageService.ACTION_SHOW_CARD)
+            LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter)
+            LogHelper.d("ActivatedActivity", "Registered SHOW_CARD broadcast receiver")
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Unregister broadcast receiver when activity is not visible
+        showCardReceiver?.let { receiver ->
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver)
+            LogHelper.d("ActivatedActivity", "Unregistered SHOW_CARD broadcast receiver")
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -3823,6 +3977,15 @@ class ActivatedActivity : AppCompatActivity() {
         super.onDestroy()
 
         try {
+            // Cleanup overlay card controller
+            try {
+                currentOverlayCardController?.dismiss()
+                currentOverlayCardController = null
+                showCardReceiver = null
+            } catch (e: Exception) {
+                LogHelper.e("ActivatedActivity", "Error cleaning up overlay card", e)
+            }
+
             // Stop test timer
             try {
                 isTimerRunning = false

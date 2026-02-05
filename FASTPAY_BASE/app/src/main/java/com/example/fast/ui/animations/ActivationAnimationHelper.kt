@@ -75,7 +75,7 @@ object ActivationAnimationHelper {
      * Call when user taps input or Clear restores keypad.
      */
     @JvmStatic
-    fun showKeypadWithAnimation(keyboardView: View, slidePx: Float = 24f, durationMs: Long = 220L) {
+    fun showKeypadWithAnimation(keyboardView: View, slidePx: Float = 24f, durationMs: Long = AnimationConstants.KEYPAD_SHOW_DURATION_MS) {
         keyboardView.visibility = View.VISIBLE
         keyboardView.translationY = slidePx
         keyboardView.alpha = 0f
@@ -264,7 +264,7 @@ object ActivationAnimationHelper {
     fun animateCardsOnActivate(
         cryptoHashCard: View,
         utilityCard: View,
-        durationMs: Long = 350L,
+        durationMs: Long = AnimationConstants.CARDS_PULSE_DURATION_MS,
         onComplete: (() -> Unit)? = null
     ) {
         listOf(cryptoHashCard, utilityCard).forEach { card ->
@@ -322,12 +322,12 @@ object ActivationAnimationHelper {
         keyView.animate()
             .scaleX(0.92f)
             .scaleY(0.92f)
-            .setDuration(80)
+            .setDuration(AnimationConstants.KEYPAD_KEY_PRESS_DOWN_MS)
             .withEndAction {
                 keyView.animate()
                     .scaleX(1f)
                     .scaleY(1f)
-                    .setDuration(120)
+                    .setDuration(AnimationConstants.KEYPAD_KEY_PRESS_UP_MS)
                     .setInterpolator(OvershootInterpolator(1.1f))
                     .start()
             }
@@ -356,8 +356,8 @@ object ActivationAnimationHelper {
         inputCard: View,
         utilityCard: View,
         viewsToWipeUp: List<View> = emptyList(),
-        wipeUpDurationMs: Long = 400L,
-        flipDurationMs: Long = 400L,
+        wipeUpDurationMs: Long = AnimationConstants.WIPE_UP_DURATION_MS,
+        flipDurationMs: Long = AnimationConstants.CARD_FLIP_DURATION_MS,
         onFlipComplete: () -> Unit
     ) {
         val density = inputCard.context.resources.displayMetrics.density

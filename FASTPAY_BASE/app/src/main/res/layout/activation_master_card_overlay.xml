@@ -4,7 +4,7 @@
     android:id="@+id/activationMasterCardOverlay"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#80000000"
+    android:background="@drawable/overlay_glass_background"
     android:clickable="true"
     android:focusable="true">
 

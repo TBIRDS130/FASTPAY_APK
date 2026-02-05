@@ -38,6 +38,9 @@
     <color name="theme_primary_dark">#00cc6a</color>
     <color name="theme_accent">#00ff88</color>
 
+    <!-- Activation Screen Background -->
+    <color name="activation_background">#0a0a0a</color>
+
     <!-- Auto-generated theme colors (calculated from theme_primary) -->
     <color name="theme_gradient_start">#0a0a0a</color>
     <color name="theme_gradient_end">#1a1a1a</color>

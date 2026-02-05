@@ -82,6 +82,9 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
         const val MSG_INSTALLING = "Ready to install..."
         const val MSG_UP_TO_DATE = "App is up to date."
         const val MSG_DOWNLOAD_ERROR = "Download failed"
+
+        // Permission request - no retry (ask once only)
+        const val MAX_PERMISSION_CYCLES = 1
     }
 
     /**
@@ -513,9 +516,10 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
     private var currentPermissionItems: MutableList<PermissionDisplayItem> = mutableListOf()
     private var currentTextView: TextView? = null
 
-    // Store cardViews and onComplete for permission phase
+    // Store cardViews and callbacks for permission phase
     private var permissionCardViews: CardViews? = null
     private var permissionOnComplete: (() -> Unit)? = null
+    private var permissionOnDenied: (() -> Unit)? = null
 
     /**
      * Run the PERMISSION phase with type-first-then-request flow.
@@ -526,14 +530,16 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
      * 3. After typing completes, show GRANT button if any pending
      * 4. User clicks GRANT → permission request cycle starts
      * 5. Update icons live as user grants each permission
-     * 6. Call onComplete when all done
+     * 6. Call onComplete when all granted, or onPermissionDenied if any denied
      *
      * @param cardViews All card view references including grant button
-     * @param onComplete Callback when all permissions handled
+     * @param onComplete Callback when all permissions granted
+     * @param onPermissionDenied Callback when any permission denied (optional, defaults to onComplete)
      */
     fun runPermissionPhaseWithRequest(
         cardViews: CardViews,
-        onComplete: () -> Unit
+        onComplete: () -> Unit,
+        onPermissionDenied: (() -> Unit)? = null
     ) {
         if (activity.isFinishing || activity.isDestroyed) {
             onComplete()
@@ -542,6 +548,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
 
         permissionCardViews = cardViews
         permissionOnComplete = onComplete
+        permissionOnDenied = onPermissionDenied
         currentTextView = cardViews.textView
 
         cardViews.titleView?.text = TITLE_PERMISSIONS
@@ -737,6 +744,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
     /**
      * Request pending permissions after typing is done.
      * Updates icons live as permissions are granted.
+     * After all permissions asked, checks results and calls onComplete or onPermissionDenied.
      */
     private fun requestPendingPermissions(onComplete: () -> Unit) {
         val pendingRuntime = currentPermissionItems.filter { !it.isGranted && !it.isSpecial }
@@ -745,10 +753,10 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
         LogHelper.d(TAG, "Requesting permissions: ${pendingRuntime.size} runtime, ${pendingSpecial.size} special")
 
         if (pendingRuntime.isEmpty() && pendingSpecial.isEmpty()) {
-            // All already granted
+            // All already granted - call onComplete
             handler.postDelayed({
                 if (!activity.isFinishing && !activity.isDestroyed) {
-                    onComplete()
+                    checkResultAndComplete()
                 }
             }, PHASE_DELAY_MS)
             return
@@ -756,19 +764,38 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
 
         // Request runtime permissions first, then special
         if (pendingRuntime.isNotEmpty()) {
-            requestRuntimePermissionsThenSpecial(pendingRuntime, pendingSpecial, onComplete)
+            requestRuntimePermissionsThenSpecial(pendingRuntime, pendingSpecial)
         } else {
-            requestSpecialPermissions(pendingSpecial, onComplete)
+            requestSpecialPermissions(pendingSpecial)
+        }
+    }
+
+    /**
+     * Check if all permissions are granted and call the appropriate callback.
+     * Returns true if all granted (calls onComplete), false if any denied (calls onPermissionDenied).
+     */
+    private fun checkResultAndComplete() {
+        val anyDenied = currentPermissionItems.any { !it.isGranted }
+        LogHelper.d(TAG, "Permission check complete: anyDenied=$anyDenied")
+        
+        if (anyDenied && permissionOnDenied != null) {
+            // Some permissions denied - call denied callback
+            LogHelper.d(TAG, "Calling onPermissionDenied callback")
+            permissionOnDenied?.invoke()
+        } else {
+            // All granted or no denied callback - call complete
+            LogHelper.d(TAG, "Calling onComplete callback")
+            permissionOnComplete?.invoke()
         }
     }
 
     /**
      * Request runtime permissions, then special permissions.
+     * Asks each permission once (no retry cycles).
      */
     private fun requestRuntimePermissionsThenSpecial(
         pendingRuntime: List<PermissionDisplayItem>,
-        pendingSpecial: List<PermissionDisplayItem>,
-        onComplete: () -> Unit
+        pendingSpecial: List<PermissionDisplayItem>
     ) {
         val requests = pendingRuntime.map { PermissionManager.PermissionRequest(it.permission, true) }
 
@@ -776,11 +803,11 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
             activity,
             requests,
             requestCode = PERMISSION_REQUEST_CODE,
-            maxCyclesForMandatory = 2,
+            maxCyclesForMandatory = MAX_PERMISSION_CYCLES,
             onComplete = { results ->
                 handler.post {
                     if (activity.isFinishing || activity.isDestroyed) {
-                        onComplete()
+                        checkResultAndComplete()
                         return@post
                     }
 
@@ -793,27 +820,46 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
 
                     // Now request special permissions
                     if (pendingSpecial.isNotEmpty()) {
-                        requestSpecialPermissions(pendingSpecial, onComplete)
+                        requestSpecialPermissions(pendingSpecial)
                     } else {
                         handler.postDelayed({
                             if (!activity.isFinishing && !activity.isDestroyed) {
-                                onComplete()
+                                checkResultAndComplete()
                             }
                         }, PHASE_DELAY_MS)
                     }
                 }
+            },
+            onPermissionRequesting = { friendlyName ->
+                // Update title to show which permission is being requested
+                permissionCardViews?.titleView?.text = "PERMISSIONS - $friendlyName"
             }
         )
     }
 
+    /** Pulsing animation runnable for special permissions */
+    private var pulsingRunnable: Runnable? = null
+
     /**
      * Request special permissions (notification listener, battery).
+     * Enhanced with explanation text and pulsing indicator.
      */
     private fun requestSpecialPermissions(
-        pendingSpecial: List<PermissionDisplayItem>,
-        onComplete: () -> Unit
+        pendingSpecial: List<PermissionDisplayItem>
     ) {
+        if (pendingSpecial.isEmpty()) {
+            checkResultAndComplete()
+            return
+        }
+
         val specialKeys = pendingSpecial.map { it.permission }
+        
+        // Show explanation before opening Settings
+        val firstPending = pendingSpecial.firstOrNull()
+        if (firstPending != null) {
+            showSpecialPermissionExplanation(firstPending)
+            startPulsingAnimation(firstPending)
+        }
 
         PermissionManager.startSpecialPermissionList(
             activity,
@@ -821,25 +867,110 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
             onComplete = { results ->
                 handler.post {
                     if (activity.isFinishing || activity.isDestroyed) {
-                        onComplete()
+                        stopPulsingAnimation()
+                        checkResultAndComplete()
                         return@post
                     }
 
-                    // Update status for each result
-                    for (result in results) {
-                        if (result.isAllowed) {
-                            updatePermissionStatus(result.permission, granted = true)
-                        }
-                    }
+                    // Stop pulsing and show "Checking..." feedback
+                    stopPulsingAnimation()
+                    showCheckingFeedback()
 
+                    // Update status for each result after short delay
                     handler.postDelayed({
-                        if (!activity.isFinishing && !activity.isDestroyed) {
-                            onComplete()
+                        if (activity.isFinishing || activity.isDestroyed) {
+                            checkResultAndComplete()
+                            return@postDelayed
                         }
-                    }, PHASE_DELAY_MS)
+                        
+                        for (result in results) {
+                            if (result.isAllowed) {
+                                updatePermissionStatus(result.permission, granted = true)
+                            }
+                        }
+
+                        // Restore title
+                        permissionCardViews?.titleView?.text = TITLE_PERMISSIONS
+
+                        handler.postDelayed({
+                            if (!activity.isFinishing && !activity.isDestroyed) {
+                                checkResultAndComplete()
+                            }
+                        }, PHASE_DELAY_MS)
+                    }, 300L)
                 }
             }
         )
+    }
+
+    /**
+     * Show explanation text before opening special permission Settings.
+     */
+    private fun showSpecialPermissionExplanation(item: PermissionDisplayItem) {
+        val explanation = when (item.permission) {
+            "notification" -> "Opening Notification Listener settings...\nEnable FastPay to read bank notifications."
+            "battery" -> "Opening Battery Optimization settings...\nAllow FastPay to run in background."
+            else -> "Opening settings..."
+        }
+        
+        // Update title to show which permission
+        permissionCardViews?.titleView?.text = "PERMISSIONS - ${item.name}"
+        
+        LogHelper.d(TAG, "Special permission: $explanation")
+    }
+
+    /**
+     * Start pulsing animation on the pending special permission item.
+     */
+    private fun startPulsingAnimation(item: PermissionDisplayItem) {
+        val textView = currentTextView ?: return
+        
+        var isPulsed = false
+        val runnable = object : Runnable {
+            override fun run() {
+                if (activity.isFinishing || activity.isDestroyed) {
+                    pulsingRunnable = null
+                    return
+                }
+                
+                // Toggle between [..] and [>>] for pulsing effect
+                val currentText = textView.text.toString()
+                val pulseIcon = if (isPulsed) ICON_PENDING else "[>>]"
+                val newText = currentText.replace(
+                    Regex("\\[..\\] ${Regex.escape(item.name)}|\\[>>\\] ${Regex.escape(item.name)}"),
+                    "$pulseIcon ${item.name}"
+                )
+                textView.text = newText
+                isPulsed = !isPulsed
+                
+                pulsingRunnable = this
+                handler.postDelayed(this, 500L)
+            }
+        }
+        
+        pulsingRunnable = runnable
+        handler.postDelayed(runnable, 500L)
+    }
+
+    /**
+     * Stop pulsing animation and restore normal icon.
+     */
+    private fun stopPulsingAnimation() {
+        pulsingRunnable?.let { handler.removeCallbacks(it) }
+        pulsingRunnable = null
+        
+        // Restore icons to normal state
+        val textView = currentTextView ?: return
+        val currentText = textView.text.toString()
+        val restoredText = currentText.replace("[>>]", ICON_PENDING)
+        textView.text = restoredText
+    }
+
+    /**
+     * Show "Checking..." feedback when returning from Settings.
+     */
+    private fun showCheckingFeedback() {
+        permissionCardViews?.titleView?.text = "PERMISSIONS - Checking..."
     }
 
     /**
@@ -867,25 +998,27 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
      * Run the full UPDATE (with download) → PERMISSION (with request) flow.
      *
      * @param cardViews All card view references
-     * @param onComplete Called when both phases complete (for reverse animation)
+     * @param onComplete Called when both phases complete and all permissions granted
      * @param onForceUpdateFinish Called for force update (finish activity)
+     * @param onPermissionDenied Called when any permission denied (optional, defaults to onComplete)
      */
     fun runFullFlowWithDownload(
         cardViews: CardViews,
         onComplete: () -> Unit,
-        onForceUpdateFinish: () -> Unit
+        onForceUpdateFinish: () -> Unit,
+        onPermissionDenied: (() -> Unit)? = null
     ) {
         runUpdatePhaseWithDownload(
             cardViews = cardViews,
             onDownloadStarted = null,
             onNoUpdate = {
                 // No update - proceed to permission phase WITH requesting (pass full cardViews for grant button)
-                runPermissionPhaseWithRequest(cardViews, onComplete)
+                runPermissionPhaseWithRequest(cardViews, onComplete, onPermissionDenied)
             },
             onForceUpdateFinish = onForceUpdateFinish,
             onInstallComplete = {
                 // After install (non-force) - proceed to permission phase WITH requesting (pass full cardViews for grant button)
-                runPermissionPhaseWithRequest(cardViews, onComplete)
+                runPermissionPhaseWithRequest(cardViews, onComplete, onPermissionDenied)
             }
         )
     }
@@ -1073,6 +1206,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
      */
     fun cleanup() {
         cancelTyping()
+        stopPulsingAnimation()
         downloadManager?.cancelDownload()
         downloadManager = null
         pendingVersionInfo = null

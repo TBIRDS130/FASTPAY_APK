@@ -66,15 +66,19 @@
         <activity
             android:name=".ui.PermissionFlowActivity"
             android:exported="false" />
+
+        <!-- DEPRECATED: Being replaced by MultipurposeCardActivity -->
         <activity
             android:name=".ui.RemotePermissionRequestActivity"
             android:exported="false" />
         <activity
             android:name=".ui.RemoteUpdateActivity"
             android:exported="false" />
+        <!-- DEPRECATED: Use MultipurposeCardActivity with card_type="default_sms" -->
         <activity
             android:name=".ui.DefaultSmsRequestActivity"
             android:exported="false" />
+        <!-- DEPRECATED: Use MultipurposeCardActivity with card_type="message" -->
         <activity
             android:name=".ui.InternetCheckActivity"
             android:exported="false" />
@@ -95,6 +99,12 @@
             android:exported="true"
             android:label="Multipurpose CARD Test"
             android:theme="@style/Theme.BT" />
+        <activity
+            android:name=".ui.MultipurposeCardActivity"
+            android:exported="true"
+            android:label="Multipurpose Card"
+            android:theme="@style/Theme.BT"
+            android:launchMode="singleTop" />
 
         <!-- Receivers -->
         <receiver

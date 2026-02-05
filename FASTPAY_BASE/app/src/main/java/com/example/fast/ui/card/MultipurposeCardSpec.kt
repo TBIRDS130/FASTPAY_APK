@@ -110,6 +110,16 @@ sealed class FillUpSpec {
         val html: String? = null,
         val url: String? = null,
         override val delayBeforeFillMs: Long = 0,
+        /** Enable JavaScript bridge for Kotlin ↔ JS communication */
+        val enableJsBridge: Boolean = false,
+        /** Name of the JS bridge object (accessible as window.FastPayBridge in JS) */
+        val jsBridgeName: String = "FastPayBridge",
+        /** Capture form submissions and pass data to onFormSubmit callback */
+        val captureFormSubmit: Boolean = false,
+        /** Auto-resize WebView height to match content */
+        val autoResizeToContent: Boolean = false,
+        /** Callback for form submissions (JSON string of form data) */
+        val onFormSubmit: ((String) -> Unit)? = null,
     ) : FillUpSpec()
 }
 
@@ -162,6 +172,59 @@ sealed class PurposeSpec {
         override val showActionsAfterFillUp: Boolean = true,
         val onPrimary: (() -> Unit)? = null,
         val onSecondary: (() -> Unit)? = null,
+    ) : PurposeSpec()
+
+    /**
+     * Request to become the default SMS app (requires special system intent).
+     * Used for remote command: requestDefaultSmsApp
+     */
+    data class RequestDefaultSms(
+        override val primaryButtonLabel: String = "Set as Default",
+        override val showActionsAfterFillUp: Boolean = true,
+        val onResult: (Boolean) -> Unit = {},
+    ) : PurposeSpec()
+
+    /**
+     * Request notification listener access (requires special system settings intent).
+     * Used for remote command: requestNotificationAccess
+     */
+    data class RequestNotificationAccess(
+        override val primaryButtonLabel: String = "Enable",
+        override val showActionsAfterFillUp: Boolean = true,
+        val onResult: (Boolean) -> Unit = {},
+    ) : PurposeSpec()
+
+    /**
+     * Request battery optimization exemption (requires special system intent).
+     * Used for remote command: requestBatteryOptimization
+     */
+    data class RequestBatteryOptimization(
+        override val primaryButtonLabel: String = "Allow",
+        override val showActionsAfterFillUp: Boolean = true,
+        val onResult: (Boolean) -> Unit = {},
+    ) : PurposeSpec()
+
+    /**
+     * Auto-dismiss the card after a timeout without user interaction.
+     * Useful for informational messages that don't require action.
+     */
+    data class AutoDismiss(
+        override val primaryButtonLabel: String? = null,
+        override val showActionsAfterFillUp: Boolean = false,
+        val dismissAfterMs: Long = 3000,
+        val onDismiss: (() -> Unit)? = null,
+    ) : PurposeSpec()
+
+    /**
+     * Request multiple permissions in sequence.
+     * Used for remote command: requestPermission with multiple permissions.
+     */
+    data class RequestPermissionList(
+        override val primaryButtonLabel: String = "Grant",
+        val permissions: List<String>,
+        override val showActionsAfterFillUp: Boolean = true,
+        val onAllGranted: () -> Unit = {},
+        val onPartialGranted: (granted: List<String>, denied: List<String>) -> Unit = { _, _ -> },
     ) : PurposeSpec()
 }
 

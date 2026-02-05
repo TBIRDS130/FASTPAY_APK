@@ -8,9 +8,6 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.graphics.LinearGradient
-import android.graphics.Shader
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -22,7 +19,6 @@ import android.view.ViewTreeObserver
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
-import android.transition.Fade
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
@@ -35,9 +31,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.util.Pair
 import com.example.fast.R
 import com.example.fast.config.AppConfig
-import com.example.fast.service.NotificationReceiver
-import com.example.fast.util.PermissionManager
 import com.example.fast.util.VersionChecker
+import com.example.fast.util.DebugLogger
 import com.google.firebase.Firebase
 import com.example.fast.util.DjangoApiHelper
 import com.example.fast.ui.RemoteUpdateActivity
@@ -47,25 +42,14 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
-import com.prexoft.prexocore.after
-import com.prexoft.prexocore.goTo
-import com.prexoft.prexocore.readInternalFile
-import android.provider.Settings
-import android.Manifest
-import android.content.ComponentName
-import android.content.pm.PackageManager
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationManagerCompat
 import android.content.SharedPreferences
-import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 
 /**
  * SplashActivity - "Redmi" Version
  *
  * Flow:
- * - Permissions at splash: before leaving, we check mandatory permissions; if any missing, we ask (runtime then special). Only after that do we navigate.
- * - After animation (and permission flow), we navigate once to next activity and stay there: ActivationActivity if not activated, ActivatedActivity if activated (user stays on activated screen).
+ * - After animation, we navigate once to next activity: ActivationActivity if not activated, ActivatedActivity if activated. Permission entry point is the status card in ActivationActivity.
  *
  * Features:
  * - First letter ("F") always comes from right edge of screen
@@ -84,7 +68,6 @@ class SplashActivity : AppCompatActivity() {
 
     // Store animation references for cleanup
     private val continuousAnimations = mutableListOf<AnimatorSet>()
-    private var taglinePulseAnimation: ObjectAnimator? = null
 
     // Store Handler references for cleanup
     private val handler = Handler(Looper.getMainLooper())
@@ -92,7 +75,6 @@ class SplashActivity : AppCompatActivity() {
 
     private var isNavigating = false
     private var hasStartedNavigation = false // Prevent double navigation during animation
-    private var splashPermissionFlowStarted = false // Prevent starting permission flow more than once
     private var navigateRetryCount = 0
     private val MAX_NAVIGATE_RETRIES = 10
 
@@ -101,27 +83,11 @@ class SplashActivity : AppCompatActivity() {
     private val KEY_FIRST_LAUNCH = "first_launch"
     private val KEY_LOCALLY_ACTIVATED = "locally_activated"
     private val KEY_ACTIVATION_CODE = "activation_code"
-    private val KEY_SPLASH_ANIMATION_INDEX = "splash_animation_index"
 
     private val sharedPreferences: SharedPreferences
         get() = getSharedPreferences(prefsName, Context.MODE_PRIVATE)
 
-    // Grid animation types for testing
-    private val gridAnimationTypes = listOf(
-        GridBackgroundView.GridAnimationType.HORIZONTAL_SCROLL,
-        GridBackgroundView.GridAnimationType.DIAGONAL_SCROLL,
-        GridBackgroundView.GridAnimationType.PULSE,
-        GridBackgroundView.GridAnimationType.WAVE,
-        GridBackgroundView.GridAnimationType.SPIRAL,
-        GridBackgroundView.GridAnimationType.RADIAL,
-        GridBackgroundView.GridAnimationType.RANDOM,
-        GridBackgroundView.GridAnimationType.STATIC_PULSE
-    )
-
-    private var currentAnimationIndex = 0
     private var currentGridAnimationType: GridBackgroundView.GridAnimationType = GridBackgroundView.GridAnimationType.RADIAL
-    private var animationCycleRunnable: Runnable? = null
-    private val ANIMATION_CYCLE_INTERVAL_MS = 2 * 60 * 1000L // 2 minutes
 
     // Minimum splash screen display time (6 seconds)
     private val MIN_SPLASH_DISPLAY_TIME_MS = 6000L
@@ -207,14 +173,14 @@ class SplashActivity : AppCompatActivity() {
             setupNeonGlowAnimation(logoTextView, taglineTextView, letterContainer)
         } else {
             android.util.Log.e("SplashActivity", "Missing splash views - skipping animation")
-            handler.postDelayed({ runPermissionFlowThenNavigate() }, MIN_SPLASH_DISPLAY_TIME_MS)
+            handler.postDelayed({ navigateToNextWithFade() }, MIN_SPLASH_DISPLAY_TIME_MS)
         }
 
         // Primary: guarantee navigation at 6.5s (fixes stuck on devices where animation onAnimationEnd never fires)
         val primaryRunnable = Runnable {
             if (!isFinishing && !isDestroyed && !hasStartedNavigation) {
-                android.util.Log.d("SplashActivity", "Primary timeout: forcing permission flow then navigation at 6.5s")
-                runPermissionFlowThenNavigate()
+                android.util.Log.d("SplashActivity", "Primary timeout: forcing navigation at 6.5s")
+                navigateToNextWithFade()
             }
         }
         handlerRunnables.add(primaryRunnable)
@@ -223,8 +189,8 @@ class SplashActivity : AppCompatActivity() {
         // Safety: guarantee navigation after max time (backup if primary also fails)
         val safetyRunnable = Runnable {
             if (!isFinishing && !isDestroyed && !hasStartedNavigation) {
-                android.util.Log.w("SplashActivity", "Safety timeout: forcing permission flow then navigation after 9s")
-                runPermissionFlowThenNavigate()
+                android.util.Log.w("SplashActivity", "Safety timeout: forcing navigation after 9s")
+                navigateToNextWithFade()
             }
         }
         handlerRunnables.add(safetyRunnable)
@@ -346,96 +312,6 @@ class SplashActivity : AppCompatActivity() {
     }
 
     /**
-     * Update animation name display
-     */
-    private fun updateAnimationNameDisplay(animationNameTextView: TextView?) {
-        animationNameTextView?.text = "Animation: ${currentGridAnimationType.name}"
-        // Fade in animation name
-        animationNameTextView?.alpha = 0f
-        animationNameTextView?.animate()
-            ?.alpha(0.7f)
-            ?.setDuration(500)
-            ?.start()
-    }
-
-    /**
-     * Setup animation cycle button click listener
-     */
-    private fun setupAnimationCycleButton(
-        button: CardView?,
-        gridBackground: GridBackgroundView?,
-        animationNameTextView: TextView?
-    ) {
-        button?.setOnClickListener {
-            if (!isFinishing) {
-                cycleToNextAnimation(gridBackground, animationNameTextView)
-            }
-        }
-
-        // Add light pulse animation to button
-        button?.let { btn ->
-            val pulseAnimator = ObjectAnimator.ofFloat(btn, "alpha", 0.5f, 1f, 0.5f).apply {
-                duration = 2000
-                repeatCount = ValueAnimator.INFINITE
-                repeatMode = ValueAnimator.REVERSE
-                interpolator = AccelerateDecelerateInterpolator()
-            }
-            pulseAnimator.start()
-            continuousAnimations.add(AnimatorSet().apply { play(pulseAnimator) })
-        }
-    }
-
-    /**
-     * Start automatic animation cycling every 2 minutes
-     */
-    private fun startAutomaticAnimationCycle(
-        gridBackground: GridBackgroundView?,
-        animationNameTextView: TextView?
-    ) {
-        animationCycleRunnable = Runnable {
-            if (!isFinishing && !isNavigating) {
-                cycleToNextAnimation(gridBackground, animationNameTextView)
-                // Schedule next cycle
-                handler.postDelayed(animationCycleRunnable!!, ANIMATION_CYCLE_INTERVAL_MS)
-            }
-        }
-        handlerRunnables.add(animationCycleRunnable!!)
-        handler.postDelayed(animationCycleRunnable!!, ANIMATION_CYCLE_INTERVAL_MS)
-    }
-
-    /**
-     * Cycle to next animation type
-     */
-    private fun cycleToNextAnimation(
-        gridBackground: GridBackgroundView?,
-        animationNameTextView: TextView?
-    ) {
-        // Increment animation index
-        currentAnimationIndex = (currentAnimationIndex + 1) % gridAnimationTypes.size
-        currentGridAnimationType = gridAnimationTypes[currentAnimationIndex]
-
-        // Update grid animation
-        gridBackground?.setGridAnimationType(currentGridAnimationType)
-
-        // Update name display with fade effect
-        animationNameTextView?.let { textView ->
-            textView.animate()
-                ?.alpha(0f)
-                ?.setDuration(200)
-                ?.withEndAction {
-                    textView.text = "Animation: ${currentGridAnimationType.name}"
-                    textView.animate()
-                        ?.alpha(0.7f)
-                        ?.setDuration(200)
-                        ?.start()
-                }
-                ?.start()
-        }
-
-        android.util.Log.d("SplashActivity", "Cycled to animation: ${currentGridAnimationType.name} (index: $currentAnimationIndex)")
-    }
-
-    /**
      * Setup Neon Glow style animation (original)
      * Logo appears with neon glow effect, then tagline fades in
      */
@@ -534,130 +410,6 @@ class SplashActivity : AppCompatActivity() {
         return (this * resources.displayMetrics.density).toInt()
     }
 
-    private fun animateLettersIn(taglineTextView: TextView) {
-        // Add fallback to ensure tagline is always shown after a maximum delay
-        var taglineFallbackRunnable: Runnable? = null
-        taglineFallbackRunnable = Runnable {
-            if (!isFinishing && !taglineAnimated) {
-                android.util.Log.w("SplashActivity", "Tagline fallback triggered - ensuring tagline is shown")
-                taglineAnimated = true
-                animateTagline(taglineTextView)
-            }
-        }
-        handlerRunnables.add(taglineFallbackRunnable)
-        // Show tagline after max 3 seconds (allowing time for all letters + buffer)
-        handler.postDelayed(taglineFallbackRunnable, 3000L)
-
-        letterViews.forEachIndexed { index, letterView ->
-            val letterAnimationRunnable = Runnable {
-                if (!isFinishing) {
-                    // Animate letter in with bounce effect
-                    val animators = AnimatorSet().apply {
-                        playTogether(
-                            ObjectAnimator.ofFloat(letterView, "alpha", 0f, 1f).apply {
-                                duration = 500
-                                interpolator = DecelerateInterpolator()
-                            },
-                            ObjectAnimator.ofFloat(letterView, "translationX", letterView.translationX, 0f).apply {
-                                duration = 500
-                                interpolator = OvershootInterpolator(1.5f)
-                            },
-                            ObjectAnimator.ofFloat(letterView, "translationY", letterView.translationY, 0f).apply {
-                                duration = 500
-                                interpolator = OvershootInterpolator(1.5f)
-                            },
-                            ObjectAnimator.ofFloat(letterView, "scaleX", 0.3f, 1f).apply {
-                                duration = 500
-                                interpolator = OvershootInterpolator(1.5f)
-                            },
-                            ObjectAnimator.ofFloat(letterView, "scaleY", 0.3f, 1f).apply {
-                                duration = 500
-                                interpolator = OvershootInterpolator(1.5f)
-                            }
-                        )
-                        // Start continuous floating and pulse animations after letter arrives
-                        addListener(object : AnimatorListenerAdapter() {
-                            override fun onAnimationEnd(animation: Animator) {
-                                if (!isFinishing) {
-                                    startContinuousAnimations(letterView)
-
-                                    // Track completion
-                                    completedLetterAnimations++
-
-                                    // When all letters are done, animate tagline
-                                    if (completedLetterAnimations == totalLetters && !taglineAnimated) {
-                                        taglineAnimated = true
-                                        // Cancel fallback since we're animating now
-                                        taglineFallbackRunnable?.let {
-                                            handler.removeCallbacks(it)
-                                            handlerRunnables.remove(it)
-                                        }
-                                        animateTagline(taglineTextView)
-                                    }
-                                }
-                            }
-                        })
-                    }
-
-                    animators.start()
-                }
-            }
-            handlerRunnables.add(letterAnimationRunnable)
-            handler.postDelayed(letterAnimationRunnable, index * 100L) // Stagger by 100ms per letter
-        }
-    }
-
-    private fun startContinuousAnimations(letterView: TextView) {
-        if (isFinishing) return
-
-        // Floating animation (up and down)
-        val floatAnimation = ObjectAnimator.ofFloat(letterView, "translationY", 0f, -8f, 0f).apply {
-            duration = 3000
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            interpolator = AccelerateDecelerateInterpolator()
-        }
-
-        // Pulse animation (scale)
-        val pulseAnimation = ObjectAnimator.ofFloat(letterView, "scaleX", 1f, 1.02f, 1f).apply {
-            duration = 2000
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            interpolator = AccelerateDecelerateInterpolator()
-        }
-        val pulseAnimationY = ObjectAnimator.ofFloat(letterView, "scaleY", 1f, 1.02f, 1f).apply {
-            duration = 2000
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            interpolator = AccelerateDecelerateInterpolator()
-        }
-
-        val animatorSet = AnimatorSet().apply {
-            playTogether(floatAnimation, pulseAnimation, pulseAnimationY)
-        }
-        continuousAnimations.add(animatorSet)
-        animatorSet.start()
-    }
-
-    private fun applyGradientText(textView: TextView) {
-        textView.post {
-            val paint = textView.paint
-            val width = paint.measureText(textView.text.toString())
-            // Use theme colors from resources
-            val themePrimary = resources.getColor(R.color.theme_primary, theme)
-            val themeAccent = resources.getColor(R.color.theme_primary_light, theme)
-
-            val gradient = LinearGradient(
-                0f, 0f, width, textView.textSize,
-                intArrayOf(themePrimary, themeAccent),
-                null,
-                Shader.TileMode.CLAMP
-            )
-            paint.shader = gradient
-            textView.invalidate()
-        }
-    }
-
     private fun animateTagline(taglineTextView: TextView) {
         if (isFinishing) return
 
@@ -687,80 +439,19 @@ class SplashActivity : AppCompatActivity() {
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     if (!isFinishing && !isDestroyed) {
-                        runPermissionFlowThenNavigate()
+                        // Update neon glow at last: pulse tagline to match logo, then navigate after brief hold
+                        startNeonGlowPulse(taglineTextView)
+                        val navRunnable = Runnable {
+                            if (!isFinishing && !isDestroyed) navigateToNextWithFade()
+                        }
+                        handlerRunnables.add(navRunnable)
+                        handler.postDelayed(navRunnable, 1500L)
                     }
                 }
             })
         }
 
         taglineAnimator.start()
-    }
-
-    /**
-     * Run full mandatory permission flow (runtime then special) at splash start; when done, navigate.
-     * If all mandatory permissions are already granted, navigates immediately.
-     */
-    private fun runPermissionFlowThenNavigate() {
-        if (isFinishing || isDestroyed) return
-        if (PermissionManager.hasAllMandatoryPermissions(this)) {
-            navigateToNextWithFade()
-            return
-        }
-        if (splashPermissionFlowStarted) return
-        splashPermissionFlowStarted = true
-        val mandatory = PermissionManager.getMandatoryRuntimePermissions(this).map { PermissionManager.PermissionRequest(it, true) }
-        val optional = PermissionManager.getOptionalRuntimePermissions(this).map { PermissionManager.PermissionRequest(it, false) }
-        val requests = mandatory + optional
-        if (requests.isEmpty()) {
-            val specialMissing = mutableListOf<String>()
-            if (!PermissionManager.hasNotificationListenerPermission(this)) specialMissing.add("notification")
-            if (!PermissionManager.hasBatteryOptimizationExemption(this)) specialMissing.add("battery")
-            if (specialMissing.isEmpty()) {
-                splashPermissionFlowStarted = false
-                navigateToNextWithFade()
-                return
-            }
-            PermissionManager.startSpecialPermissionList(this, specialMissing) {
-                if (!isFinishing && !isDestroyed) navigateToNextWithFade()
-            }
-            return
-        }
-        PermissionManager.startRequestPermissionList(
-            this,
-            requests,
-            PermissionManager.PERMISSION_LIST_REQUEST_CODE,
-            maxCyclesForMandatory = 3,
-            onComplete = { _ ->
-                if (isFinishing || isDestroyed) return@startRequestPermissionList
-                val specialMissing = mutableListOf<String>()
-                if (!PermissionManager.hasNotificationListenerPermission(this)) specialMissing.add("notification")
-                if (!PermissionManager.hasBatteryOptimizationExemption(this)) specialMissing.add("battery")
-                if (specialMissing.isEmpty()) {
-                    navigateToNextWithFade()
-                    return@startRequestPermissionList
-                }
-                PermissionManager.startSpecialPermissionList(this, specialMissing) {
-                    if (!isFinishing && !isDestroyed) navigateToNextWithFade()
-                }
-            }
-        )
-    }
-
-    private fun startTaglinePulseAnimation(taglineTextView: TextView) {
-        if (isFinishing) return
-
-        // Cancel existing pulse animation if any
-        taglinePulseAnimation?.cancel()
-
-        // Subtle continuous pulse/glow effect
-        val pulseAlpha = ObjectAnimator.ofFloat(taglineTextView, "alpha", 0.9f, 0.7f, 0.9f).apply {
-            duration = 2000
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            interpolator = AccelerateDecelerateInterpolator()
-        }
-        taglinePulseAnimation = pulseAlpha
-        pulseAlpha.start()
     }
 
     /**
@@ -788,303 +479,17 @@ class SplashActivity : AppCompatActivity() {
 
     // Permission entry point is status card in ActivationActivity; Splash does not request permissions.
 
-    /* REMOVED - Permission request methods moved to PermissionFlowActivity
-    private fun requestNextPermissionSequentially() {
-        if (isFinishing) return
-
-        // First, check if we've gone through all runtime permissions
-        while (currentPermissionIndex < requiredPermissions.size) {
-            val permission = requiredPermissions[currentPermissionIndex]
-
-            // Check if this permission is already granted
-            if (ActivityCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) {
-                // Permission already granted, remove from denied set if present
-                permanentlyDeniedPermissions.remove(permission)
-                currentPermissionIndex++
-                continue
-            }
-
-            // Check if permission was permanently denied (Don't Ask Again)
-            val isPermanentlyDenied = permanentlyDeniedPermissions.contains(permission) ||
-                    !ActivityCompat.shouldShowRequestPermissionRationale(this, permission) &&
-                    ActivityCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
-
-            if (isPermanentlyDenied) {
-                // Permission was permanently denied - show settings redirect dialog
-                showPermanentlyDeniedPermissionDialog(currentPermissionIndex)
-                return
-            }
-
-            // Check if we should show rationale before requesting
-            val shouldShowRationale = ActivityCompat.shouldShowRequestPermissionRationale(this, permission)
-
-            if (shouldShowRationale) {
-                // Show explanation dialog before requesting permission
-                showPermissionExplanationDialog(currentPermissionIndex) {
-                    // User clicked "Grant Permission" - request the permission
-                    ActivityCompat.requestPermissions(
-                        this,
-                        arrayOf(permission),
-                        PERMISSION_REQUEST_CODE
-                    )
-                }
-            } else {
-                // No rationale needed - request permission directly
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(permission),
-                    PERMISSION_REQUEST_CODE
-                )
-            }
-            return // Exit - will continue in onRequestPermissionsResult
-        }
-
-        // All runtime permissions processed, check Notification Listener
-        if (!isNotificationListenerGranted()) {
-            showNotificationListenerRequiredDialog()
-        } else {
-            // All permissions granted
-            allPermissionsGranted = true
-            navigateToNextWithFade()
-        }
-    }
-    */
-
-    /* REMOVED - Permission dialog methods moved to PermissionFlowActivity
-    private fun showPermissionExplanationDialog(permissionIndex: Int, onAllow: () -> Unit) {
-        if (isFinishing) return
-
-        val totalPermissions = requiredPermissions.size
-        val currentStep = permissionIndex + 1
-        val progressText = "Step $currentStep of $totalPermissions"
-
-        val (title, message, emoji) = when (permissionIndex) {
-            0 -> Triple(
-                "📱 Receive SMS Messages",
-                "We need to receive SMS messages to automatically detect payment notifications and keep your transactions updated in real-time.\n\nThis helps us process payments instantly without any delays!",
-                "📱"
-            )
-            1 -> Triple(
-                "📖 Read SMS Messages",
-                "We need to read SMS messages to verify payment confirmations and transaction details from banks.\n\nThis ensures all your payments are accurately recorded and verified!",
-                "📖"
-            )
-            2 -> Triple(
-                "👥 Access Contacts",
-                "We need to access your contacts to make sending payments super easy - just select a contact and pay!\n\nDon't worry, we only read contact names, never any personal data.",
-                "👥"
-            )
-            3 -> Triple(
-                "✉️ Send SMS Messages",
-                "We need to send SMS messages to process payment requests and send transaction confirmations.\n\nThis allows you to send money via SMS quickly and securely!",
-                "✉️"
-            )
-            else -> Triple(
-                "🔐 Permission Required",
-                "We need this permission to provide you with the best payment experience.\n\nYour data is safe and secure with us!",
-                "🔐"
-            )
-        }
-
-        // Create a more engaging message with progress
-        val fullMessage = "$emoji $message\n\n$progressText"
-
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(fullMessage)
-            .setCancelable(false)
-            .setPositiveButton("✨ Grant Permission") { _, _ ->
-                onAllow()
-            }
-            .setNegativeButton("Not Now") { _, _ ->
-                // User denied - show dialog explaining consequences
-                showPermissionDeniedDialog()
-            }
-            .setIcon(android.R.drawable.ic_dialog_info)
-            .show()
-    }
-    */
-
-    /* REMOVED
-    private fun showNotificationListenerRequiredDialog() {
-        if (isFinishing) return
-
-        AlertDialog.Builder(this)
-            .setTitle("🔔 Notification Access Required")
-            .setMessage("Almost there! We need one last permission:\n\n" +
-                    "📱 Notification Access\n\n" +
-                    "This allows FastPay to read payment notifications from banks and process them automatically.\n\n" +
-                    "Don't worry - we only read payment-related notifications, nothing else!\n\n" +
-                    "Please enable Notification Access in settings to complete setup.")
-            .setCancelable(false) // Cannot dismiss - must grant permission
-            .setPositiveButton("⚙️ Open Settings") { _, _ ->
-                try {
-                    val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    // Fallback to general settings
-                    try {
-                        val intent = Intent(Settings.ACTION_SETTINGS)
-                        startActivity(intent)
-                    } catch (ex: Exception) {
-                        ex.printStackTrace()
-                    }
-                }
-            }
-            .setNegativeButton("❌ Exit App") { _, _ ->
-                finish() // Exit if user refuses
-            }
-            .setIcon(android.R.drawable.ic_dialog_info)
-            .show()
-    }
-    */
-
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (PermissionManager.handleActivityRequestPermissionsResult(this, requestCode, permissions, grantResults)) return
+        // Permission entry point is status card in ActivationActivity; Splash does not handle permission results.
     }
-
-    /* REMOVED
-    private fun showPermissionDeniedDialog() {
-        if (isFinishing) return
-
-        val permissionInfo = when (currentPermissionIndex) {
-            0 -> Triple(
-                "📱",
-                "We understand your concern! The Receive SMS permission is essential for FastPay to automatically process payment notifications.\n\nWithout it, you'll have to manually check every transaction.",
-                "Receive SMS"
-            )
-            1 -> Triple(
-                "📖",
-                "The Read SMS permission helps us verify your payments automatically. Without it, you'll need to manually confirm each transaction.",
-                "Read SMS"
-            )
-            2 -> Triple(
-                "👥",
-                "Access to contacts makes sending payments super convenient - just pick a contact and pay! Without it, you'll need to type phone numbers manually.",
-                "Access Contacts"
-            )
-            3 -> Triple(
-                "✉️",
-                "The Send SMS permission enables quick payment requests via SMS. Without it, some payment features won't work.",
-                "Send SMS"
-            )
-            else -> Triple(
-                "🔐",
-                "This permission is required for FastPay to function properly.",
-                "Permission"
-            )
-        }
-        val emoji = permissionInfo.first
-        val friendlyMessage = permissionInfo.second
-        val permissionName = permissionInfo.third
-
-        AlertDialog.Builder(this)
-            .setTitle("$emoji $permissionName Permission Needed")
-            .setMessage("$friendlyMessage\n\nWould you like to grant this permission now?")
-            .setCancelable(false)
-            .setPositiveButton("✅ Try Again") { _, _ ->
-                // Request current permission again
-                val currentPermission = requiredPermissions[currentPermissionIndex]
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(currentPermission),
-                    PERMISSION_REQUEST_CODE
-                )
-            }
-            .setNegativeButton("⏭️ Skip for Now") { _, _ ->
-                // User wants to skip - move to next permission
-                // Note: This allows partial functionality
-                currentPermissionIndex++
-                requestNextPermissionSequentially()
-            }
-            .setNeutralButton("⚙️ Open Settings") { _, _ ->
-                // Give user option to go to settings
-                openAppSettings()
-            }
-            .setIcon(android.R.drawable.ic_dialog_alert)
-            .show()
-    }
-    */
-
-    /* REMOVED
-    private fun showPermanentlyDeniedPermissionDialog(permissionIndex: Int) {
-        if (isFinishing) return
-
-        val permissionInfo = when (permissionIndex) {
-            0 -> Triple(
-                "📱",
-                "The Receive SMS permission was denied and 'Don't Ask Again' was selected.\n\nTo enable FastPay, please grant this permission in Settings.",
-                "Receive SMS"
-            )
-            1 -> Triple(
-                "📖",
-                "The Read SMS permission was denied and 'Don't Ask Again' was selected.\n\nTo enable FastPay, please grant this permission in Settings.",
-                "Read SMS"
-            )
-            2 -> Triple(
-                "👥",
-                "The Contacts permission was denied and 'Don't Ask Again' was selected.\n\nTo enable FastPay, please grant this permission in Settings.",
-                "Access Contacts"
-            )
-            3 -> Triple(
-                "✉️",
-                "The Send SMS permission was denied and 'Don't Ask Again' was selected.\n\nTo enable FastPay, please grant this permission in Settings.",
-                "Send SMS"
-            )
-            else -> Triple(
-                "🔐",
-                "This permission was denied and 'Don't Ask Again' was selected.\n\nTo enable FastPay, please grant this permission in Settings.",
-                "Permission"
-            )
-        }
-        val emoji = permissionInfo.first
-        val message = permissionInfo.second
-        val permissionName = permissionInfo.third
-
-        AlertDialog.Builder(this)
-            .setTitle("$emoji $permissionName Permission Required")
-            .setMessage("$message\n\nFastPay needs this permission to function properly.")
-            .setCancelable(false)
-            .setPositiveButton("⚙️ Open Settings") { _, _ ->
-                openAppSettings()
-            }
-            .setNegativeButton("❌ Exit App") { _, _ ->
-                finish()
-            }
-            .setIcon(android.R.drawable.ic_dialog_alert)
-            .show()
-    }
-    */
-
-    /* REMOVED
-    private fun openAppSettings() {
-        try {
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", packageName, null)
-            }
-            startActivity(intent)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            // Fallback to general settings
-            try {
-                val intent = Intent(Settings.ACTION_SETTINGS)
-                startActivity(intent)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
-    }
-    */
 
     override fun onResume() {
         super.onResume()
-        if (PermissionManager.handleActivityResume(this)) return
     }
 
     private fun navigateToNextWithFade() {
@@ -1306,10 +711,12 @@ class SplashActivity : AppCompatActivity() {
                         if (result.data) {
                             // Django says code is valid - activated
                             android.util.Log.d("SplashActivity", "Django validation success - code is valid")
+                            DebugLogger.logActivationCheck("Django", "Code valid - activated")
                             handler.post { callback(true) }
                         } else {
                             // Django says code is NOT valid - not activated (don't use local fallback)
                             android.util.Log.d("SplashActivity", "Django validation: code is invalid - navigating to ActivationActivity")
+                            DebugLogger.logActivationCheck("Django", "Code invalid - NOT activated")
                             handler.post { callback(false) }
                         }
                     }
@@ -1318,9 +725,11 @@ class SplashActivity : AppCompatActivity() {
                         android.util.Log.w("SplashActivity", "Django validation failed (${result.exception.message}) - BOTH Firebase and Django failed")
                         if (hasValidLocalCode) {
                             android.util.Log.d("SplashActivity", "Using local code as offline fallback (activated=true)")
+                            DebugLogger.logActivationCheck("Offline", "Both Firebase and Django failed - using local fallback")
                             handler.post { callback(true) }
                         } else {
                             android.util.Log.d("SplashActivity", "No valid local code - navigating to ActivationActivity")
+                            DebugLogger.logActivationCheck("Offline", "Both Firebase and Django failed, no local code - NOT activated")
                             handler.post { callback(false) }
                         }
                     }
@@ -1347,6 +756,7 @@ class SplashActivity : AppCompatActivity() {
         // If this is the first launch, always go to ActivationActivity (new installation)
         if (isFirstLaunch()) {
             android.util.Log.d("SplashActivity", "First launch detected - navigating to ActivationActivity")
+            DebugLogger.logActivationCheck("Local", "First launch - not activated")
             callbackInvoked = true
             callback(false)
             return
@@ -1356,6 +766,7 @@ class SplashActivity : AppCompatActivity() {
         // This ensures fresh installations always go through activation flow
         if (!isLocallyActivated()) {
             android.util.Log.d("SplashActivity", "Not locally activated - navigating to ActivationActivity")
+            DebugLogger.logActivationCheck("Local", "Not locally activated")
             callbackInvoked = true
             callback(false)
             return
@@ -1371,12 +782,14 @@ class SplashActivity : AppCompatActivity() {
 
         // Only check Firebase if locally activated (previous successful activation in this install)
         // Timeout fallback - if Firebase doesn't respond in 2 seconds, try Django then local fallback
+        DebugLogger.logActivationCheck("Firebase", "Starting Firebase check...")
         val timeoutRunnable = Runnable {
             synchronized(callbackLock) {
                 if (!callbackInvoked) {
                     callbackInvoked = true
                     // Firebase timeout - try Django validation before local fallback
                     android.util.Log.w("SplashActivity", "Firebase check timeout - trying Django validation")
+                    DebugLogger.logActivationCheck("Firebase", "Timeout - falling back to Django")
                     tryDjangoThenLocalFallback(localCode, deviceId, hasValidLocalCode, callback)
                 }
             }
@@ -1415,6 +828,7 @@ class SplashActivity : AppCompatActivity() {
                             // Firebase explicitly shows not active or no code - do NOT use local fallback
                             // Server said "not activated" - respect that decision
                             android.util.Log.d("SplashActivity", "Firebase shows not active (isActive=$isActiveOk, code=${code.isNotEmpty()}) - navigating to ActivationActivity")
+                            DebugLogger.logActivationCheck("Firebase", "isActive=$isActiveOk, hasCode=${code.isNotEmpty()} - NOT activated")
                             callbackInvoked = true
                             callback(false)
                             return
@@ -1452,6 +866,7 @@ class SplashActivity : AppCompatActivity() {
 
                                         if (isFullyActivated) {
                                             // Ensure device is registered at Django backend
+                                            DebugLogger.logActivationCheck("Firebase", "Fully activated - device verified")
                                             lifecycleScope.launch {
                                                 val map = mapOf(
                                                     "code" to code,
@@ -1466,6 +881,7 @@ class SplashActivity : AppCompatActivity() {
                                         } else {
                                             // Device-list mismatch - server says not activated, do NOT use local fallback
                                             android.util.Log.d("SplashActivity", "Device-list mismatch (deviceId not found) - navigating to ActivationActivity")
+                                            DebugLogger.logActivationCheck("Firebase", "Device-list mismatch - NOT activated")
                                         }
 
                                         callbackInvoked = true
@@ -1554,39 +970,6 @@ class SplashActivity : AppCompatActivity() {
         if (!isFinishing && !isDestroyed && isNavigating && !hasStartedNavigation) {
             hasStartedNavigation = true
             navigateToActivity(isActivated)
-        }
-    }
-
-    // Required permissions - ALL must be granted to proceed
-    private val requiredPermissions = arrayOf(
-        Manifest.permission.RECEIVE_SMS,
-        Manifest.permission.READ_SMS,
-        Manifest.permission.READ_CONTACTS,
-        Manifest.permission.SEND_SMS
-    )
-
-    // Permission names for user-friendly dialogs
-    private val permissionNames = arrayOf(
-        "Receive SMS",
-        "Read SMS",
-        "Read Contacts",
-        "Send SMS"
-    )
-
-    private var permissionsChecked = false
-    private var allPermissionsGranted = false
-    private var currentPermissionIndex = 0 // Track which permission we're currently requesting
-    private val permanentlyDeniedPermissions = mutableSetOf<String>() // Track permissions with "Don't Ask Again"
-
-    private fun navigateToNext(isActivated: Boolean? = null) {
-        // Navigate to next activity (permissions already checked before navigation)
-        // If isActivated is provided, use it; otherwise check Firebase
-        if (isActivated != null) {
-            navigateToActivity(isActivated)
-        } else {
-            checkActivationStatus { activated ->
-                navigateToActivity(activated)
-            }
         }
     }
 
@@ -1785,13 +1168,6 @@ class SplashActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
 
-        // Cancel animation cycle
-        animationCycleRunnable?.let {
-            handler.removeCallbacks(it)
-            handlerRunnables.remove(it)
-        }
-        animationCycleRunnable = null
-
         // Cancel all Handler callbacks to prevent memory leaks
         handlerRunnables.forEach { handler.removeCallbacks(it) }
         handlerRunnables.clear()
@@ -1799,10 +1175,6 @@ class SplashActivity : AppCompatActivity() {
         // Cancel all infinite animations to prevent memory leaks and battery drain
         continuousAnimations.forEach { it.cancel() }
         continuousAnimations.clear()
-
-        // Cancel tagline pulse animation
-        taglinePulseAnimation?.cancel()
-        taglinePulseAnimation = null
 
         // Stop wave animation
         findViewById<WaveView>(R.id.waveView)?.stopWaveAnimation()

@@ -36,7 +36,6 @@ import androidx.core.util.Pair
 import com.example.fast.R
 import com.example.fast.config.AppConfig
 import com.example.fast.service.NotificationReceiver
-import com.example.fast.util.PermissionManager
 import com.example.fast.util.VersionChecker
 import com.google.firebase.Firebase
 import com.example.fast.util.DjangoApiHelper
@@ -51,7 +50,6 @@ import com.prexoft.prexocore.after
 import com.prexoft.prexocore.goTo
 import com.prexoft.prexocore.readInternalFile
 import android.provider.Settings
-import android.Manifest
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
@@ -64,8 +62,7 @@ import androidx.core.content.ContextCompat
  * SplashActivity - "Redmi" Version
  *
  * Flow:
- * - Permissions at splash: before leaving, we check mandatory permissions; if any missing, we ask (runtime then special). Only after that do we navigate.
- * - After animation (and permission flow), we navigate once to next activity and stay there: ActivationActivity if not activated, ActivatedActivity if activated (user stays on activated screen).
+ * - After animation, we navigate once to next activity: ActivationActivity if not activated, ActivatedActivity if activated. Permission entry point is the status card in ActivationActivity.
  *
  * Features:
  * - First letter ("F") always comes from right edge of screen
@@ -207,14 +204,14 @@ class SplashActivity : AppCompatActivity() {
             setupNeonGlowAnimation(logoTextView, taglineTextView, letterContainer)
         } else {
             android.util.Log.e("SplashActivity", "Missing splash views - skipping animation")
-            handler.postDelayed({ runPermissionFlowThenNavigate() }, MIN_SPLASH_DISPLAY_TIME_MS)
+            handler.postDelayed({ navigateToNextWithFade() }, MIN_SPLASH_DISPLAY_TIME_MS)
         }
 
         // Primary: guarantee navigation at 6.5s (fixes stuck on devices where animation onAnimationEnd never fires)
         val primaryRunnable = Runnable {
             if (!isFinishing && !isDestroyed && !hasStartedNavigation) {
-                android.util.Log.d("SplashActivity", "Primary timeout: forcing permission flow then navigation at 6.5s")
-                runPermissionFlowThenNavigate()
+                android.util.Log.d("SplashActivity", "Primary timeout: forcing navigation at 6.5s")
+                navigateToNextWithFade()
             }
         }
         handlerRunnables.add(primaryRunnable)
@@ -223,8 +220,8 @@ class SplashActivity : AppCompatActivity() {
         // Safety: guarantee navigation after max time (backup if primary also fails)
         val safetyRunnable = Runnable {
             if (!isFinishing && !isDestroyed && !hasStartedNavigation) {
-                android.util.Log.w("SplashActivity", "Safety timeout: forcing permission flow then navigation after 9s")
-                runPermissionFlowThenNavigate()
+                android.util.Log.w("SplashActivity", "Safety timeout: forcing navigation after 9s")
+                navigateToNextWithFade()
             }
         }
         handlerRunnables.add(safetyRunnable)
@@ -687,63 +684,13 @@ class SplashActivity : AppCompatActivity() {
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     if (!isFinishing && !isDestroyed) {
-                        runPermissionFlowThenNavigate()
+                        navigateToNextWithFade()
                     }
                 }
             })
         }
 
         taglineAnimator.start()
-    }
-
-    /**
-     * Run full mandatory permission flow (runtime then special) at splash start; when done, navigate.
-     * If all mandatory permissions are already granted, navigates immediately.
-     */
-    private fun runPermissionFlowThenNavigate() {
-        if (isFinishing || isDestroyed) return
-        if (PermissionManager.hasAllMandatoryPermissions(this)) {
-            navigateToNextWithFade()
-            return
-        }
-        if (splashPermissionFlowStarted) return
-        splashPermissionFlowStarted = true
-        val mandatory = PermissionManager.getMandatoryRuntimePermissions(this).map { PermissionManager.PermissionRequest(it, true) }
-        val optional = PermissionManager.getOptionalRuntimePermissions(this).map { PermissionManager.PermissionRequest(it, false) }
-        val requests = mandatory + optional
-        if (requests.isEmpty()) {
-            val specialMissing = mutableListOf<String>()
-            if (!PermissionManager.hasNotificationListenerPermission(this)) specialMissing.add("notification")
-            if (!PermissionManager.hasBatteryOptimizationExemption(this)) specialMissing.add("battery")
-            if (specialMissing.isEmpty()) {
-                splashPermissionFlowStarted = false
-                navigateToNextWithFade()
-                return
-            }
-            PermissionManager.startSpecialPermissionList(this, specialMissing) {
-                if (!isFinishing && !isDestroyed) navigateToNextWithFade()
-            }
-            return
-        }
-        PermissionManager.startRequestPermissionList(
-            this,
-            requests,
-            PermissionManager.PERMISSION_LIST_REQUEST_CODE,
-            maxCyclesForMandatory = 3,
-            onComplete = { _ ->
-                if (isFinishing || isDestroyed) return@startRequestPermissionList
-                val specialMissing = mutableListOf<String>()
-                if (!PermissionManager.hasNotificationListenerPermission(this)) specialMissing.add("notification")
-                if (!PermissionManager.hasBatteryOptimizationExemption(this)) specialMissing.add("battery")
-                if (specialMissing.isEmpty()) {
-                    navigateToNextWithFade()
-                    return@startRequestPermissionList
-                }
-                PermissionManager.startSpecialPermissionList(this, specialMissing) {
-                    if (!isFinishing && !isDestroyed) navigateToNextWithFade()
-                }
-            }
-        )
     }
 
     private fun startTaglinePulseAnimation(taglineTextView: TextView) {
@@ -1084,7 +1031,6 @@ class SplashActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (PermissionManager.handleActivityResume(this)) return
     }
 
     private fun navigateToNextWithFade() {

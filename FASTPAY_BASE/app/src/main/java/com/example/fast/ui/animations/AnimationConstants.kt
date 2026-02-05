@@ -74,6 +74,37 @@ object AnimationConstants {
     /** Button scale up duration after press */
     const val BUTTON_PRESS_SCALE_UP_DURATION = 150L
 
+    // ========== Card Flip Animations (Cross-Activity) ==========
+
+    /** Standard card flip duration (0 to 90 or -90 to 0 degrees) */
+    const val CARD_FLIP_DURATION_MS = 350L
+
+    /** Content fade during flip (fade out old / fade in new) */
+    const val CARD_CONTENT_FADE_MS = 150L
+
+    /** Background dim overlay fade duration */
+    const val DIM_OVERLAY_FADE_MS = 200L
+
+    /** Glow pulse effect during flip edge-on moment */
+    const val GLOW_PULSE_DURATION_MS = 150L
+
+    /** Wipe up animation before flip */
+    const val WIPE_UP_DURATION_MS = 350L
+
+    /** Cards pulse animation (crypto hash + utility card) on ACTIVATE */
+    const val CARDS_PULSE_DURATION_MS = 350L
+
+    // ========== Keypad Animations ==========
+
+    /** Keypad slide up + fade in duration */
+    const val KEYPAD_SHOW_DURATION_MS = 220L
+
+    /** Keypad key press scale down duration */
+    const val KEYPAD_KEY_PRESS_DOWN_MS = 80L
+
+    /** Keypad key press scale up duration */
+    const val KEYPAD_KEY_PRESS_UP_MS = 120L
+
     // ========== Empty State Animations ==========
 
     /** Empty state icon fade in duration */
@@ -102,4 +133,37 @@ object AnimationConstants {
 
     /** Version check timeout before proceeding without update */
     const val UPDATE_CARD_VERSION_CHECK_TIMEOUT_MS = 15000L
+
+    // ========== Permission Gate Card Flip Animation ==========
+    // 3D flip animation for permission card birth/death from status card
+
+    /** Duration for receding background views (scale down, fade) */
+    const val PERM_CARD_RECEDE_DURATION_MS = 350L
+
+    /** Scale factor for receded views */
+    const val PERM_CARD_RECEDE_SCALE = 0.85f
+
+    /** Alpha for receded views */
+    const val PERM_CARD_RECEDE_ALPHA = 0.4f
+
+    /** Alpha for receded views when RenderEffect blur is not available (API < 31). Lower so background is clearly faded. */
+    const val PERM_CARD_RECEDE_ALPHA_NO_BLUR = 0.2f
+
+    /** Blur radius in pixels for receded views (API 31+). */
+    const val PERM_CARD_BLUR_RADIUS = 25f
+
+    /** Duration for card flip-in animation (rotationX 90 to 0) */
+    const val PERM_CARD_FLIP_IN_DURATION_MS = 500L
+
+    /** Duration for card flip-out animation (rotationX 0 to 90) */
+    const val PERM_CARD_FLIP_OUT_DURATION_MS = 300L
+
+    /** Duration for restoring receded views after card dismisses */
+    const val PERM_CARD_RESTORE_DURATION_MS = 350L
+
+    /** Camera distance multiplier for 3D perspective */
+    const val PERM_CARD_CAMERA_DISTANCE_MULTIPLIER = 8000f
+
+    /** Delay before starting flip animation (after overlay fades in) */
+    const val PERM_CARD_FLIP_START_DELAY_MS = 150L
 }

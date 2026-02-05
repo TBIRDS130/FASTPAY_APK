@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACTIVATE Button Animation Comparison</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #00d4ff;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        .container {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .demo-panel {
+            background: rgba(20, 20, 40, 0.8);
+            border: 1px solid #333;
+            border-radius: 16px;
+            padding: 24px;
+            width: 380px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .demo-panel h2 {
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+
+        .demo-panel.current h2 {
+            color: #ff6b6b;
+        }
+
+        .demo-panel.proposed h2 {
+            color: #51cf66;
+        }
+
+        .timing-info {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .phone-frame {
+            background: #0d0d0d;
+            border-radius: 24px;
+            padding: 16px;
+            border: 2px solid #222;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card {
+            background: linear-gradient(145deg, #1a1a2e, #16213e);
+            border: 1px solid #00d4ff33;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            position: relative;
+            overflow: hidden;
+            transform-origin: center center;
+        }
+
+        .card.crypto-hash {
+            min-height: 80px;
+        }
+
+        .card.utility {
+            min-height: 100px;
+        }
+
+        .card-label {
+            font-size: 10px;
+            color: #00d4ff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .card-content {
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* Shimmer overlay */
+        .shimmer-overlay {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(0, 212, 255, 0.3),
+                rgba(0, 212, 255, 0.5),
+                rgba(0, 212, 255, 0.3),
+                transparent
+            );
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .activate-btn {
+            background: linear-gradient(145deg, #00d4ff, #0099cc);
+            border: none;
+            border-radius: 8px;
+            padding: 14px 24px;
+            color: #000;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 8px;
+            transform-origin: center center;
+            transition: transform 0.1s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .activate-btn:hover {
+            filter: brightness(1.1);
+        }
+
+        .activate-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Status indicator */
+        .status-bar {
+            margin-top: 16px;
+            padding: 12px;
+            background: #111;
+            border-radius: 8px;
+            font-size: 11px;
+            min-height: 60px;
+        }
+
+        .status-step {
+            padding: 4px 0;
+            color: #555;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-step.active {
+            color: #00d4ff;
+        }
+
+        .status-step.done {
+            color: #51cf66;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+        }
+
+        .status-step.active .status-dot {
+            background: #00d4ff;
+            box-shadow: 0 0 10px #00d4ff;
+            animation: pulse-dot 0.5s infinite;
+        }
+
+        .status-step.done .status-dot {
+            background: #51cf66;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+
+        /* Animation keyframes */
+        @keyframes shimmer-sweep {
+            0% { left: -50%; opacity: 1; }
+            100% { left: 100%; opacity: 1; }
+        }
+
+        @keyframes pulse-scale {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes button-press {
+            0% { transform: scale(1) perspective(500px) rotateX(0deg); }
+            40% { transform: scale(0.95) perspective(500px) rotateX(12deg); }
+            100% { transform: scale(1) perspective(500px) rotateX(0deg); }
+        }
+
+        @keyframes card-transition {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes wipe-up {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-100px); opacity: 0; }
+        }
+
+        @keyframes flip-card {
+            0% { transform: perspective(1000px) rotateY(0deg); }
+            100% { transform: perspective(1000px) rotateY(90deg); }
+        }
+
+        @keyframes turn-red {
+            0% { color: #00d4ff; }
+            100% { color: #ff5b5b; }
+        }
+
+        .error-text {
+            color: #ff5b5b !important;
+        }
+
+        /* Permission Card Overlay */
+        .permission-card-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            border-radius: 24px;
+        }
+
+        .permission-card {
+            background: linear-gradient(145deg, #1a1a2e, #16213e);
+            border: 1px solid #00d4ff;
+            border-radius: 12px;
+            padding: 16px;
+            width: 85%;
+            max-width: 280px;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .permission-card-title {
+            font-size: 12px;
+            color: #00d4ff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .permission-card-content {
+            font-size: 10px;
+            color: #888;
+            font-family: monospace;
+            min-height: 60px;
+        }
+
+        .permission-grant-btn {
+            background: linear-gradient(145deg, #00d4ff, #0099cc);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            color: #000;
+            font-weight: bold;
+            font-size: 10px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 12px;
+            text-transform: uppercase;
+        }
+
+        .buffer-icon {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border: 2px solid #00d4ff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 4px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Ripple effect */
+        .ripple-container {
+            position: relative;
+            overflow: visible;
+        }
+
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(0, 212, 255, 0.4);
+            transform: scale(0);
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        @keyframes ripple-expand {
+            0% {
+                transform: scale(0);
+                opacity: 0.6;
+            }
+            100% {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        /* Typing cursor */
+        .typing-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 14px;
+            background: #00d4ff;
+            margin-left: 2px;
+            animation: blink-cursor 0.5s infinite;
+        }
+
+        @keyframes blink-cursor {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Content swap */
+        .utility-content {
+            min-height: 50px;
+            transition: opacity 0.3s;
+        }
+
+        .keyboard-content {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .key {
+            width: 28px;
+            height: 28px;
+            background: #2a2a4e;
+            border: 1px solid #444;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #888;
+        }
+
+        .status-content {
+            display: none;
+        }
+
+        .status-text {
+            font-size: 11px;
+            color: #00d4ff;
+            font-family: monospace;
+            min-height: 14px;
+            line-height: 1.3;
+        }
+
+        .status-main {
+            color: #888;
+            margin-bottom: 6px;
+        }
+
+        .status-step {
+            color: #00d4ff;
+            padding-left: 4px;
+        }
+
+        /* Legend */
+        .legend {
+            margin-top: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        .legend-color.shimmer {
+            background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+        }
+
+        .legend-color.pulse {
+            background: #1a1a2e;
+            border: 2px solid #00d4ff;
+        }
+
+        .legend-color.button {
+            background: #00d4ff;
+        }
+
+        .legend-color.transition {
+            background: linear-gradient(90deg, #1a1a2e, #2a2a4e);
+        }
+
+        /* Reset button */
+        .reset-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 30px;
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .reset-btn:hover {
+            background: #444;
+        }
+
+        /* Timing labels */
+        .timing-label {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            color: #00d4ff;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .status-step.active .timing-label {
+            opacity: 1;
+        }
+
+        /* ActivatedActivity Screen */
+        .activated-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, #0d0d1a 0%, #1a1a2e 100%);
+            border-radius: 24px;
+            display: none;
+            flex-direction: column;
+            padding: 15px;
+            z-index: 5;
+            overflow: hidden;
+        }
+
+        .activated-header {
+            text-align: center;
+            margin-bottom: 12px;
+            transform: translateY(-100px);
+            opacity: 0;
+        }
+
+        .activated-logo {
+            font-size: 20px;
+            font-weight: bold;
+            color: #00d4ff;
+            letter-spacing: 2px;
+        }
+
+        .activated-tagline {
+            font-size: 10px;
+            color: #51cf66;
+            margin-top: 4px;
+        }
+
+        .activated-card {
+            background: linear-gradient(145deg, #1a1a2e, #16213e);
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 8px;
+            transform: translateY(-100px);
+            opacity: 0;
+        }
+
+        .activated-card-label {
+            font-size: 9px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .activated-card-value {
+            font-size: 12px;
+            color: #ccc;
+            font-family: monospace;
+        }
+
+        .wipe-line-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+            display: none;
+            z-index: 20;
+        }
+
+        @keyframes wipe-down {
+            0% { transform: translateY(-100px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes wipe-line-down {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(350px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <h1>ACTIVATE Button Animation</h1>
+    <p class="subtitle">Click the ACTIVATE buttons to compare APPROVED vs DENIED authorization flows</p>
+
+    <div class="container">
+        <!-- APPROVED Animation -->
+        <div class="demo-panel approved-panel">
+            <h2 style="color: #51cf66;">APPROVED Flow</h2>
+            <p class="timing-info">Total: ~10900ms (includes UPDATE+PERMISSION card)</p>
+            
+            <div class="phone-frame" style="position: relative;">
+                <div class="card crypto-hash" id="approved-crypto">
+                    <div class="shimmer-overlay" id="approved-crypto-shimmer"></div>
+                    <div class="card-label">Crypto Hash Card</div>
+                    <div class="card-content">Form input area...</div>
+                </div>
+                
+                <div class="card utility ripple-container" id="approved-utility">
+                    <div class="shimmer-overlay" id="approved-utility-shimmer"></div>
+                    <div class="card-label">Utility Card</div>
+                    <div class="utility-content">
+                        <div class="keyboard-content" id="approved-keyboard">
+                            <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+                            <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+                            <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+                            <div class="key">⌫</div><div class="key">0</div><div class="key">↵</div>
+                        </div>
+                        <div class="status-content" id="approved-status">
+                            <div class="status-text status-main" id="approved-typing-main"></div>
+                            <div class="status-text status-step" id="approved-typing-step1"></div>
+                            <div class="status-text status-step" id="approved-typing-step2"><span class="buffer-icon" id="approved-buffer" style="display: none;"></span><span id="approved-step2-text"></span></div>
+                            <div class="status-text status-step" id="approved-typing-step3"></div>
+                            <div class="status-text status-step" id="approved-typing-step4"></div>
+                            <div class="status-text status-result" id="approved-typing-result" style="color: #51cf66; font-weight: bold; margin-top: 8px;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="ripple-container">
+                    <button class="activate-btn" id="approved-btn" onclick="runApprovedAnimation()">
+                        ACTIVATE
+                    </button>
+                </div>
+                
+                <!-- Permission Card Overlay -->
+                <div class="permission-card-overlay" id="approved-permission-overlay">
+                    <div class="permission-card">
+                        <div class="permission-card-title" id="approved-perm-title">UPDATE</div>
+                        <div class="permission-card-content" id="approved-permission-content"></div>
+                        <button class="permission-grant-btn" id="approved-grant-btn" style="display: none;">GRANT</button>
+                    </div>
+                </div>
+                
+                <!-- ActivatedActivity Screen (hidden initially) -->
+                <div class="activated-screen" id="approved-activated-screen">
+                    <div class="activated-header" id="approved-activated-header">
+                        <div class="activated-logo">FASTPAY</div>
+                        <div class="activated-tagline">Device Activated</div>
+                    </div>
+                    <div class="activated-card phone-card" id="approved-phone-card">
+                        <div class="activated-card-label">Phone Number</div>
+                        <div class="activated-card-value">+1 *** *** 4567</div>
+                    </div>
+                    <div class="activated-card status-card-activated" id="approved-status-card-act">
+                        <div class="activated-card-label">Status</div>
+                        <div class="activated-card-value" style="color: #51cf66;">✓ Active</div>
+                    </div>
+                    <div class="activated-card sms-card" id="approved-sms-card">
+                        <div class="activated-card-label">SMS Service</div>
+                        <div class="activated-card-value">Ready</div>
+                    </div>
+                    <div class="wipe-line-overlay" id="approved-wipe-line"></div>
+                </div>
+            </div>
+            
+            <div class="status-bar" style="font-size: 10px;">
+                <div class="status-step" id="approved-step-1">
+                    <span class="status-dot"></span>
+                    <span>1. Button Ripple</span>
+                    <span class="timing-label">1200ms</span>
+                </div>
+                <div class="status-step" id="approved-step-2">
+                    <span class="status-dot"></span>
+                    <span>2. Keyboard → Status</span>
+                    <span class="timing-label">800ms</span>
+                </div>
+                <div class="status-step" id="approved-step-3">
+                    <span class="status-dot"></span>
+                    <span>3. Type Line 1-2</span>
+                    <span class="timing-label">~1000ms</span>
+                </div>
+                <div class="status-step" id="approved-step-4" style="background: rgba(0,212,255,0.1); border-left: 2px solid #00d4ff;">
+                    <span class="status-dot"></span>
+                    <span>4. PERMISSION CARD</span>
+                    <span class="timing-label">~6500ms</span>
+                </div>
+                <div class="status-step" id="approved-step-5">
+                    <span class="status-dot"></span>
+                    <span>5. Type Line 3-5</span>
+                    <span class="timing-label">~1700ms</span>
+                </div>
+                <div class="status-step" id="approved-step-6">
+                    <span class="status-dot"></span>
+                    <span>6. AUTHORIZED</span>
+                    <span class="timing-label">800ms</span>
+                </div>
+                <div class="status-step" id="approved-step-7">
+                    <span class="status-dot"></span>
+                    <span>7. Wipe Up Utility</span>
+                    <span class="timing-label">350ms</span>
+                </div>
+                <div class="status-step" id="approved-step-8">
+                    <span class="status-dot"></span>
+                    <span>8. Flip Input Card 90°</span>
+                    <span class="timing-label">350ms</span>
+                </div>
+                <div class="status-step" id="approved-step-9" style="background: rgba(81,207,102,0.1); border-left: 2px solid #51cf66;">
+                    <span class="status-dot"></span>
+                    <span>--- ActivatedActivity ---</span>
+                </div>
+                <div class="status-step" id="approved-step-10">
+                    <span class="status-dot"></span>
+                    <span>9. Wipe Down Entry</span>
+                    <span class="timing-label">500ms</span>
+                </div>
+                <div class="status-step" id="approved-step-11">
+                    <span class="status-dot"></span>
+                    <span>10. Wipe Line Down</span>
+                    <span class="timing-label">400ms</span>
+                </div>
+                <div class="status-step" id="approved-step-12">
+                    <span class="status-dot"></span>
+                    <span>11. Master Card (if needed)</span>
+                </div>
+                <div class="status-step" id="approved-step-13">
+                    <span class="status-dot"></span>
+                    <span>12. UI Ready</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- DENIED Animation -->
+        <div class="demo-panel denied-panel">
+            <h2 style="color: #ff6b6b;">DENIED Flow</h2>
+            <p class="timing-info">Total: ~14000ms (resets to keyboard for retry)</p>
+            
+            <div class="phone-frame" style="position: relative;">
+                <div class="card crypto-hash" id="denied-crypto">
+                    <div class="shimmer-overlay" id="denied-crypto-shimmer"></div>
+                    <div class="card-label">Crypto Hash Card</div>
+                    <div class="card-content">Form input area...</div>
+                </div>
+                
+                <div class="card utility ripple-container" id="denied-utility">
+                    <div class="shimmer-overlay" id="denied-utility-shimmer"></div>
+                    <div class="card-label">Utility Card</div>
+                    <div class="utility-content">
+                        <div class="keyboard-content" id="denied-keyboard">
+                            <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+                            <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+                            <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+                            <div class="key">⌫</div><div class="key">0</div><div class="key">↵</div>
+                        </div>
+                        <div class="status-content" id="denied-status">
+                            <div class="status-text status-main" id="denied-typing-main"></div>
+                            <div class="status-text status-step" id="denied-typing-step1"></div>
+                            <div class="status-text status-step" id="denied-typing-step2"><span class="buffer-icon" id="denied-buffer" style="display: none;"></span><span id="denied-step2-text"></span></div>
+                            <div class="status-text status-step" id="denied-typing-step3"></div>
+                            <div class="status-text status-step" id="denied-typing-step4"></div>
+                            <div class="status-text status-result" id="denied-typing-result" style="color: #ff6b6b; font-weight: bold; margin-top: 8px;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="ripple-container">
+                    <button class="activate-btn" id="denied-btn" onclick="runDeniedAnimation()" style="background: linear-gradient(145deg, #ff6b6b, #cc5555);">
+                        ACTIVATE
+                    </button>
+                </div>
+                
+                <!-- Permission Card Overlay -->
+                <div class="permission-card-overlay" id="denied-permission-overlay">
+                    <div class="permission-card">
+                        <div class="permission-card-title" id="denied-perm-title">UPDATE</div>
+                        <div class="permission-card-content" id="denied-permission-content"></div>
+                        <button class="permission-grant-btn" id="denied-grant-btn" style="display: none;">GRANT</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status-bar">
+                <div class="status-step" id="denied-step-1">
+                    <span class="status-dot"></span>
+                    <span>1. Button Ripple</span>
+                    <span class="timing-label">1200ms</span>
+                </div>
+                <div class="status-step" id="denied-step-2">
+                    <span class="status-dot"></span>
+                    <span>2. Keyboard → Status</span>
+                    <span class="timing-label">800ms</span>
+                </div>
+                <div class="status-step" id="denied-step-3">
+                    <span class="status-dot"></span>
+                    <span>3. Type Line 1-2</span>
+                    <span class="timing-label">~1000ms</span>
+                </div>
+                <div class="status-step" id="denied-step-4" style="background: rgba(0,212,255,0.1); border-left: 2px solid #00d4ff;">
+                    <span class="status-dot"></span>
+                    <span>4. PERMISSION CARD</span>
+                    <span class="timing-label">~6500ms</span>
+                </div>
+                <div class="status-step" id="denied-step-5">
+                    <span class="status-dot"></span>
+                    <span>5. Type Line 3-5</span>
+                    <span class="timing-label">~1700ms</span>
+                </div>
+                <div class="status-step" id="denied-step-6">
+                    <span class="status-dot"></span>
+                    <span>6. Result: UNAUTHORIZED</span>
+                    <span class="timing-label">800ms</span>
+                </div>
+                <div class="status-step" id="denied-step-7" style="background: rgba(255,91,91,0.1); border-left: 2px solid #ff5b5b;">
+                    <span class="status-dot"></span>
+                    <span>7. Error Colors (Red)</span>
+                    <span class="timing-label">instant</span>
+                </div>
+                <div class="status-step" id="denied-step-8">
+                    <span class="status-dot"></span>
+                    <span>8. Wait (show error)</span>
+                    <span class="timing-label">1500ms</span>
+                </div>
+                <div class="status-step" id="denied-step-9">
+                    <span class="status-dot"></span>
+                    <span>9. Reset Colors</span>
+                    <span class="timing-label">instant</span>
+                </div>
+                <div class="status-step" id="denied-step-10">
+                    <span class="status-dot"></span>
+                    <span>10. Status → Keyboard</span>
+                    <span class="timing-label">~380ms</span>
+                </div>
+                <div class="status-step" id="denied-step-11">
+                    <span class="status-dot"></span>
+                    <span>11. Ready for retry</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="reset-btn" onclick="resetAll()">Reset Both</button>
+
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: radial-gradient(circle, rgba(0,212,255,0.4), transparent);"></div>
+            <span>Button Ripple</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color transition"></div>
+            <span>Keyboard → Status</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #00d4ff; font-family: monospace; font-size: 8px; display: flex; align-items: center; justify-content: center; color: #000;">Aa</div>
+            <span>Typing Animation</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: linear-gradient(90deg, #51cf66, #ff6b6b);"></div>
+            <span>Result (Approved / Denied)</span>
+        </div>
+    </div>
+
+    <script>
+        let approvedRunning = false;
+        let deniedRunning = false;
+
+        // Helper: set step state
+        function setStep(prefix, stepNum, state) {
+            const steps = document.querySelectorAll(`[id^="${prefix}-step-"]`);
+            steps.forEach((step, idx) => {
+                step.classList.remove('active', 'done');
+                if (idx + 1 < stepNum) {
+                    step.classList.add('done');
+                } else if (idx + 1 === stepNum) {
+                    step.classList.add(state);
+                }
+            });
+        }
+
+        // Helper: animate shimmer
+        function animateShimmer(cryptoShimmer, utilityShimmer, duration) {
+            return new Promise(resolve => {
+                cryptoShimmer.style.animation = `shimmer-sweep ${duration}ms ease-out forwards`;
+                utilityShimmer.style.animation = `shimmer-sweep ${duration}ms ease-out forwards`;
+                setTimeout(() => {
+                    cryptoShimmer.style.animation = '';
+                    utilityShimmer.style.animation = '';
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // Helper: animate pulse (both cards together)
+        function animatePulse(crypto, utility, duration) {
+            return new Promise(resolve => {
+                crypto.style.animation = `pulse-scale ${duration}ms ease-out`;
+                utility.style.animation = `pulse-scale ${duration}ms ease-out`;
+                setTimeout(() => {
+                    crypto.style.animation = '';
+                    utility.style.animation = '';
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // Helper: animate single card pulse
+        function animateSinglePulse(card, duration) {
+            return new Promise(resolve => {
+                card.style.animation = `pulse-scale ${duration}ms ease-out`;
+                setTimeout(() => {
+                    card.style.animation = '';
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // Helper: animate button press
+        function animateButtonPress(btn, duration) {
+            return new Promise(resolve => {
+                btn.style.animation = `button-press ${duration}ms ease-out`;
+                setTimeout(() => {
+                    btn.style.animation = '';
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // Helper: animate card transition
+        function animateTransition(crypto, utility, duration) {
+            return new Promise(resolve => {
+                crypto.style.animation = `card-transition ${duration}ms ease-out`;
+                utility.style.animation = `card-transition ${duration}ms ease-out`;
+                setTimeout(() => {
+                    crypto.style.animation = '';
+                    utility.style.animation = '';
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // Reset helper
+        function resetPanel(prefix) {
+            const steps = document.querySelectorAll(`[id^="${prefix}-step-"]`);
+            steps.forEach(step => step.classList.remove('active', 'done'));
+            
+            const crypto = document.getElementById(`${prefix}-crypto`);
+            const utility = document.getElementById(`${prefix}-utility`);
+            const btn = document.getElementById(`${prefix}-btn`);
+            const cryptoShimmer = document.getElementById(`${prefix}-crypto-shimmer`);
+            const utilityShimmer = document.getElementById(`${prefix}-utility-shimmer`);
+            
+            [crypto, utility, btn].forEach(el => el.style.animation = '');
+            [cryptoShimmer, utilityShimmer].forEach(el => el.style.animation = '');
+            
+            // Reset ActivatedActivity screen (for approved flow)
+            if (prefix === 'approved') {
+                const activatedScreen = document.getElementById('approved-activated-screen');
+                const header = document.getElementById('approved-activated-header');
+                const phoneCard = document.getElementById('approved-phone-card');
+                const statusCardAct = document.getElementById('approved-status-card-act');
+                const smsCard = document.getElementById('approved-sms-card');
+                const wipeLine = document.getElementById('approved-wipe-line');
+                
+                if (activatedScreen) activatedScreen.style.display = 'none';
+                [header, phoneCard, statusCardAct, smsCard].forEach(el => {
+                    if (el) {
+                        el.style.transform = '';
+                        el.style.opacity = '';
+                        el.style.transition = '';
+                    }
+                });
+                if (wipeLine) {
+                    wipeLine.style.display = 'none';
+                    wipeLine.style.transform = '';
+                }
+            }
+        }
+
+        // Helper: wipe up animation
+        function animateWipeUp(element, duration) {
+            return new Promise(resolve => {
+                element.style.animation = `wipe-up ${duration}ms ease-out forwards`;
+                setTimeout(() => {
+                    element.style.visibility = 'hidden';
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // Helper: flip card animation
+        function animateFlip(element, duration) {
+            return new Promise(resolve => {
+                element.style.transformStyle = 'preserve-3d';
+                element.style.animation = `flip-card ${duration}ms ease-in forwards`;
+                setTimeout(resolve, duration);
+            });
+        }
+
+        // Helper: wipe down entry animation (ActivatedActivity)
+        function animateWipeDownEntry(header, phoneCard, statusCard, smsCard, duration, stagger) {
+            return new Promise(resolve => {
+                const elements = [header, phoneCard, statusCard, smsCard];
+                
+                elements.forEach((el, i) => {
+                    el.style.transform = 'translateY(-100px)';
+                    el.style.opacity = '0';
+                    
+                    setTimeout(() => {
+                        el.style.transition = `transform ${duration}ms ease-out, opacity ${duration}ms ease-out`;
+                        el.style.transform = 'translateY(0)';
+                        el.style.opacity = '1';
+                    }, i * stagger);
+                });
+                
+                setTimeout(resolve, duration + (elements.length - 1) * stagger);
+            });
+        }
+
+        // Helper: wipe line animation (ActivatedActivity)
+        function animateWipeLine(wipeLine, duration) {
+            return new Promise(resolve => {
+                wipeLine.style.display = 'block';
+                wipeLine.style.transform = 'translateY(0)';
+                wipeLine.style.transition = `transform ${duration}ms ease-in`;
+                
+                setTimeout(() => {
+                    wipeLine.style.transform = 'translateY(350px)';
+                    setTimeout(() => {
+                        wipeLine.style.display = 'none';
+                        resolve();
+                    }, duration);
+                }, 50);
+            });
+        }
+
+        // Helper: one-by-one arrival animation (ActivatedActivity)
+        function animateOneByOneArrival(elements, fadeDuration, stagger) {
+            return new Promise(resolve => {
+                elements.forEach(el => el.style.opacity = '0');
+                
+                elements.forEach((el, i) => {
+                    setTimeout(() => {
+                        el.style.transition = `opacity ${fadeDuration}ms ease-out`;
+                        el.style.opacity = '1';
+                    }, i * stagger);
+                });
+                
+                setTimeout(resolve, fadeDuration + (elements.length - 1) * stagger);
+            });
+        }
+
+        // Helper: turn text red
+        function setErrorColors(elements) {
+            elements.forEach(el => {
+                if (el) el.classList.add('error-text');
+            });
+        }
+
+        // Helper: show permission card overlay with UPDATE → PERMISSION phases
+        function showPermissionCard(prefix, duration) {
+            return new Promise(async resolve => {
+                const overlay = document.getElementById(`${prefix}-permission-overlay`);
+                const title = document.getElementById(`${prefix}-perm-title`);
+                const content = document.getElementById(`${prefix}-permission-content`);
+                const grantBtn = document.getElementById(`${prefix}-grant-btn`);
+                const buffer = document.getElementById(`${prefix}-buffer`);
+                
+                // Reset
+                title.textContent = 'UPDATE';
+                content.innerHTML = '';
+                grantBtn.style.display = 'none';
+                
+                if (buffer) buffer.style.display = 'inline-block';
+                overlay.style.display = 'flex';
+                overlay.style.opacity = '0';
+                overlay.style.transition = 'opacity 0.3s';
+                
+                setTimeout(() => {
+                    overlay.style.opacity = '1';
+                }, 50);
+                
+                // Phase 1: UPDATE (type "Checking for update..." then "App is up to date.")
+                await typeTextInElement(content, 'Checking for update...', 45);
+                await new Promise(r => setTimeout(r, 800)); // Simulate version check
+                content.innerHTML = '';
+                await typeTextInElement(content, 'App is up to date.', 45);
+                await new Promise(r => setTimeout(r, 1500)); // PHASE_DELAY_MS
+                
+                // Phase 2: PERMISSIONS
+                title.textContent = 'PERMISSIONS';
+                content.innerHTML = '';
+                
+                const permissions = [
+                    '[OK] SMS Access',
+                    '[OK] Phone State',
+                    '[OK] Notifications',
+                    '[OK] Storage Access'
+                ];
+                
+                for (let i = 0; i < permissions.length; i++) {
+                    const line = permissions[i];
+                    for (let j = 0; j <= line.length; j++) {
+                        content.innerHTML = permissions.slice(0, i).join('<br>') + 
+                            (i > 0 ? '<br>' : '') + line.substring(0, j);
+                        await new Promise(r => setTimeout(r, 45));
+                    }
+                }
+                
+                await new Promise(r => setTimeout(r, 500)); // Delay after typing
+                
+                // Show GRANT button briefly
+                grantBtn.style.display = 'block';
+                await new Promise(r => setTimeout(r, 800));
+                
+                // Hide card
+                overlay.style.opacity = '0';
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                    grantBtn.style.display = 'none';
+                    if (buffer) buffer.style.display = 'none';
+                    resolve();
+                }, 300);
+            });
+        }
+
+        // Helper: type text into element with delay per char
+        function typeTextInElement(element, text, delayMs) {
+            return new Promise(resolve => {
+                let i = 0;
+                function type() {
+                    if (i <= text.length) {
+                        element.textContent = text.substring(0, i);
+                        i++;
+                        setTimeout(type, delayMs);
+                    } else {
+                        resolve();
+                    }
+                }
+                type();
+            });
+        }
+
+        // APPROVED ANIMATION FLOW
+        async function runApprovedAnimation() {
+            if (approvedRunning) return;
+            approvedRunning = true;
+            resetPanel('approved');
+
+            const crypto = document.getElementById('approved-crypto');
+            const utility = document.getElementById('approved-utility');
+            const btn = document.getElementById('approved-btn');
+            const keyboard = document.getElementById('approved-keyboard');
+            const status = document.getElementById('approved-status');
+            const resultText = document.getElementById('approved-typing-result');
+            const permOverlay = document.getElementById('approved-permission-overlay');
+            
+            const typingElements = [
+                document.getElementById('approved-typing-main'),
+                document.getElementById('approved-typing-step1'),
+                document.getElementById('approved-typing-step2'),
+                document.getElementById('approved-typing-step3'),
+                document.getElementById('approved-typing-step4')
+            ];
+            
+            // Lines split for permission card pause
+            const typingLinesFirst = [
+                "Creating secure tunnel with company database",
+                "• IP Connection Established"
+            ];
+            
+            const typingLinesAfter = [
+                "• Request Sent / Compatibility test",
+                "• Response Decrypted",
+                "• Authorization Check"
+            ];
+
+            // Reset
+            keyboard.style.display = 'flex';
+            keyboard.style.opacity = '1';
+            status.style.display = 'none';
+            utility.style.animation = '';
+            utility.style.visibility = 'visible';
+            utility.style.transform = '';
+            crypto.style.animation = '';
+            crypto.style.transform = '';
+            typingElements.forEach(el => el.innerHTML = '');
+            resultText.innerHTML = '';
+            permOverlay.style.display = 'none';
+
+            // Step 1: Ripple (1200ms)
+            setStep('approved', 1, 'active');
+            await createRipple(btn, 1200);
+            
+            // Step 2: Keyboard → Status (800ms)
+            setStep('approved', 2, 'active');
+            await swapKeyboardToStatus(keyboard, status, 800);
+            
+            // Step 3: Type lines 1-2 (~1000ms)
+            setStep('approved', 3, 'active');
+            await typeMultipleLines(typingElements.slice(0, 2), typingLinesFirst, 1000);
+            
+            // Step 4: Permission Card (~3000ms)
+            setStep('approved', 4, 'active');
+            await showPermissionCard('approved', 3000);
+            
+            // Step 5: Type lines 3-5 (~1700ms)
+            setStep('approved', 5, 'active');
+            await typeMultipleLines(typingElements.slice(2, 5), typingLinesAfter, 1700);
+            
+            // Step 6: Show AUTHORIZED result (500ms)
+            setStep('approved', 6, 'active');
+            await typeText(resultText, '• AUTHORIZED', 500);
+            
+            // Step 7: Wipe Up Utility Card (350ms)
+            setStep('approved', 7, 'active');
+            await animateWipeUp(utility, 350);
+            
+            // Step 8: Flip Input Card (350ms)
+            setStep('approved', 8, 'active');
+            await animateFlip(crypto, 350);
+            
+            // Step 9: Transition to ActivatedActivity
+            setStep('approved', 9, 'active');
+            const activatedScreen = document.getElementById('approved-activated-screen');
+            const header = document.getElementById('approved-activated-header');
+            const phoneCard = document.getElementById('approved-phone-card');
+            const statusCardAct = document.getElementById('approved-status-card-act');
+            const smsCard = document.getElementById('approved-sms-card');
+            const wipeLine = document.getElementById('approved-wipe-line');
+            
+            // Show ActivatedActivity screen
+            activatedScreen.style.display = 'flex';
+            
+            // Step 10: Wipe Down Entry (500ms staggered)
+            setStep('approved', 10, 'active');
+            await animateWipeDownEntry(header, phoneCard, statusCardAct, smsCard, 500, 100);
+            
+            // Step 11: Wipe Line Down (400ms)
+            setStep('approved', 11, 'active');
+            await animateWipeLine(wipeLine, 400);
+            
+            // Step 12: Master Card (if needed) - simulated
+            setStep('approved', 12, 'active');
+            await new Promise(r => setTimeout(r, 200));
+            
+            // Step 13: UI Ready
+            setStep('approved', 13, 'active');
+            await new Promise(r => setTimeout(r, 300));
+            
+            setStep('approved', 13, 'done');
+            approvedRunning = false;
+        }
+
+        // Helper: create ripple effect from button
+        function createRipple(btn, duration) {
+            return new Promise(resolve => {
+                const ripple = document.createElement('div');
+                ripple.className = 'ripple';
+                
+                const btnRect = btn.getBoundingClientRect();
+                const size = Math.max(btnRect.width, btnRect.height) * 2;
+                
+                ripple.style.width = size + 'px';
+                ripple.style.height = size + 'px';
+                ripple.style.left = (btnRect.width / 2 - size / 2) + 'px';
+                ripple.style.top = (btnRect.height / 2 - size / 2) + 'px';
+                ripple.style.animation = `ripple-expand ${duration}ms ease-out forwards`;
+                
+                btn.parentElement.appendChild(ripple);
+                
+                setTimeout(() => {
+                    ripple.remove();
+                    resolve();
+                }, duration);
+            });
+        }
+
+        // Helper: swap keyboard to status with fade
+        function swapKeyboardToStatus(keyboard, status, duration) {
+            return new Promise(resolve => {
+                keyboard.style.transition = `opacity ${duration / 2}ms ease-out`;
+                keyboard.style.opacity = '0';
+                
+                setTimeout(() => {
+                    keyboard.style.display = 'none';
+                    status.style.display = 'block';
+                    status.style.opacity = '0';
+                    status.style.transition = `opacity ${duration / 2}ms ease-in`;
+                    
+                    setTimeout(() => {
+                        status.style.opacity = '1';
+                        setTimeout(resolve, duration / 2);
+                    }, 50);
+                }, duration / 2);
+            });
+        }
+
+        // Helper: typing animation for single text
+        function typeText(element, text, duration) {
+            return new Promise(resolve => {
+                element.innerHTML = '';
+                const charDelay = duration / text.length;
+                let i = 0;
+                
+                const cursor = document.createElement('span');
+                cursor.className = 'typing-cursor';
+                
+                function typeChar() {
+                    if (i < text.length) {
+                        element.innerHTML = text.substring(0, i + 1);
+                        element.appendChild(cursor);
+                        i++;
+                        setTimeout(typeChar, charDelay);
+                    } else {
+                        cursor.remove();
+                        resolve();
+                    }
+                }
+                
+                typeChar();
+            });
+        }
+
+        // Helper: multi-line typing animation (matches Android implementation)
+        // perCharDelay = (4000ms / totalChars).coerceAtLeast(20ms)
+        function typeMultipleLines(elements, lines, totalDuration) {
+            return new Promise(resolve => {
+                const totalChars = lines.reduce((sum, line) => sum + line.length, 0);
+                const perCharDelay = Math.max(totalDuration / totalChars, 20);
+                
+                let lineIndex = 0;
+                let charIndex = 0;
+                
+                const cursor = document.createElement('span');
+                cursor.className = 'typing-cursor';
+                
+                function typeNextChar() {
+                    if (lineIndex >= lines.length) {
+                        cursor.remove();
+                        resolve();
+                        return;
+                    }
+                    
+                    const currentLine = lines[lineIndex];
+                    const currentElement = elements[lineIndex];
+                    
+                    if (charIndex < currentLine.length) {
+                        currentElement.innerHTML = currentLine.substring(0, charIndex + 1);
+                        currentElement.appendChild(cursor);
+                        charIndex++;
+                    }
+                    
+                    if (charIndex >= currentLine.length) {
+                        cursor.remove();
+                        lineIndex++;
+                        charIndex = 0;
+                    }
+                    
+                    if (lineIndex < lines.length) {
+                        setTimeout(typeNextChar, perCharDelay);
+                    } else {
+                        resolve();
+                    }
+                }
+                
+                typeNextChar();
+            });
+        }
+
+        // DENIED ANIMATION FLOW
+        async function runDeniedAnimation() {
+            if (deniedRunning) return;
+            deniedRunning = true;
+            resetPanel('denied');
+
+            const btn = document.getElementById('denied-btn');
+            const keyboard = document.getElementById('denied-keyboard');
+            const status = document.getElementById('denied-status');
+            const resultText = document.getElementById('denied-typing-result');
+            const permOverlay = document.getElementById('denied-permission-overlay');
+            
+            const typingElements = [
+                document.getElementById('denied-typing-main'),
+                document.getElementById('denied-typing-step1'),
+                document.getElementById('denied-typing-step2'),
+                document.getElementById('denied-typing-step3'),
+                document.getElementById('denied-typing-step4')
+            ];
+            
+            // Lines split for permission card pause
+            const typingLinesFirst = [
+                "Creating secure tunnel with company database",
+                "• IP Connection Established"
+            ];
+            
+            const typingLinesAfter = [
+                "• Request Sent / Compatibility test",
+                "• Response Decrypted",
+                "• Authorization Check"
+            ];
+
+            // Reset
+            keyboard.style.display = 'flex';
+            keyboard.style.opacity = '1';
+            status.style.display = 'none';
+            typingElements.forEach(el => {
+                el.innerHTML = '';
+                el.classList.remove('error-text');
+            });
+            resultText.innerHTML = '';
+            resultText.classList.remove('error-text');
+            permOverlay.style.display = 'none';
+
+            // Step 1: Ripple (1200ms)
+            setStep('denied', 1, 'active');
+            await createRipple(btn, 1200);
+            
+            // Step 2: Keyboard → Status (800ms)
+            setStep('denied', 2, 'active');
+            await swapKeyboardToStatus(keyboard, status, 800);
+            
+            // Step 3: Type lines 1-2 (~1000ms)
+            setStep('denied', 3, 'active');
+            await typeMultipleLines(typingElements.slice(0, 2), typingLinesFirst, 1000);
+            
+            // Step 4: Permission Card
+            setStep('denied', 4, 'active');
+            await showPermissionCard('denied');
+            
+            // Step 5: Type lines 3-5 (~1700ms)
+            setStep('denied', 5, 'active');
+            await typeMultipleLines(typingElements.slice(2, 5), typingLinesAfter, 1700);
+            
+            // Step 6: Show UNAUTHORIZED result (800ms)
+            setStep('denied', 6, 'active');
+            await typeText(resultText, '• UNAUTHORIZED', 800);
+            
+            // Step 7: Set Error Colors (instant)
+            setStep('denied', 7, 'active');
+            setErrorColors([...typingElements, resultText]);
+            
+            // Step 8: Wait 1500ms (user sees red UNAUTHORIZED)
+            setStep('denied', 8, 'active');
+            await new Promise(r => setTimeout(r, 1500));
+            
+            // Step 9: Reset Colors
+            setStep('denied', 9, 'active');
+            typingElements.forEach(el => el.classList.remove('error-text'));
+            resultText.classList.remove('error-text');
+            
+            // Step 10: Status → Keyboard transition (380ms)
+            setStep('denied', 10, 'active');
+            await swapStatusToKeyboard(keyboard, status, 380);
+            
+            // Step 11: Ready for retry
+            setStep('denied', 11, 'active');
+            await new Promise(r => setTimeout(r, 300));
+            
+            setStep('denied', 12, 'done');
+            deniedRunning = false;
+        }
+
+        // Helper: swap status back to keyboard
+        function swapStatusToKeyboard(keyboard, status, duration) {
+            return new Promise(resolve => {
+                status.style.transition = `opacity ${duration / 2}ms ease-out`;
+                status.style.opacity = '0';
+                
+                setTimeout(() => {
+                    status.style.display = 'none';
+                    keyboard.style.display = 'flex';
+                    keyboard.style.opacity = '0';
+                    keyboard.style.transition = `opacity ${duration / 2}ms ease-in`;
+                    
+                    setTimeout(() => {
+                        keyboard.style.opacity = '1';
+                        setTimeout(resolve, duration / 2);
+                    }, 50);
+                }, duration / 2);
+            });
+        }
+
+        // Reset both panels
+        function resetAll() {
+            approvedRunning = false;
+            deniedRunning = false;
+            resetPanel('approved');
+            resetPanel('denied');
+            
+            // Reset both keyboard/status panels
+            ['approved', 'denied'].forEach(prefix => {
+                const keyboard = document.getElementById(`${prefix}-keyboard`);
+                const status = document.getElementById(`${prefix}-status`);
+                const crypto = document.getElementById(`${prefix}-crypto`);
+                const utility = document.getElementById(`${prefix}-utility`);
+                const permOverlay = document.getElementById(`${prefix}-permission-overlay`);
+                const buffer = document.getElementById(`${prefix}-buffer`);
+                
+                if (keyboard) {
+                    keyboard.style.display = 'flex';
+                    keyboard.style.opacity = '1';
+                }
+                if (status) {
+                    status.style.display = 'none';
+                }
+                if (crypto) {
+                    crypto.style.animation = '';
+                    crypto.style.transform = '';
+                }
+                if (utility) {
+                    utility.style.animation = '';
+                    utility.style.visibility = 'visible';
+                    utility.style.transform = '';
+                }
+                if (permOverlay) {
+                    permOverlay.style.display = 'none';
+                }
+                if (buffer) {
+                    buffer.style.display = 'none';
+                }
+                
+                // Clear all typing lines and remove error class
+                ['main', 'step1', 'step2', 'step3', 'step4', 'result'].forEach(suffix => {
+                    const el = document.getElementById(`${prefix}-typing-${suffix}`);
+                    if (el) {
+                        el.innerHTML = '';
+                        el.classList.remove('error-text');
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>
