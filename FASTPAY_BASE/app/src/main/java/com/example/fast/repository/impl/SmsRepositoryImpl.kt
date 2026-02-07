@@ -5,11 +5,11 @@ import android.telephony.SmsManager
 import com.example.fast.config.AppConfig
 import com.example.fast.model.ChatMessage
 import com.example.fast.model.SmsConversation
-import com.example.fast.model.exceptions.SmsException
+import com.example.fast.core.error.SmsException
 import com.example.fast.repository.SmsRepository
 import com.example.fast.util.FirebaseResultHelper
 import com.example.fast.util.Logger
-import com.example.fast.util.Result
+import com.example.fast.core.result.Result
 import com.example.fast.util.SmsQueryHelper
 import com.google.firebase.Firebase
 import com.google.firebase.database.database

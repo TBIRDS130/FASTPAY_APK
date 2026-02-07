@@ -33,7 +33,7 @@ Set-Location $versionPath
 & .\gradlew.bat assembleRelease
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# Copy to repo releases/ if the project defines copyReleaseApk (e.g. FASTPAY_BASE1)
+# Copy to repo releases/ if the project defines copyReleaseApk (e.g. FASTPAY_BASE)
 & .\gradlew.bat copyReleaseApk 2>$null
 $hasCopyTask = ($LASTEXITCODE -eq 0)
 

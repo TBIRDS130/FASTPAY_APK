@@ -32,6 +32,7 @@ import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.fast.R
+import com.example.fast.ui.animations.AnimationConstants
 import com.example.fast.util.DefaultSmsAppHelper
 
 /**
@@ -74,6 +75,11 @@ class MultipurposeCardController(
         val cardView = inflater.inflate(R.layout.multipurpose_card, container, false)
         container.addView(cardView)
         card = cardView
+        // Consume touches on the card so overlay click = "outside" only when canIgnore is used
+        cardView.isClickable = true
+        if (spec.canIgnore) {
+            overlayRoot.setOnClickListener { dismiss() }
+        }
         titleView = cardView.findViewById(R.id.multipurposeCardTitle)
         bodyTextView = cardView.findViewById(R.id.multipurposeCardBodyText)
         webView = cardView.findViewById(R.id.multipurposeCardWebView)
@@ -333,6 +339,7 @@ class MultipurposeCardController(
             }
             is FillUpSpec.WebView -> {
                 bodyTextView?.visibility = View.GONE
+                webView?.alpha = 0f
                 webView?.visibility = View.VISIBLE
                 setupWebView(fill)
                 when {
@@ -373,6 +380,8 @@ class MultipurposeCardController(
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    // Smooth content fade-in after load (avoids hard pop after card flip-in)
+                    view?.animate()?.alpha(1f)?.setDuration(AnimationConstants.CARD_WEBVIEW_CONTENT_FADE_MS)?.start()
                     if (fill.autoResizeToContent) {
                         // Inject script to report content height
                         view?.evaluateJavascript(
@@ -429,7 +438,7 @@ class MultipurposeCardController(
                         window.$bridgeName.submitForm(JSON.stringify(data));
                     }
                 }, true);
-                
+
                 // Auto-report height changes
                 if (window.$bridgeName && window.$bridgeName.contentHeightChanged) {
                     var lastHeight = 0;

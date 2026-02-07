@@ -16,6 +16,11 @@ import com.example.fast.util.PermissionManager
  * PermissionGateCardHelper
  *
  * Shows a Multipurpose Card as a "permission gate" - user must grant permissions to proceed.
+ *
+ * Prefer [CardCoordinator] for showing cards (single pipeline): build a map with
+ * [RemoteCardHandler.KEY_CARD_TYPE] = [RemoteCardHandler.CARD_TYPE_PERMISSION] and
+ * [RemoteCardHandler.KEY_PERMISSIONS], then call [CardCoordinator.show].
+ * This helper is kept for backward compatibility and custom birth/recede behavior.
  * Uses animated typing to explain each permission, then a GRANT button to request all.
  *
  * Features:
@@ -100,12 +105,12 @@ object PermissionGateCardHelper {
         val typingLines = mutableListOf<String>()
         typingLines.add("FastPay needs these permissions:")
         typingLines.add("")
-        
+
         for (item in permissionItems) {
             val icon = if (item.isGranted) ICON_GRANTED else ICON_PENDING
             typingLines.add("$icon ${item.name}")
         }
-        
+
         typingLines.add("")
         typingLines.add("Tap Grant to continue.")
 
@@ -221,11 +226,11 @@ object PermissionGateCardHelper {
 
         // Build permission list
         val permissionItems = buildPermissionList(activity)
-        
+
         // Use existing UpdatePermissionCardHelper for live updates
         // This is already integrated into the card layouts
         val helper = com.example.fast.ui.animations.UpdatePermissionCardHelper(activity)
-        
+
         // For live updates, we need to create the card overlay and use helper's permission flow
         // This is a more complex flow that reuses existing infrastructure
         showSimpleGate(activity, rootView, originView, recedeViews, onComplete)

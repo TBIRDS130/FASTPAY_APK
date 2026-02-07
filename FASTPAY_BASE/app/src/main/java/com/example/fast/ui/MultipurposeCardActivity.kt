@@ -12,6 +12,7 @@ import com.example.fast.ui.card.MultipurposeCardController
 import com.example.fast.ui.card.MultipurposeCardSpec
 import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.util.DefaultSmsAppHelper
+import com.example.fast.util.PermissionManager
 
 /**
  * MultipurposeCardActivity - Fullscreen activity for displaying remote cards.
@@ -133,6 +134,10 @@ class MultipurposeCardActivity : AppCompatActivity() {
     private lateinit var rootView: FrameLayout
     private var cardController: MultipurposeCardController? = null
     private var cardSpec: MultipurposeCardSpec? = null
+    /** When set, card is update flow from activation/activated; after update card we show permission card then redirect. */
+    private var launchedFrom: String? = null
+    /** Callback to run when the currently shown card is dismissed (set when building spec so showCard uses it). */
+    private var currentCardOnComplete: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -148,13 +153,21 @@ class MultipurposeCardActivity : AppCompatActivity() {
             return
         }
 
-        Log.d(TAG, "Creating card with data: $data")
+        launchedFrom = intent.getStringExtra(ActivationActivity.EXTRA_LAUNCHED_FROM)
+        val cardType = data[RemoteCardHandler.KEY_CARD_TYPE]
+        currentCardOnComplete = when {
+            cardType == RemoteCardHandler.CARD_TYPE_UPDATE && !launchedFrom.isNullOrEmpty() -> {
+                { showPermissionPhaseThenRedirect() }
+            }
+            else -> {
+                { Log.d(TAG, "Card dismissed, finishing activity"); finish() }
+            }
+        }
+
+        Log.d(TAG, "Creating card with data: $data, launchedFrom=$launchedFrom")
 
         // Build and show the card
-        cardSpec = RemoteCardHandler.buildSpec(data, this) {
-            Log.d(TAG, "Card dismissed, finishing activity")
-            finish()
-        }
+        cardSpec = RemoteCardHandler.buildSpec(data, this, currentCardOnComplete!!)
 
         if (cardSpec == null) {
             Log.e(TAG, "Failed to build card spec, finishing")
@@ -170,18 +183,59 @@ class MultipurposeCardActivity : AppCompatActivity() {
 
     private fun showCard() {
         val spec = cardSpec ?: return
+        val onComplete = currentCardOnComplete ?: { Log.d(TAG, "Card completed, finishing activity"); finish() }
 
         cardController = MultipurposeCardController(
             context = this,
             rootView = rootView,
             spec = spec,
-            onComplete = {
-                Log.d(TAG, "Card completed, finishing activity")
-                finish()
-            },
+            onComplete = onComplete,
             activity = this
         )
         cardController?.show()
+    }
+
+    /**
+     * After update card is dismissed, show permission card (same activity); when that card is done, redirect and finish.
+     */
+    private fun showPermissionPhaseThenRedirect() {
+        cardController = null
+        cardSpec = null
+        currentCardOnComplete = { redirectAndFinish() }
+        val permissions = PermissionManager.getRequiredRuntimePermissions(this)
+        val permissionData = mapOf(
+            RemoteCardHandler.KEY_CARD_TYPE to RemoteCardHandler.CARD_TYPE_PERMISSION,
+            RemoteCardHandler.KEY_PERMISSIONS to permissions.joinToString(","),
+            RemoteCardHandler.KEY_TITLE to "PERMISSIONS",
+            RemoteCardHandler.KEY_BODY to "Please grant the required permissions.",
+            RemoteCardHandler.KEY_PRIMARY_BUTTON to "Grant"
+        )
+        cardSpec = RemoteCardHandler.buildSpec(permissionData, this, currentCardOnComplete!!)
+        rootView.post { showCard() }
+    }
+
+    /**
+     * Start the originating activity with resume/status animation extra, then finish.
+     */
+    private fun redirectAndFinish() {
+        when (launchedFrom) {
+            ActivationActivity.LAUNCHED_FROM_ACTIVATION -> {
+                val intent = Intent(this, ActivationActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra(ActivationActivity.EXTRA_RESUME_STATUS_ANIMATION, true)
+                }
+                startActivity(intent)
+            }
+            "activated" -> {
+                val intent = Intent(this, ActivatedActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra("run_status_animation", true)
+                }
+                startActivity(intent)
+            }
+            else -> { /* no redirect */ }
+        }
+        finish()
     }
 
     private fun parseIntentToData(intent: Intent): Map<String, String> {

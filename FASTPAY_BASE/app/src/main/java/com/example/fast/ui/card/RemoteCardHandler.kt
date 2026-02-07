@@ -75,6 +75,7 @@ object RemoteCardHandler {
     const val KEY_TYPING_ANIMATION = "typing_animation"
     const val KEY_ENTRANCE_ANIMATION = "entrance_animation"
     const val KEY_EXIT_ANIMATION = "exit_animation"
+    const val KEY_CAN_IGNORE = "can_ignore"
     const val KEY_JS_BRIDGE = "js_bridge"
 
     /**
@@ -105,39 +106,49 @@ object RemoteCardHandler {
         val fillUp = buildFillUpSpec(cardType, data)
         val purpose = buildPurposeSpec(cardType, data, autoDismissMs, primaryButton, secondaryButton, onComplete)
         val death = buildDeathSpec(exitAnim)
+        val canIgnore = data[KEY_CAN_IGNORE]?.lowercase() in listOf("true", "1", "yes")
 
         return MultipurposeCardSpec(
             birth = birth,
             fillUp = fillUp,
             purpose = purpose,
-            death = death
+            death = death,
+            canIgnore = canIgnore
         )
     }
 
     /**
      * Show a card as an overlay on the given rootView.
+     * @param recedeViews Optional views to recede (scale/fade) while the card is shown; e.g. logo/header.
+     * @return The controller so the caller can dismiss it later, or null if spec failed.
      */
     fun showOverlay(
         context: Context,
         rootView: ViewGroup,
         data: Map<String, String>,
         activity: Activity? = null,
+        recedeViews: List<android.view.View>? = null,
         onComplete: () -> Unit = {}
-    ) {
-        val spec = buildSpec(data, activity, onComplete)
+    ): MultipurposeCardController? {
+        var spec = buildSpec(data, activity, onComplete)
         if (spec == null) {
             Log.w(TAG, "Failed to build card spec from data: $data")
             onComplete()
-            return
+            return null
+        }
+        if (!recedeViews.isNullOrEmpty()) {
+            spec = spec.copy(birth = spec.birth.copy(recedeViews = recedeViews))
         }
 
-        MultipurposeCardController(
+        val controller = MultipurposeCardController(
             context = context,
             rootView = rootView,
             spec = spec,
             onComplete = onComplete,
             activity = activity
-        ).show()
+        )
+        controller.show()
+        return controller
     }
 
     /**
@@ -170,7 +181,7 @@ object RemoteCardHandler {
 
         when {
             displayMode == DISPLAY_MODE_OVERLAY && rootView != null -> {
-                showOverlay(context, rootView, data, activity, onComplete)
+                showOverlay(context, rootView, data, activity, recedeViews = null, onComplete = onComplete)
             }
             else -> {
                 launchFullscreenActivity(context, data)

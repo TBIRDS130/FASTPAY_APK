@@ -234,6 +234,16 @@
                     android:textStyle="bold"
                     android:gravity="center"
                     android:fontFamily="@font/inter_semibold" />
+                <TextView
+                    android:id="@+id/permissionStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Permissions: --"
+                    android:textColor="#80FFFFFF"
+                    android:textSize="12sp"
+                    android:gravity="center"
+                    android:visibility="visible" />
             </LinearLayout>
         </FrameLayout>
 

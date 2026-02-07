@@ -35,8 +35,6 @@ import com.example.fast.util.VersionChecker
 import com.example.fast.util.DebugLogger
 import com.google.firebase.Firebase
 import com.example.fast.util.DjangoApiHelper
-import com.example.fast.ui.MultipurposeCardActivity
-import com.example.fast.ui.card.RemoteCardHandler
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.google.firebase.database.DataSnapshot
@@ -51,7 +49,7 @@ import androidx.core.content.ContextCompat
  * SplashActivity - "Redmi" Version
  *
  * Flow:
- * - After animation, we navigate once to next activity: ActivationActivity if not activated, ActivatedActivity if activated. Permission entry point is the status card in ActivationActivity.
+ * - After animation, we navigate once to next activity: ActivationActivity if not activated, ActivatedActivity if activated. Update check is on Activation (status card); permission entry point is ActivatedActivity.
  *
  * Features:
  * - First letter ("F") always comes from right edge of screen
@@ -204,7 +202,7 @@ class SplashActivity : AppCompatActivity() {
 
     /**
      * Register device with Django and Firebase immediately (background).
-     * Permission entry point is the status card in ActivationActivity; before that only device registration runs here.
+     * Permission entry point is ActivatedActivity; before that only device registration runs here.
      * Strategy: Try Firebase first (with timeout), then register with best available data.
      */
     @SuppressLint("HardwareIds")
@@ -480,7 +478,7 @@ class SplashActivity : AppCompatActivity() {
     }
 
 
-    // Permission entry point is status card in ActivationActivity; Splash does not request permissions.
+    // Permission entry point is ActivatedActivity; Splash does not request permissions.
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -488,7 +486,7 @@ class SplashActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        // Permission entry point is status card in ActivationActivity; Splash does not handle permission results.
+        // Permission entry point is ActivatedActivity; Splash does not handle permission results.
     }
 
     override fun onResume() {
@@ -507,7 +505,7 @@ class SplashActivity : AppCompatActivity() {
         isNavigating = true
         hasStartedNavigation = false // Reset flag for new navigation
 
-        android.util.Log.d("SplashActivity", "Navigating - permission entry point is status card in ActivationActivity")
+        android.util.Log.d("SplashActivity", "Navigating - permission entry point is ActivatedActivity")
 
         val letterContainer = this@SplashActivity.findViewById<LinearLayout>(R.id.letterContainer)
         val taglineTextView = this@SplashActivity.findViewById<TextView>(R.id.taglineTextView)
@@ -704,13 +702,13 @@ class SplashActivity : AppCompatActivity() {
 
         // Try Django validation
         android.util.Log.d("SplashActivity", "Firebase failed - trying Django validation for code: ${localCode.take(4)}...")
-        
+
         lifecycleScope.launch {
             try {
                 val result = DjangoApiHelper.isValidCodeLogin(localCode, deviceId)
-                
+
                 when (result) {
-                    is com.example.fast.util.Result.Success -> {
+                    is com.example.fast.core.result.Result.Success<Boolean> -> {
                         if (result.data) {
                             // Django says code is valid - activated
                             android.util.Log.d("SplashActivity", "Django validation success - code is valid")
@@ -723,7 +721,7 @@ class SplashActivity : AppCompatActivity() {
                             handler.post { callback(false) }
                         }
                     }
-                    is com.example.fast.util.Result.Error -> {
+                    is com.example.fast.core.result.Result.Error -> {
                         // Django also failed (network error) - NOW use local fallback
                         android.util.Log.w("SplashActivity", "Django validation failed (${result.exception.message}) - BOTH Firebase and Django failed")
                         if (hasValidLocalCode) {
@@ -995,18 +993,9 @@ class SplashActivity : AppCompatActivity() {
 
         android.util.Log.d("SplashActivity", "navigateToActivity: Navigating to ${if (isActivated) "ActivatedActivity" else "ActivationActivity"}")
 
-        // If already activated, check for updates before navigating
+        // Update check is on ActivationActivity (status card); Splash just navigates.
         if (isActivated) {
-            checkForAppUpdate { updateAvailable ->
-                if (updateAvailable) {
-                    // Update is available and will be handled by MultipurposeCardActivity
-                    android.util.Log.d("SplashActivity", "Update check completed - update available")
-                    // Don't navigate if force update is required (activity will finish)
-                } else {
-                    // No update needed, proceed to ActivatedActivity
-                    navigateToActivatedActivity()
-                }
-            }
+            navigateToActivatedActivity()
         } else {
             // Not activated - go to ActivationActivity
             val intent = Intent(this, ActivationActivity::class.java).apply {
@@ -1198,62 +1187,5 @@ class SplashActivity : AppCompatActivity() {
             view.scaleX = 1f
             view.scaleY = 1f
         }
-    }
-
-    /**
-     * Check for app updates before navigating to ActivatedActivity
-     * If an update is available, launches MultipurposeCardActivity
-     *
-     * @param onComplete Callback with updateAvailable boolean (true if update was launched, false otherwise)
-     */
-    private fun checkForAppUpdate(onComplete: (Boolean) -> Unit) {
-        android.util.Log.d("SplashActivity", "Checking for app updates...")
-
-        VersionChecker.checkVersion(
-            context = this,
-            onVersionChecked = { versionInfo ->
-                if (versionInfo == null) {
-                    android.util.Log.d("SplashActivity", "No version info available, proceeding normally")
-                    onComplete(false)
-                    return@checkVersion
-                }
-
-                val currentVersionCode = VersionChecker.getCurrentVersionCode(this)
-                val requiredVersionCode = versionInfo.versionCode
-                val downloadUrl = versionInfo.downloadUrl
-                val forceUpdate = versionInfo.forceUpdate
-
-                android.util.Log.d("SplashActivity", "Version check: current=$currentVersionCode, required=$requiredVersionCode, forceUpdate=$forceUpdate")
-
-                if (currentVersionCode < requiredVersionCode && downloadUrl != null && VersionChecker.isValidDownloadUrl(downloadUrl)) {
-                    android.util.Log.d("SplashActivity", "Update available: $downloadUrl")
-
-                    // Launch MultipurposeCardActivity to handle the update
-                    val intent = Intent(this, MultipurposeCardActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_UPDATE)
-                        putExtra(RemoteCardHandler.KEY_DOWNLOAD_URL, "$requiredVersionCode|$downloadUrl")
-                        putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
-                    }
-                    startActivity(intent)
-
-                    // If force update, finish this activity so user can't proceed without updating
-                    if (forceUpdate) {
-                        android.util.Log.d("SplashActivity", "Force update required - finishing splash")
-                        finish()
-                    }
-
-                    onComplete(true)
-                } else {
-                    android.util.Log.d("SplashActivity", "No update needed or invalid URL")
-                    onComplete(false)
-                }
-            },
-            onError = { error ->
-                android.util.Log.w("SplashActivity", "Version check failed, proceeding normally: ${error.message}")
-                // On error, proceed normally (don't block navigation)
-                onComplete(false)
-            }
-        )
     }
 }

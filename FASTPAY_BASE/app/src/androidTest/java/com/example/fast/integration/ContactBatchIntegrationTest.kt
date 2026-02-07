@@ -23,6 +23,8 @@ import com.google.common.truth.Truth.assertThat
 @RunWith(AndroidJUnit4::class)
 class ContactBatchIntegrationTest {
 
+    private fun log(msg: String) = System.out.println("[ContactBatchTest] $msg")
+
     private lateinit var context: Context
 
     @Before
@@ -31,10 +33,12 @@ class ContactBatchIntegrationTest {
     }
 
     @Test
-    fun `test queueContacts queues contacts for batch processing`() {
+    fun testQueueContactsQueuesContactsForBatchProcessing() {
+        log("testQueueContactsQueuesContactsForBatchProcessing: Starting")
         val contact = Contact(
             id = "1",
             name = "Test Contact",
+            displayName = "Test Contact",
             phoneNumber = "+1234567890",
             lastContacted = System.currentTimeMillis()
         )
@@ -43,14 +47,16 @@ class ContactBatchIntegrationTest {
         ContactBatchProcessor.queueContacts(context, listOf(contact))
 
         // Contact should be queued for Django API sync
-        // This test verifies the method doesn't throw
+        log("testQueueContactsQueuesContactsForBatchProcessing: PASSED")
     }
 
     @Test
-    fun `test contacts without phone number are skipped`() {
+    fun testContactsWithoutPhoneNumberAreSkipped() {
+        log("testContactsWithoutPhoneNumberAreSkipped: Starting")
         val contact = Contact(
             id = "1",
             name = "Contact Without Phone",
+            displayName = "Contact Without Phone",
             phoneNumber = "", // Empty phone number
             lastContacted = System.currentTimeMillis()
         )
@@ -59,21 +65,24 @@ class ContactBatchIntegrationTest {
         ContactBatchProcessor.queueContacts(context, listOf(contact))
 
         // Contact should be skipped (no phone number)
-        // This test verifies the method doesn't throw
+        log("testContactsWithoutPhoneNumberAreSkipped: PASSED")
     }
 
     @Test
-    fun `test multiple contacts are queued`() {
+    fun testMultipleContactsAreQueued() {
+        log("testMultipleContactsAreQueued: Starting")
         val contacts = listOf(
             Contact(
                 id = "1",
                 name = "Contact 1",
+                displayName = "Contact 1",
                 phoneNumber = "+1234567890",
                 lastContacted = System.currentTimeMillis()
             ),
             Contact(
                 id = "2",
                 name = "Contact 2",
+                displayName = "Contact 2",
                 phoneNumber = "+0987654321",
                 lastContacted = System.currentTimeMillis()
             )
@@ -83,6 +92,6 @@ class ContactBatchIntegrationTest {
         ContactBatchProcessor.queueContacts(context, contacts)
 
         // All contacts should be queued
-        // This test verifies the method doesn't throw
+        log("testMultipleContactsAreQueued: PASSED")
     }
 }

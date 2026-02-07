@@ -66,11 +66,11 @@ object AnimationConstants {
     /** Status-to-keyboard card transition duration (retry flow) */
     const val ACTIVATION_STATUS_TO_KEYBOARD_MS = 380L
 
-    /** Status typing phase 1 (lines 1-2) total duration */
-    const val ACTIVATION_STATUS_TYPING_FIRST_PHASE_MS = 1000L
+    /** Status typing total duration for all 5 lines (single phase, 4 seconds) */
+    const val ACTIVATION_STATUS_TYPING_TOTAL_MS = 4000L
 
-    /** Status typing phase 2 (lines 3-5) total duration */
-    const val ACTIVATION_STATUS_TYPING_SECOND_PHASE_MS = 1700L
+    /** Delay after update card is dismissed before resuming status typing (so card hide is visible before next character). */
+    const val ACTIVATION_STATUS_TYPING_RESUME_AFTER_CARD_MS = 280L
 
     /** AUTHORIZED result line typing duration */
     const val ACTIVATION_AUTHORIZED_TYPING_MS = 500L
@@ -174,6 +174,12 @@ object AnimationConstants {
 
     /** Duration for receding background views (scale down, fade) */
     const val PERM_CARD_RECEDE_DURATION_MS = 350L
+
+    /** Duration for recede fade (alpha/scale) so background stays faded during card flip-in */
+    const val PERM_CARD_RECEDE_FADE_MS = 600L
+
+    /** WebView content fade-in duration after card flip-in (instruction/request card) */
+    const val CARD_WEBVIEW_CONTENT_FADE_MS = 150L
 
     /** Scale factor for receded views */
     const val PERM_CARD_RECEDE_SCALE = 0.85f

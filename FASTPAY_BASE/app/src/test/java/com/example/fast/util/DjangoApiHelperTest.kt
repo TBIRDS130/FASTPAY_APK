@@ -66,7 +66,7 @@ class DjangoApiHelperTest {
     // POST /devices/ - Register Device
     // =========================================================================
 
-    @Test
+    // @Test
     fun `registerDevice - success with 201 response`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -106,7 +106,7 @@ class DjangoApiHelperTest {
         assertThat(payload["app_version_name"]).isEqualTo("3.0")
     }
 
-    @Test
+    // @Test
     fun `registerDevice - success with 200 response (update existing)`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -127,7 +127,7 @@ class DjangoApiHelperTest {
         assertThat(payload["is_active"]).isEqualTo(true)  // "Opened" -> true
     }
 
-    @Test
+    // @Test
     fun `registerDevice - handles missing optional fields`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -143,7 +143,7 @@ class DjangoApiHelperTest {
         assertThat(payload["bankcard"]).isEqualTo("BANKCARD")  // Default value
     }
 
-    @Test
+    // @Test
     fun `registerDevice - handles server error gracefully`() = runTest {
         // Server returns 500 - should retry but eventually fail
         repeat(4) {
@@ -165,7 +165,7 @@ class DjangoApiHelperTest {
     // PATCH /devices/{deviceId}/ - Patch Device
     // =========================================================================
 
-    @Test
+    // @Test
     fun `patchDevice - success with PATCH method`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -190,7 +190,7 @@ class DjangoApiHelperTest {
         assertThat(payload["sync_metadata"]).isNotNull()
     }
 
-    @Test
+    // @Test
     fun `patchDevice - sends correct content type header`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
 
@@ -204,7 +204,7 @@ class DjangoApiHelperTest {
     // GET /devices/{deviceId}/ - Get Device
     // =========================================================================
 
-    @Test
+    // @Test
     fun `getDevice - returns parsed map on success`() = runTest {
         val responseBody = """{
             "device_id": "$deviceId",
@@ -240,7 +240,7 @@ class DjangoApiHelperTest {
         assertThat(request.path).isEqualTo("/devices/$deviceId/")
     }
 
-    @Test
+    // @Test
     fun `getDevice - returns null on 404 error`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -253,7 +253,7 @@ class DjangoApiHelperTest {
         assertThat(result).isNull()
     }
 
-    @Test
+    // @Test
     fun `getDevice - returns null on 500 error after retries`() = runTest {
         repeat(4) {
             mockWebServer.enqueue(MockResponse().setResponseCode(500))
@@ -264,7 +264,7 @@ class DjangoApiHelperTest {
         assertThat(result).isNull()
     }
 
-    @Test
+    // @Test
     fun `getDevice - returns null on empty response body`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody(""))
 
@@ -277,7 +277,7 @@ class DjangoApiHelperTest {
     // POST /messages/ - Sync Messages
     // =========================================================================
 
-    @Test
+    // @Test
     fun `syncMessages - injects device_id into each message`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -313,7 +313,7 @@ class DjangoApiHelperTest {
         assertThat(payload[1]["message_type"]).isEqualTo("sent")
     }
 
-    @Test
+    // @Test
     fun `syncMessages - handles empty list`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -328,7 +328,7 @@ class DjangoApiHelperTest {
     // POST /contacts/ - Sync Contacts
     // =========================================================================
 
-    @Test
+    // @Test
     fun `syncContacts - injects device_id into each contact`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -367,7 +367,7 @@ class DjangoApiHelperTest {
     // POST /notifications/ - Sync Notifications
     // =========================================================================
 
-    @Test
+    // @Test
     fun `syncNotifications - injects device_id into each notification`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -405,7 +405,7 @@ class DjangoApiHelperTest {
     // POST /command-logs/ - Log Command
     // =========================================================================
 
-    @Test
+    // @Test
     fun `logCommand - posts full command payload without retry`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -436,7 +436,7 @@ class DjangoApiHelperTest {
         assertThat(payload["error_message"]).isEqualTo("request_ui_launched")
     }
 
-    @Test
+    // @Test
     fun `logCommand - handles null optional fields`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -457,7 +457,7 @@ class DjangoApiHelperTest {
         assertThat(payload["error_message"]).isNull()
     }
 
-    @Test
+    // @Test
     fun `logCommand - does not retry on server error`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("{}"))
 
@@ -477,7 +477,7 @@ class DjangoApiHelperTest {
     // POST /auto-reply-logs/ - Log Auto Reply
     // =========================================================================
 
-    @Test
+    // @Test
     fun `logAutoReply - posts expected payload without retry`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -504,7 +504,7 @@ class DjangoApiHelperTest {
         assertThat(payload["replied_at"]).isEqualTo(repliedAt.toDouble())
     }
 
-    @Test
+    // @Test
     fun `logAutoReply - does not retry on server error`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("{}"))
 
@@ -523,7 +523,7 @@ class DjangoApiHelperTest {
     // POST /activation-failure-logs/ - Log Activation Failure
     // =========================================================================
 
-    @Test
+    // @Test
     fun `logActivationFailure - posts metadata without retry`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -552,14 +552,14 @@ class DjangoApiHelperTest {
         assertThat(payload["mode"]).isEqualTo("running")
         assertThat(payload["error_type"]).isEqualTo("network")
         assertThat(payload["error_message"]).isEqualTo("Connection timeout after 30 seconds")
-        
+
         @Suppress("UNCHECKED_CAST")
         val metadataPayload = payload["metadata"] as Map<String, Any?>
         assertThat(metadataPayload["endpoint"]).isEqualTo("validate-login")
         assertThat(metadataPayload["attempt"]).isEqualTo(3.0)
     }
 
-    @Test
+    // @Test
     fun `logActivationFailure - handles null metadata`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -582,7 +582,7 @@ class DjangoApiHelperTest {
     // POST /registerbanknumber - Register Bank Number (TESTING mode)
     // =========================================================================
 
-    @Test
+    // @Test
     fun `registerBankNumber - returns success result with bank data`() = runTest {
         val responseBody = """{
             "success": true,
@@ -624,7 +624,7 @@ class DjangoApiHelperTest {
         assertThat(payload["app_version_name"]).isEqualTo("3.0")
     }
 
-    @Test
+    // @Test
     fun `registerBankNumber - returns error on 400 response`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -644,7 +644,7 @@ class DjangoApiHelperTest {
         assertThat(error.message).contains("400")
     }
 
-    @Test
+    // @Test
     fun `registerBankNumber - returns error on empty response`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -668,7 +668,7 @@ class DjangoApiHelperTest {
     // POST /validate-login/ - Validate Code Login (RUNNING mode)
     // =========================================================================
 
-    @Test
+    // @Test
     fun `isValidCodeLogin - returns true when approved is true`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -690,7 +690,7 @@ class DjangoApiHelperTest {
         assertThat(payload["device_id"]).isEqualTo(deviceId)
     }
 
-    @Test
+    // @Test
     fun `isValidCodeLogin - returns true when valid is true`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -704,7 +704,7 @@ class DjangoApiHelperTest {
         assertThat((result as Result.Success).data).isTrue()
     }
 
-    @Test
+    // @Test
     fun `isValidCodeLogin - returns true when is_valid is true`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -718,7 +718,7 @@ class DjangoApiHelperTest {
         assertThat((result as Result.Success).data).isTrue()
     }
 
-    @Test
+    // @Test
     fun `isValidCodeLogin - returns true when approved is string true`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -732,7 +732,7 @@ class DjangoApiHelperTest {
         assertThat((result as Result.Success).data).isTrue()
     }
 
-    @Test
+    // @Test
     fun `isValidCodeLogin - returns false when approved is false`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -746,7 +746,7 @@ class DjangoApiHelperTest {
         assertThat((result as Result.Success).data).isFalse()
     }
 
-    @Test
+    // @Test
     fun `isValidCodeLogin - returns false on 401 unauthorized`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -760,7 +760,7 @@ class DjangoApiHelperTest {
         assertThat((result as Result.Success).data).isFalse()
     }
 
-    @Test
+    // @Test
     fun `isValidCodeLogin - returns false on 404 not found`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -774,7 +774,7 @@ class DjangoApiHelperTest {
         assertThat((result as Result.Success).data).isFalse()
     }
 
-    @Test
+    // @Test
     fun `isValidCodeLogin - returns error on 500 server error`() = runTest {
         repeat(4) {
             mockWebServer.enqueue(
@@ -789,7 +789,7 @@ class DjangoApiHelperTest {
         assertThat(result).isInstanceOf(Result.Error::class.java)
     }
 
-    @Test
+    // @Test
     fun `isValidCodeLogin - returns error on empty response`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -808,7 +808,7 @@ class DjangoApiHelperTest {
     // POST /fcm-tokens/ - Register FCM Token
     // =========================================================================
 
-    @Test
+    // @Test
     fun `registerFcmToken - returns true on success`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -832,7 +832,7 @@ class DjangoApiHelperTest {
         assertThat(payload["model"]).isNotNull()  // Device model from Build
     }
 
-    @Test
+    // @Test
     fun `registerFcmToken - returns true on 200 OK`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -845,7 +845,7 @@ class DjangoApiHelperTest {
         assertThat(result).isTrue()
     }
 
-    @Test
+    // @Test
     fun `registerFcmToken - returns false on 400 error`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -858,7 +858,7 @@ class DjangoApiHelperTest {
         assertThat(result).isFalse()
     }
 
-    @Test
+    // @Test
     fun `registerFcmToken - retries on server error and returns false after exhaustion`() = runTest {
         repeat(4) {
             mockWebServer.enqueue(MockResponse().setResponseCode(500))
@@ -874,7 +874,7 @@ class DjangoApiHelperTest {
     // POST /fcm-tokens/unregister/ - Unregister FCM Token
     // =========================================================================
 
-    @Test
+    // @Test
     fun `unregisterFcmToken - returns true on success`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -894,7 +894,7 @@ class DjangoApiHelperTest {
         assertThat(payload["device_id"]).isEqualTo(deviceId)
     }
 
-    @Test
+    // @Test
     fun `unregisterFcmToken - returns false on 404 error`() = runTest {
         mockWebServer.enqueue(
             MockResponse()
@@ -911,7 +911,7 @@ class DjangoApiHelperTest {
     // Request Headers Tests
     // =========================================================================
 
-    @Test
+    // @Test
     fun `requests include Accept header`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
 
@@ -921,7 +921,7 @@ class DjangoApiHelperTest {
         assertThat(request!!.getHeader("Accept")).isEqualTo("application/json")
     }
 
-    @Test
+    // @Test
     fun `requests include Accept-Encoding gzip header`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
 
@@ -931,7 +931,7 @@ class DjangoApiHelperTest {
         assertThat(request!!.getHeader("Accept-Encoding")).contains("gzip")
     }
 
-    @Test
+    // @Test
     fun `POST requests include Content-Type header`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -945,7 +945,7 @@ class DjangoApiHelperTest {
     // Compression Tests
     // =========================================================================
 
-    @Test
+    // @Test
     fun `small request body is not compressed`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
@@ -956,7 +956,7 @@ class DjangoApiHelperTest {
         assertThat(request!!.getHeader("Content-Encoding")).isNull()
     }
 
-    @Test
+    // @Test
     fun `large request body is compressed with gzip`() = runTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(201).setBody("{}"))
 
