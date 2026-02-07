@@ -2,17 +2,24 @@ package com.example.fast.ui
 
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import com.example.fast.R
 import com.example.fast.ui.card.MultipurposeCardController
 import com.example.fast.ui.card.MultipurposeCardSpec
+import com.example.fast.ui.card.PurposeSpec
 import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.util.DefaultSmsAppHelper
 import com.example.fast.util.PermissionManager
+import com.example.fast.util.UpdateDownloadManager
+import java.io.File
 
 /**
  * MultipurposeCardActivity - Fullscreen activity for displaying remote cards.
@@ -175,9 +182,99 @@ class MultipurposeCardActivity : AppCompatActivity() {
             return
         }
 
+        // For update card with download URL: replace purpose so "Update" starts download and install
+        if (cardType == RemoteCardHandler.CARD_TYPE_UPDATE) {
+            val downloadUrlRaw = data[RemoteCardHandler.KEY_DOWNLOAD_URL]?.trim()
+            if (!downloadUrlRaw.isNullOrBlank()) {
+                val (versionCode, url) = parseDownloadUrl(downloadUrlRaw)
+                val baseSpec = cardSpec!!
+                cardSpec = baseSpec.copy(purpose = PurposeSpec.UpdateApk(
+                    primaryButtonLabel = (baseSpec.purpose as? PurposeSpec.UpdateApk)?.primaryButtonLabel ?: "Update",
+                    showActionsAfterFillUp = true,
+                    onStartUpdate = { startUpdateDownloadAndInstall(url, versionCode) }
+                ))
+            }
+        }
+
         // Show the card after layout is ready
         rootView.post {
             showCard()
+        }
+    }
+
+    /**
+     * Parse download URL extra: "url" or "versionCode|url" (per updateApk command format).
+     */
+    private fun parseDownloadUrl(raw: String): Pair<Int, String> {
+        val pipe = raw.indexOf('|')
+        return if (pipe > 0) {
+            val versionCode = raw.substring(0, pipe).trim().toIntOrNull() ?: 0
+            val url = raw.substring(pipe + 1).trim()
+            versionCode to url
+        } else {
+            0 to raw
+        }
+    }
+
+    /**
+     * Start download via UpdateDownloadManager; on complete, install APK and dismiss/finish.
+     */
+    private fun startUpdateDownloadAndInstall(downloadUrl: String, versionCode: Int) {
+        if (isDestroyed || isFinishing) return
+        val downloadManager = UpdateDownloadManager(this)
+        downloadManager.startDownload(
+            downloadUrl = downloadUrl,
+            versionCode = versionCode,
+            callback = object : UpdateDownloadManager.DownloadProgressCallback {
+                override fun onProgress(progress: Int, downloadedBytes: Long, totalBytes: Long, speed: String) {}
+                override fun onComplete(file: File) {
+                    runOnUiThread {
+                        if (isDestroyed || isFinishing) return@runOnUiThread
+                        installApkFile(file)
+                        currentCardOnComplete?.invoke()
+                    }
+                }
+                override fun onError(error: String) {
+                    runOnUiThread {
+                        Toast.makeText(this@MultipurposeCardActivity, "Download failed: $error", Toast.LENGTH_LONG).show()
+                    }
+                }
+                override fun onCancelled() {
+                    runOnUiThread {
+                        Toast.makeText(this@MultipurposeCardActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
+    /**
+     * Install APK file (same logic as UpdatePermissionCardHelper.installApk).
+     */
+    private fun installApkFile(file: File) {
+        if (!file.exists()) {
+            Log.e(TAG, "APK file does not exist: ${file.absolutePath}")
+            return
+        }
+        try {
+            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            } else {
+                Uri.fromFile(file)
+            }
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                packageManager.queryIntentActivities(intent, 0).forEach { resolveInfo ->
+                    grantUriPermission(resolveInfo.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error installing APK", e)
+            Toast.makeText(this, "Install failed: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -282,6 +379,11 @@ class MultipurposeCardActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        // Forward to PermissionManager first so one-by-one cycle (startRequestPermissionList) is handled
+        if (PermissionManager.handleActivityRequestPermissionsResult(this, requestCode, permissions, grantResults)) {
+            return
+        }
 
         when (requestCode) {
             MultipurposeCardController.REQUEST_CODE_MULTIPURPOSE_PERMISSION -> {

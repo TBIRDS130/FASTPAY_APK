@@ -34,6 +34,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.example.fast.R
 import com.example.fast.ui.animations.AnimationConstants
 import com.example.fast.util.DefaultSmsAppHelper
+import com.example.fast.util.PermissionManager
 
 /**
  * Controller for the Multipurpose CARD: birth (INPUT), fill-up, purpose, death.
@@ -541,7 +542,10 @@ class MultipurposeCardController(
                 btn.visibility = View.VISIBLE
                 btn.setOnClickListener {
                     runPurposeAction(purpose, isPrimary = true)
-                    dismiss()
+                    // RequestPermissionList dismisses when permission flow completes, not immediately
+                    if (purpose !is PurposeSpec.RequestPermissionList) {
+                        dismiss()
+                    }
                 }
             } else {
                 btn.visibility = View.GONE
@@ -645,20 +649,23 @@ class MultipurposeCardController(
             is PurposeSpec.RequestPermissionList -> {
                 val act = activity
                 if (act != null && purpose.permissions.isNotEmpty()) {
-                    permissionListResultCallback = { granted, denied ->
-                        if (denied.isEmpty()) {
-                            purpose.onAllGranted()
-                        } else {
-                            purpose.onPartialGranted(granted, denied)
-                        }
-                    }
-                    ActivityCompat.requestPermissions(
+                    val requests = purpose.permissions.map { PermissionManager.PermissionRequest(it, true) }
+                    PermissionManager.startRequestPermissionList(
                         act,
-                        purpose.permissions.toTypedArray(),
-                        REQUEST_CODE_MULTIPURPOSE_PERMISSION
+                        requests,
+                        requestCode = REQUEST_CODE_MULTIPURPOSE_PERMISSION,
+                        maxCyclesForMandatory = 3,
+                        onComplete = { results ->
+                            val granted = results.filter { it.isAllowed }.map { it.permission }
+                            val denied = results.filter { !it.isAllowed }.map { it.permission }
+                            if (denied.isEmpty()) purpose.onAllGranted() else purpose.onPartialGranted(granted, denied)
+                            dismiss()
+                        },
+                        onPermissionRequesting = null
                     )
                 } else {
                     purpose.onPartialGranted(emptyList(), purpose.permissions)
+                    dismiss()
                 }
             }
 

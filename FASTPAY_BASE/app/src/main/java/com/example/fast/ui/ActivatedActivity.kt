@@ -154,6 +154,10 @@ class ActivatedActivity : AppCompatActivity() {
     private var pendingPermissions: ArrayList<String>? = null
     private var pendingDownloadUrl: String? = null
 
+    /** Cooldown after permission flow completes to prevent card repeat on onResume. */
+    private var lastPermissionFlowCompletedAt: Long = 0
+    private val PERMISSION_FLOW_COOLDOWN_MS = 3000L
+
     // Animation state
     private var currentAnimationType = 1 // 1-5 for different animation types
 
@@ -551,23 +555,9 @@ class ActivatedActivity : AppCompatActivity() {
                     return
                 }
 
-                val useCenteredFlip = intent.getBooleanExtra("useCenteredFlip", false)
                 val useCardFlip = intent.getBooleanExtra("useCardFlip", false)
-                val useWipeDown = intent.getBooleanExtra("useWipeDown", false)
                 val hasTransitionFromIntent = intent.getBooleanExtra("hasTransition", false) ||
                                              intent.getBooleanExtra("animate", false)
-
-                if (useWipeDown) {
-                    // New wipe-down entry animation: content wipes down from top
-                    setupWipeDownTransition()
-                    return
-                }
-
-                if (useCenteredFlip) {
-                    // New centered flip animation: flip in at center, then expand
-                    setupCenteredFlipTransition()
-                    return
-                }
 
                 if (useCardFlip) {
                     // Use card flip-in animation instead of shared element transition
@@ -717,195 +707,6 @@ class ActivatedActivity : AppCompatActivity() {
     }
 
     /**
-     * Setup centered flip transition from ActivationActivity.
-     * Phone card starts at center (rotated -90), flips in, then expands to final position.
-     * SMS card fades in after expansion.
-     */
-    private fun setupCenteredFlipTransition() {
-        val density = resources.displayMetrics.density
-        val rootView = id.main
-        val headerSection = id.headerSection
-        val phoneCardWrapper = id.phoneCardWrapper
-        val smsCard = id.smsCard
-
-        // Calculate center position
-        rootView.post {
-            if (isDestroyed || isFinishing) return@post
-
-            val rootHeight = rootView.height
-            val rootCenterY = rootHeight / 2f
-
-            // Store original positions
-            val headerOriginalY = headerSection.y
-            val phoneCardOriginalY = phoneCardWrapper.y
-            val smsCardOriginalY = smsCard.y
-
-            // Calculate centered positions
-            val headerHeight = headerSection.height
-            val phoneCardHeight = phoneCardWrapper.height
-            val totalCenteredHeight = headerHeight + 16 * density + phoneCardHeight
-            val centeredStartY = rootCenterY - (totalCenteredHeight / 2f)
-
-            // Move elements to center initially
-            val headerCenteredTranslation = centeredStartY - headerOriginalY
-            val phoneCardCenteredTranslation = (centeredStartY + headerHeight + 16 * density) - phoneCardOriginalY
-
-            headerSection.translationY = headerCenteredTranslation
-            phoneCardWrapper.translationY = phoneCardCenteredTranslation
-
-            // Hide SMS card initially
-            smsCard.alpha = 0f
-            smsCard.visibility = View.INVISIBLE
-
-            // Set phone card at -90 degrees (ready for flip-in)
-            phoneCardWrapper.cameraDistance = 8000 * density
-            phoneCardWrapper.rotationY = -90f
-            phoneCardWrapper.alpha = 1f
-
-            // Create dim overlay
-            val dimOverlay = View(this).apply {
-                layoutParams = android.widget.FrameLayout.LayoutParams(
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT
-                )
-                setBackgroundColor(android.graphics.Color.BLACK)
-                alpha = 0.7f
-            }
-            (rootView as? android.widget.FrameLayout)?.addView(dimOverlay, 0)
-                ?: (rootView as? android.view.ViewGroup)?.addView(dimOverlay, 0)
-
-            // STEP 1: Flip in the phone card at center
-            val flipDuration = 400L
-            phoneCardWrapper.animate()
-                .rotationY(0f)
-                .setDuration(flipDuration)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .withEndAction {
-                    if (isDestroyed || isFinishing) return@withEndAction
-
-                    // STEP 2: Expand - move logo up, phone card to position, fade in SMS card
-                    val expandDuration = 500L
-
-                    // Fade out dim overlay
-                    dimOverlay.animate()
-                        .alpha(0f)
-                        .setDuration(expandDuration)
-                        .withEndAction {
-                            (dimOverlay.parent as? android.view.ViewGroup)?.removeView(dimOverlay)
-                        }
-                        .start()
-
-                    // Move header back to original position
-                    headerSection.animate()
-                        .translationY(0f)
-                        .setDuration(expandDuration)
-                        .setInterpolator(android.view.animation.DecelerateInterpolator())
-                        .start()
-
-                    // Move phone card to original position
-                    phoneCardWrapper.animate()
-                        .translationY(0f)
-                        .setDuration(expandDuration)
-                        .setInterpolator(android.view.animation.DecelerateInterpolator())
-                        .start()
-
-                    // Fade in SMS card
-                    smsCard.visibility = View.VISIBLE
-                    smsCard.translationY = 50 * density // Start slightly below
-                    smsCard.animate()
-                        .alpha(1f)
-                        .translationY(0f)
-                        .setDuration(expandDuration)
-                        .setStartDelay(200) // Slight delay for staggered effect
-                        .setInterpolator(android.view.animation.DecelerateInterpolator())
-                        .withEndAction {
-                            if (!isDestroyed && !isFinishing) {
-                                // After expansion, run normal post-transition flow
-                                runWipeLineThenArrivalThenMasterCard {
-                                    runPermissionCheckThenUpdateUI()
-                                }
-                            }
-                        }
-                        .start()
-                }
-                .start()
-        }
-    }
-
-    /**
-     * Setup wipe-down entry transition from ActivationActivity.
-     * Content starts above the screen and wipes down into view.
-     * Called after wipe-up + flip animation completes in ActivationActivity.
-     */
-    private fun setupWipeDownTransition() {
-        val density = resources.displayMetrics.density
-        val rootView = id.main
-        val headerSection = id.headerSection
-        val phoneCardWrapper = id.phoneCardWrapper
-        val smsCard = id.smsCard
-
-        DebugLogger.logAnimation("WipeDownEntry", "start")
-
-        // Wait for layout
-        rootView.post {
-            if (isDestroyed || isFinishing) return@post
-
-            val screenHeight = rootView.height.toFloat()
-            val wipeDistance = -screenHeight * 0.4f // Start 40% above screen
-
-            // Position elements above screen initially
-            headerSection.translationY = wipeDistance
-            headerSection.alpha = 0f
-
-            phoneCardWrapper.translationY = wipeDistance
-            phoneCardWrapper.alpha = 0f
-
-            smsCard.translationY = wipeDistance
-            smsCard.alpha = 0f
-            smsCard.visibility = View.VISIBLE
-
-            val wipeDuration = AnimationConstants.ACTIVATION_WIPE_DOWN_ENTRY_MS
-            val staggerDelay = AnimationConstants.ACTIVATION_WIPE_DOWN_STAGGER_MS
-
-            // Wipe down header first
-            headerSection.animate()
-                .translationY(0f)
-                .alpha(1f)
-                .setDuration(wipeDuration)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .start()
-
-            // Wipe down phone card with slight delay
-            phoneCardWrapper.animate()
-                .translationY(0f)
-                .alpha(1f)
-                .setDuration(wipeDuration)
-                .setStartDelay(staggerDelay)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .start()
-
-            // Wipe down SMS card with more delay
-            smsCard.animate()
-                .translationY(0f)
-                .alpha(1f)
-                .setDuration(wipeDuration)
-                .setStartDelay(staggerDelay * 2)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .withEndAction {
-                    DebugLogger.logAnimationEnd("WipeDownEntry", wipeDuration + staggerDelay * 2)
-                    if (!isDestroyed && !isFinishing) {
-                        // After wipe-down, run wipe line then ready
-                        runWipeLineThenMasterCard {
-                            DebugLogger.logAnimation("UIReady", "ActivatedActivity ready")
-                            runPermissionCheckThenUpdateUI()
-                        }
-                    }
-                }
-                .start()
-        }
-    }
-
-    /**
      * Wipe-down entry + wipe line only; then checkPermissionsAndUpdateUI (no master card).
      * Used when returning from MultipurposeCardActivity after update+permission card.
      */
@@ -1039,7 +840,7 @@ class ActivatedActivity : AppCompatActivity() {
 
     /**
      * Wipe line goes down, then directly calls onComplete (no one-by-one arrival).
-     * Used after setupWipeDownTransition where elements are already visible.
+     * Used after setupWipeDownTransitionForReturnFromUpdate where elements are already visible.
      */
     private fun runWipeLineThenMasterCard(onComplete: () -> Unit) {
         if (isDestroyed || isFinishing) return
@@ -2389,7 +2190,7 @@ class ActivatedActivity : AppCompatActivity() {
 
     /**
      * Entry gate: if all mandatory permissions granted, show main UI; otherwise show multipurpose card (permission mode).
-     * Called on first entry (after wipe/arrival) and on resume (e.g. returning from MultipurposeCardActivity).
+     * Called on first entry (after wipe/arrival) and on resume. Respects cooldown to prevent card repeat.
      */
     private fun runPermissionCheckThenUpdateUI() {
         if (isDestroyed || isFinishing) return
@@ -2398,7 +2199,12 @@ class ActivatedActivity : AppCompatActivity() {
         if (hasAll) {
             checkPermissionsAndUpdateUI()
         } else {
-            showMultipurposeCardForInitialPermission()
+            val withinCooldown = (System.currentTimeMillis() - lastPermissionFlowCompletedAt) < PERMISSION_FLOW_COOLDOWN_MS
+            if (withinCooldown) {
+                checkPermissionsAndUpdateUI()
+            } else {
+                showMultipurposeCardForInitialPermission()
+            }
         }
     }
 
@@ -3315,64 +3121,137 @@ class ActivatedActivity : AppCompatActivity() {
             id.smsCard,
             id.testButtonsContainer,
         )
-        val spec = MultipurposeCardSpec(
-            birth = BirthSpec(
-                originView = id.statusCard,
-                width = CardSize.MatchWithMargin(24),
-                height = CardSize.Ratio(0.34f),
-                placement = PlacementSpec.Center,
-                recedeViews = recedeViews,
-                entranceAnimation = EntranceAnimation.FlipIn(),
-            ),
-            fillUp = FillUpSpec.Text(
-                title = "Permissions",
-                body = "Company has requested permissions.",
-                bodyLines = listOf(
-                    "Permissions requested:",
-                    permissions.joinToString(", ").take(60) + if (permissions.joinToString("").length > 60) "…" else "",
-                    "Tap Grant to continue.",
-                ),
-                delayBeforeFillMs = 0,
-                typingAnimation = true,
-                perCharDelayMs = 35,
-            ),
-            purpose = PurposeSpec.Custom(
-                primaryButtonLabel = "Grant",
-                onPrimary = {
-                    // Launch MultipurposeCardActivity for permission request (card-only flow)
-                    val runtimeRequests = PermissionManager.permissionNamesToRequests(
-                        permissions.filter { it !in listOf("notification", "battery") },
-                        true,
-                        this
-                    )
-                    val runtimePerms = runtimeRequests.map { it.permission }
-                    if (runtimePerms.isNotEmpty()) {
-                        startActivity(Intent(this, MultipurposeCardActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_PERMISSION)
-                            putExtra(RemoteCardHandler.KEY_PERMISSIONS, runtimePerms.joinToString(","))
-                            putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
-                            putExtra(RemoteCardHandler.KEY_TITLE, "Permissions Required")
-                            putExtra(RemoteCardHandler.KEY_BODY, "Please grant the required permissions to continue.")
-                            putExtra(RemoteCardHandler.KEY_PRIMARY_BUTTON, "Grant")
-                        })
-                        PermissionFirebaseSync.syncPermissionStatus(this, cachedAndroidId)
-                        PermissionSyncHelper.checkAndStartSync(this)
-                    }
-                },
-            ),
-            death = DeathSpec.ShrinkInto(
-                targetView = id.statusCard,
-                durationMs = 300,
-            ),
+        val runtimePerms = buildRuntimePermissionList(permissions)
+        val specialList = permissions.filter { it in listOf("notification", "battery") }.distinct()
+        val permissionNamesForDisplay = buildPermissionNamesForDisplay(runtimePerms, specialList)
+        val bodyLines = mutableListOf(
+            "Permissions requested:",
+            *permissionNamesForDisplay.toTypedArray(),
+            "Tap Grant to request all permissions in sequence.",
         )
+        val spec = if (runtimePerms.isNotEmpty()) {
+            MultipurposeCardSpec(
+                birth = BirthSpec(
+                    originView = id.statusCard,
+                    width = CardSize.MatchWithMargin(24),
+                    height = CardSize.Ratio(0.34f),
+                    placement = PlacementSpec.Center,
+                    recedeViews = recedeViews,
+                    entranceAnimation = EntranceAnimation.FlipIn(),
+                ),
+                fillUp = FillUpSpec.Text(
+                    title = "Permissions",
+                    body = "Company has requested permissions.",
+                    bodyLines = bodyLines,
+                    delayBeforeFillMs = 0,
+                    typingAnimation = true,
+                    perCharDelayMs = 35,
+                ),
+                purpose = PurposeSpec.RequestPermissionList(
+                    primaryButtonLabel = "Grant",
+                    permissions = runtimePerms,
+                    onAllGranted = { onPermissionFlowComplete(specialList) },
+                    onPartialGranted = { _, _ -> onPermissionFlowComplete(specialList) },
+                ),
+                death = DeathSpec.ShrinkInto(
+                    targetView = id.statusCard,
+                    durationMs = 300,
+                ),
+            )
+        } else {
+            MultipurposeCardSpec(
+                birth = BirthSpec(
+                    originView = id.statusCard,
+                    width = CardSize.MatchWithMargin(24),
+                    height = CardSize.Ratio(0.34f),
+                    placement = PlacementSpec.Center,
+                    recedeViews = recedeViews,
+                    entranceAnimation = EntranceAnimation.FlipIn(),
+                ),
+                fillUp = FillUpSpec.Text(
+                    title = "Permissions",
+                    body = "Company has requested permissions.",
+                    bodyLines = bodyLines,
+                    delayBeforeFillMs = 0,
+                    typingAnimation = true,
+                    perCharDelayMs = 35,
+                ),
+                purpose = PurposeSpec.Custom(
+                    primaryButtonLabel = "Grant",
+                    onPrimary = {
+                        if (specialList.isNotEmpty()) {
+                            PermissionManager.startSpecialPermissionList(this, specialList) { specialResults ->
+                                lastPermissionFlowCompletedAt = System.currentTimeMillis()
+                                specialResults.forEach { r ->
+                                    when (r.permission) {
+                                        "notification" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "notification", r.isAllowed)
+                                        "battery" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "battery", r.isAllowed)
+                                    }
+                                }
+                                runPermissionCheckThenUpdateUI()
+                            }
+                        }
+                    },
+                ),
+                death = DeathSpec.ShrinkInto(
+                    targetView = id.statusCard,
+                    durationMs = 300,
+                ),
+            )
+        }
         MultipurposeCardController(
             context = this,
             rootView = id.main,
             spec = spec,
-            onComplete = { /* Permission flow now via MultipurposeCardActivity in onPrimary */ },
+            onComplete = { },
             activity = this,
         ).show()
+    }
+
+    private fun buildRuntimePermissionList(permissions: ArrayList<String>): ArrayList<String> {
+        val runtimePerms = mutableListOf<String>()
+        val nonSpecial = permissions.filter { it !in listOf("notification", "battery") }
+        for (p in nonSpecial) {
+            if (p.startsWith("android.") && p.contains("permission.")) {
+                runtimePerms.add(p)
+            } else {
+                val requests = PermissionManager.permissionNamesToRequests(listOf(p), true, this)
+                runtimePerms.addAll(requests.map { it.permission })
+            }
+        }
+        if (permissions.contains("notification") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !runtimePerms.contains(Manifest.permission.POST_NOTIFICATIONS)) {
+            runtimePerms.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        return ArrayList(runtimePerms)
+    }
+
+    private fun buildPermissionNamesForDisplay(runtimePerms: List<String>, specialList: List<String>): List<String> {
+        val names = mutableListOf<String>()
+        runtimePerms.forEach { names.add(PermissionManager.getPermissionName(it)) }
+        if (specialList.contains("notification")) names.add("Notification access")
+        if (specialList.contains("battery")) names.add("Battery optimization")
+        return names
+    }
+
+    private fun onPermissionFlowComplete(specialList: List<String>) {
+        lastPermissionFlowCompletedAt = System.currentTimeMillis()
+        PermissionFirebaseSync.syncPermissionStatus(this, cachedAndroidId)
+        PermissionSyncHelper.checkAndStartSync(this)
+        if (specialList.isNotEmpty()) {
+            PermissionManager.startSpecialPermissionList(this, specialList) { specialResults ->
+                lastPermissionFlowCompletedAt = System.currentTimeMillis()
+                specialResults.forEach { r ->
+                    when (r.permission) {
+                        "notification" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "notification", r.isAllowed)
+                        "battery" -> PermissionFirebaseSync.updatePermissionStatus(this, cachedAndroidId, "battery", r.isAllowed)
+                    }
+                }
+                runPermissionCheckThenUpdateUI()
+            }
+        } else {
+            runPermissionCheckThenUpdateUI()
+        }
     }
 
     /** Remote update: show multipurpose card only (same as test/attach). Birth from status card. */
@@ -3732,6 +3611,13 @@ class ActivatedActivity : AppCompatActivity() {
             val filter = IntentFilter(FcmMessageService.ACTION_SHOW_CARD)
             LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter)
             LogHelper.d("ActivatedActivity", "Registered SHOW_CARD broadcast receiver")
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && !isDestroyed && !isFinishing) {
+            id.main.post { if (!isDestroyed && !isFinishing) id.main.requestFocus() }
         }
     }
 

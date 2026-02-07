@@ -84,3 +84,5 @@ Request: `device_id`, `fcm_token`, `platform`, `model`. Response: 201.
 ---
 
 For full request/response examples and Django model definitions, see the original API contract with the backend team. Implementation: `DjangoApiHelper.kt`, call sites as in the table above.
+
+**API calls by screen/flow:** For a UI-oriented map of where each endpoint is triggered (Splash, Activation, Activated, background), see [API Calls by UI](13-api-calls-by-ui.md).

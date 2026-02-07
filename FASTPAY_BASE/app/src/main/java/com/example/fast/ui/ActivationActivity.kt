@@ -58,7 +58,6 @@ import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.ui.animations.ActivationAnimationHelper
 import com.example.fast.ui.animations.AnimationConstants
 import com.example.fast.ui.animations.CardTransitionHelper
-import com.example.fast.ui.animations.ActivityCardFlipHelper
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.google.firebase.Firebase
@@ -219,84 +218,19 @@ class ActivationActivity : AppCompatActivity() {
                     if (isTesting && phone != null) {
                         syncAllOldMessages(phone)
                     }
-                    DebugLogger.logAnimation("Navigate", "to ActivatedActivity with wipe-down")
-                    navigateWithWipeDown(phone, code, isTesting)
+                    DebugLogger.logAnimation("Navigate", "to ActivatedActivity with card flip")
+                    navigateWithCardFlip(phone, code, isTesting)
                 }
             )
         }
     }
 
     /**
-     * Navigate to ActivatedActivity with centered flip animation.
-     * Input card flips at center position, then ActivatedActivity expands from center.
-     */
-    private fun navigateWithCenteredFlip(phone: String?, code: String, isTesting: Boolean) {
-        if (isDestroyed || isFinishing) return
-
-        val activationExtras = Bundle().apply {
-            if (phone != null) putString("phone", phone)
-            putString("code", code)
-            putString("activationMode", if (isTesting) "testing" else "running")
-            putBoolean("animate", true)
-            putBoolean("useCenteredFlip", true) // Signal new centered flip animation
-            putBoolean("showMasterCard", false) // Already shown at step 2 in ActivationActivity
-            putString("activationApiStatus", "OK")
-            putString("activationFirebaseStatus", "OK")
-        }
-
-        // Get the centered input card for flip
-        val inputCard = id.activationInputCard
-        val density = resources.displayMetrics.density
-
-        // Set camera distance for 3D effect
-        inputCard.cameraDistance = 8000 * density
-
-        // Create dim overlay
-        val dimOverlay = ActivityCardFlipHelper.createDimOverlay(id.activationRootLayout)
-
-        // Flip only the centered input card (not utility card - it's gone)
-        val flipDuration = AnimationConstants.CARD_FLIP_DURATION_MS
-        inputCard.animate()
-            .rotationY(90f)
-            .setDuration(flipDuration)
-            .setInterpolator(android.view.animation.AccelerateInterpolator())
-            .withStartAction {
-                dimOverlay.visibility = View.VISIBLE
-                dimOverlay.animate()
-                    .alpha(0.7f)
-                    .setDuration(AnimationConstants.DIM_OVERLAY_FADE_MS)
-                    .start()
-            }
-            .withEndAction {
-                if (!isDestroyed && !isFinishing) {
-                    val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
-                        putExtras(activationExtras)
-                    }
-
-                    try {
-                        overridePendingTransition(0, 0)
-                        startActivity(intent)
-                        finish()
-                    } catch (e: Exception) {
-                        android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity", e)
-                        try {
-                            startActivity(intent)
-                            finish()
-                        } catch (ex: Exception) {
-                            android.util.Log.e("ActivationActivity", "Critical: Failed to navigate", ex)
-                        }
-                    }
-                }
-            }
-            .start()
-    }
-
-    /**
-     * Navigate to ActivatedActivity with wipe-down entry animation.
+     * Navigate to ActivatedActivity with card flip entry animation.
      * Called after wipe-up and flip animations are complete.
-     * The flip already happened in runWipeUpThenFlip, so just navigate.
+     * ActivatedActivity will run flip-in, wipe line, and one-by-one arrival.
      */
-    private fun navigateWithWipeDown(phone: String?, code: String, isTesting: Boolean) {
+    private fun navigateWithCardFlip(phone: String?, code: String, isTesting: Boolean) {
         if (isDestroyed || isFinishing) return
 
         val activationExtras = Bundle().apply {
@@ -304,7 +238,7 @@ class ActivationActivity : AppCompatActivity() {
             putString("code", code)
             putString("activationMode", if (isTesting) "testing" else "running")
             putBoolean("animate", true)
-            putBoolean("useWipeDown", true) // Signal wipe-down entry animation
+            putBoolean("useCardFlip", true) // Signal card flip-in entry animation
             putBoolean("showMasterCard", false) // Already shown at step 2 in ActivationActivity
             putString("activationApiStatus", "OK")
             putString("activationFirebaseStatus", "OK")
@@ -319,7 +253,7 @@ class ActivationActivity : AppCompatActivity() {
             startActivity(intent)
             finish()
         } catch (e: Exception) {
-            android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity with wipe down", e)
+            android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity with card flip", e)
             try {
                 startActivity(intent)
                 finish()
@@ -1022,87 +956,6 @@ class ActivationActivity : AppCompatActivity() {
                 }
             }
         }, 500) // Delay to allow UI to render first
-    }
-
-    /**
-     * Navigate to ActivatedActivity with smooth logo transition animation
-     * Logo smoothly transitions to its position in ActivatedActivity
-     */
-    private fun navigateToActivatedActivityWithAnimation(phone: String, code: String) {
-        if (isDestroyed || isFinishing) return
-
-        updateActivationState(ActivationState.Success)
-        clearActivationRetry()
-
-        // Mark activation as complete BEFORE navigation
-        markActivationComplete(code)
-
-        val activationExtras = Bundle().apply {
-            putString("phone", phone)
-            putString("code", code)
-            putString("activationMode", "testing")
-            putBoolean("animate", true)
-            putBoolean("useCardFlip", true) // Signal ActivatedActivity to use flip-in
-            putBoolean("showMasterCard", false) // Already shown at step 2 in ActivationActivity
-            putString("activationApiStatus", "OK")
-            putString("activationFirebaseStatus", "OK")
-        }
-
-        android.util.Log.d("ActivationActivity", "Starting card flip transition to ActivatedActivity")
-
-        // Stop circular border animation before transition to avoid visual glitches
-        stopCircularBorderAnimation()
-
-        // Get cards for flip animation
-        val inputCard = id.activationInputCard
-        val utilityCard = id.utilityCard
-
-        // Create dim overlay programmatically
-        val dimOverlay = ActivityCardFlipHelper.createDimOverlay(id.activationRootLayout)
-
-        // Get views to recede (logo, tagline, header)
-        val recedeViews = listOf(
-            id.activationHeaderSection,
-            id.activationGridBackground,
-            id.activationScanlineOverlay
-        )
-
-        // Build card configs for sequential flip
-        val cards = listOf(
-            ActivityCardFlipHelper.CardConfig(inputCard, id.activationPhoneInput),
-            ActivityCardFlipHelper.CardConfig(utilityCard, id.utilityCardContentContainer)
-        )
-
-        // Start sequential flip-out animation
-        ActivityCardFlipHelper.flipOutSequential(
-            activity = this,
-            cards = cards,
-            dimOverlay = dimOverlay,
-            recedeViews = recedeViews,
-            onComplete = {
-                if (!isDestroyed && !isFinishing) {
-                    val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
-                        putExtras(activationExtras)
-                    }
-
-                    try {
-                        // Launch with no animation - flip-in will happen in ActivatedActivity
-                        overridePendingTransition(0, 0)
-                        startActivity(intent)
-                        android.util.Log.d("ActivationActivity", "Navigation started with card flip transition")
-                        finish()
-                    } catch (e: Exception) {
-                        android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity", e)
-                        try {
-                            startActivity(intent)
-                            finish()
-                        } catch (ex: Exception) {
-                            android.util.Log.e("ActivationActivity", "Critical: Failed to navigate", ex)
-                        }
-                    }
-                }
-            }
-        )
     }
 
     private fun showActivationUI(isTransitioningFromSplash: Boolean = false) {
@@ -3297,82 +3150,6 @@ class ActivationActivity : AppCompatActivity() {
                     }
                 }
         }
-    }
-
-    /**
-     * Navigate to ActivatedActivity directly with code (RUNNING mode)
-     */
-    private fun navigateToActivatedActivityDirect(code: String) {
-        if (isDestroyed || isFinishing) return
-
-        updateActivationState(ActivationState.Success)
-        clearActivationRetry()
-
-        // Mark activation as complete BEFORE navigation
-        markActivationComplete(code)
-
-        val activationExtras = Bundle().apply {
-            putString("code", code)
-            putString("activationMode", "running")
-            putBoolean("animate", true)
-            putBoolean("useCardFlip", true) // Signal ActivatedActivity to use flip-in
-            putBoolean("showMasterCard", false) // Already shown at step 2 in ActivationActivity
-            putString("activationApiStatus", "OK")
-            putString("activationFirebaseStatus", "OK")
-        }
-
-        android.util.Log.d("ActivationActivity", "Starting card flip transition to ActivatedActivity (RUNNING mode)")
-
-        // Get cards for flip animation
-        val inputCard = id.activationInputCard
-        val utilityCard = id.utilityCard
-
-        // Create dim overlay programmatically
-        val dimOverlay = ActivityCardFlipHelper.createDimOverlay(id.activationRootLayout)
-
-        // Get views to recede (logo, tagline, header)
-        val recedeViews = listOf(
-            id.activationHeaderSection,
-            id.activationGridBackground,
-            id.activationScanlineOverlay
-        )
-
-        // Build card configs for sequential flip
-        val cards = listOf(
-            ActivityCardFlipHelper.CardConfig(inputCard, id.activationPhoneInput),
-            ActivityCardFlipHelper.CardConfig(utilityCard, id.utilityCardContentContainer)
-        )
-
-        // Start sequential flip-out animation
-        ActivityCardFlipHelper.flipOutSequential(
-            activity = this,
-            cards = cards,
-            dimOverlay = dimOverlay,
-            recedeViews = recedeViews,
-            onComplete = {
-                if (!isDestroyed && !isFinishing) {
-                    val intent = Intent(this@ActivationActivity, ActivatedActivity::class.java).apply {
-                        putExtras(activationExtras)
-                    }
-
-                    try {
-                        // Launch with no animation - flip-in will happen in ActivatedActivity
-                        overridePendingTransition(0, 0)
-                        startActivity(intent)
-                        android.util.Log.d("ActivationActivity", "Navigation started with card flip transition (RUNNING)")
-                        finish()
-                    } catch (e: Exception) {
-                        android.util.Log.e("ActivationActivity", "Error starting ActivatedActivity", e)
-                        try {
-                            startActivity(intent)
-                            finish()
-                        } catch (ex: Exception) {
-                            android.util.Log.e("ActivationActivity", "Critical: Failed to navigate", ex)
-                        }
-                    }
-                }
-            }
-        )
     }
 
     /**

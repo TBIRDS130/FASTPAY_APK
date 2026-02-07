@@ -20,6 +20,7 @@ This folder contains the complete documentation for the **FASTPAY_APK** reposito
 | 10 | [APK ↔ HTML Sync](10-sync-spec.md) | Keeping activation UI HTML in sync with APK resources |
 | 11 | [Instruction Card Tests](11-instruction-card-tests.md) | Remote instruction card test cases |
 | 12 | [Naming Refactor](12-naming-refactor.md) | Layout ID naming reference |
+| 13 | [API Calls by UI](13-api-calls-by-ui.md) | Django API call sites mapped to screens and background flow |
 
 ---
 

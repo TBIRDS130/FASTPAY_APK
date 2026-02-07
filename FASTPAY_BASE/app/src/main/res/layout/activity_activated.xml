@@ -8,6 +8,8 @@
     android:layout_height="match_parent"
     android:clipChildren="false"
     android:clipToPadding="false"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
     tools:context=".ui.ActivatedActivity">
 
     <!-- Guideline for top margin (5% from top) -->
