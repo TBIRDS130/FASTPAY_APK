@@ -120,6 +120,12 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -161,7 +167,9 @@ dependencies {
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation("androidx.test:core:1.5.0")
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.truth)
     implementation(libs.prexocore)
 
     implementation("de.hdodenhof:circleimageview:3.1.0")
@@ -171,7 +179,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("io.insert-koin:koin-android:3.5.6")
+    implementation(libs.koin.android)
     implementation(libs.timber)
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)

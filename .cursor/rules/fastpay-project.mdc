@@ -6,6 +6,7 @@ alwaysApply: true
 # FASTPAY_APK project root
 
 - **Root:** `FASTPAY_APK` is the repo root. Paths, scripts, and docs assume this directory as the working root.
+- **Docs:** Full documentation is in `docs/` – start at `docs/README.md` (overview, build, architecture, Django API, Firebase, remote commands, environment, keystore, code style, sync spec, instruction card tests, naming).
 - **Versions:** Each FastPay app variant is a subfolder:
   - `FASTPAY_BASE` – base app (current release candidate)
   - Future versions (e.g. branded builds) go as sibling folders.
@@ -16,4 +17,4 @@ alwaysApply: true
 
 - **Build and install on connected device:** From repo root run `.\scripts\test-debug.ps1` (or `.\scripts\test-debug.ps1 FASTPAY_BASE`). From `FASTPAY_BASE`: `.\gradlew.bat assembleDebug installDebug`.
 - **View activation debug logs:** `adb logcat -s ActivationActivity:D`.
-- **Full details:** See `ENVIRONMENT.md` section "Cursor / Agent testing".
+- **Full details:** See `docs/07-environment.md` (Cursor / Agent testing) or `ENVIRONMENT.md`.

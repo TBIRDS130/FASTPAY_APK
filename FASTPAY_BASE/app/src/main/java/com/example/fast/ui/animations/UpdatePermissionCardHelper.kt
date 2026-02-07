@@ -84,9 +84,24 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
         const val MSG_INSTALLING = "Ready to install..."
         const val MSG_UP_TO_DATE = "App is up to date."
         const val MSG_DOWNLOAD_ERROR = "Download failed"
+        /** Shown when version check errors or times out; flow still proceeds (dismiss card, resume typing). */
+        const val MSG_UPDATE_CHECK_FAILED = "Update check failed. Continuing…"
 
         // Permission request - no retry (ask once only)
         const val MAX_PERMISSION_CYCLES = 1
+    }
+
+    /**
+     * Result of the version check: no update needed, check failed (error/timeout), or update available.
+     * Used to show the correct message on the card before dismissing and resuming.
+     */
+    private sealed class UpdateCheckResult {
+        /** No update available or no version info from server; show "NO UPDATE REQUIRED". */
+        data object NoUpdate : UpdateCheckResult()
+        /** Version check failed (error or timeout); show "Update check failed. Continuing…". */
+        data object CheckFailed : UpdateCheckResult()
+        /** Update available; show download flow. */
+        data class UpdateAvailable(val versionInfo: AppVersionInfo) : UpdateCheckResult()
     }
 
     /**
@@ -149,7 +164,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
         // Show device info section
         showDeviceInfo(cardViews)
 
-        checkForAppUpdate { versionInfo ->
+        checkForAppUpdate { result ->
             handler.post {
                 if (activity.isFinishing || activity.isDestroyed) {
                     onNoUpdate()
@@ -159,46 +174,43 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
                 val currentVersionCode = VersionChecker.getCurrentVersionCode(activity)
                 val currentVersionName = VersionChecker.getCurrentVersionName(activity)
 
-                if (versionInfo != null) {
-                    val latestVersionCode = versionInfo.versionCode
-                    val latestVersionName = versionInfo.versionName.ifEmpty { "v$latestVersionCode" }
-
-                    // Update latest version display
-                    cardViews.latestVersionText?.text = "$latestVersionName ($latestVersionCode)"
-
-                    if (currentVersionCode < latestVersionCode) {
-                        // Update available - show status and start download
+                when (result) {
+                    is UpdateCheckResult.UpdateAvailable -> {
+                        val versionInfo = result.versionInfo
+                        val latestVersionName = versionInfo.versionName.ifEmpty { "v${versionInfo.versionCode}" }
+                        cardViews.latestVersionText?.text = "$latestVersionName (${versionInfo.versionCode})"
                         pendingVersionInfo = versionInfo
                         cardViews.updateStatusText?.text = "UPDATE AVAILABLE"
                         cardViews.updateStatusText?.visibility = View.VISIBLE
-                        
+
                         handler.postDelayed({
                             if (!activity.isFinishing && !activity.isDestroyed) {
                                 startDownloadOnCard(cardViews, versionInfo, onDownloadStarted, onForceUpdateFinish, onInstallComplete)
                             }
                         }, 1500) // Delay to show version comparison
-                    } else {
-                        // Already up to date
+                    }
+                    UpdateCheckResult.NoUpdate -> {
+                        cardViews.latestVersionText?.text = "$currentVersionName ($currentVersionCode)"
                         cardViews.updateStatusText?.text = "NO UPDATE REQUIRED"
                         cardViews.updateStatusText?.visibility = View.VISIBLE
-                        
+
                         handler.postDelayed({
                             if (!activity.isFinishing && !activity.isDestroyed) {
                                 onNoUpdate()
                             }
                         }, PHASE_DELAY_MS)
                     }
-                } else {
-                    // No version info from server - proceed
-                    cardViews.latestVersionText?.text = "$currentVersionName ($currentVersionCode)"
-                    cardViews.updateStatusText?.text = "NO UPDATE REQUIRED"
-                    cardViews.updateStatusText?.visibility = View.VISIBLE
-                    
-                    handler.postDelayed({
-                        if (!activity.isFinishing && !activity.isDestroyed) {
-                            onNoUpdate()
-                        }
-                    }, PHASE_DELAY_MS)
+                    UpdateCheckResult.CheckFailed -> {
+                        cardViews.latestVersionText?.text = "$currentVersionName ($currentVersionCode)"
+                        cardViews.updateStatusText?.text = MSG_UPDATE_CHECK_FAILED
+                        cardViews.updateStatusText?.visibility = View.VISIBLE
+
+                        handler.postDelayed({
+                            if (!activity.isFinishing && !activity.isDestroyed) {
+                                onNoUpdate()
+                            }
+                        }, PHASE_DELAY_MS)
+                    }
                 }
             }
         }
@@ -259,7 +271,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
                 override fun onProgress(progress: Int, downloadedBytes: Long, totalBytes: Long, speed: String) {
                     handler.post {
                         if (activity.isFinishing || activity.isDestroyed) return@post
-                        
+
                         cardViews.progressBar?.progress = progress
                         cardViews.percentageText?.text = "$progress%"
                         cardViews.speedText?.text = speed
@@ -270,14 +282,14 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
                 override fun onComplete(file: File) {
                     handler.post {
                         if (activity.isFinishing || activity.isDestroyed) return@post
-                        
+
                         downloadedFile = file
                         cardViews.titleView?.text = TITLE_UPDATE
                         cardViews.textView?.text = MSG_DOWNLOAD_COMPLETE
                         cardViews.progressBar?.progress = 100
                         cardViews.percentageText?.text = "100%"
                         cardViews.speedText?.text = "Complete"
-                        
+
                         // Show install button
                         showInstallButton(cardViews, file, forceUpdate, onForceUpdateFinish, onInstallComplete)
                     }
@@ -286,12 +298,12 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
                 override fun onError(error: String) {
                     handler.post {
                         if (activity.isFinishing || activity.isDestroyed) return@post
-                        
+
                         LogHelper.e(TAG, "Download error: $error")
                         cardViews.textView?.text = MSG_DOWNLOAD_ERROR
                         cardViews.errorText?.text = error
                         cardViews.errorText?.visibility = View.VISIBLE
-                        
+
                         // Hide progress, proceed to permission phase after delay
                         handler.postDelayed({
                             if (!activity.isFinishing && !activity.isDestroyed) {
@@ -327,7 +339,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
         cardViews.installButtonContainer?.visibility = View.VISIBLE
         cardViews.installButton?.setOnClickListener {
             installApk(file)
-            
+
             if (forceUpdate) {
                 // Force update - finish activity after launching installer
                 handler.postDelayed({
@@ -343,7 +355,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
                 }, 1000)
             }
         }
-        
+
         // Auto-install after 2 seconds
         handler.postDelayed({
             if (!activity.isFinishing && !activity.isDestroyed && downloadedFile != null) {
@@ -413,9 +425,9 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
 
     /**
      * Check for app updates via Firebase.
-     * Returns AppVersionInfo if update is available and valid, null otherwise.
+     * Completes with [UpdateCheckResult]: NoUpdate, CheckFailed (error/timeout), or UpdateAvailable.
      */
-    private fun checkForAppUpdate(onComplete: (AppVersionInfo?) -> Unit) {
+    private fun checkForAppUpdate(onComplete: (UpdateCheckResult) -> Unit) {
         LogHelper.d(TAG, "Checking for app updates...")
 
         var completed = false
@@ -423,7 +435,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
             if (completed) return@Runnable
             completed = true
             LogHelper.w(TAG, "Version check timeout - proceeding normally")
-            onComplete(null)
+            onComplete(UpdateCheckResult.CheckFailed)
         }
         handler.postDelayed(timeoutRunnable, VERSION_CHECK_TIMEOUT_MS)
 
@@ -436,7 +448,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
 
                 if (versionInfo == null) {
                     LogHelper.d(TAG, "No version info available, proceeding normally")
-                    onComplete(null)
+                    onComplete(UpdateCheckResult.NoUpdate)
                     return@checkVersion
                 }
 
@@ -450,10 +462,10 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
                     downloadUrl != null &&
                     VersionChecker.isValidDownloadUrl(downloadUrl)) {
                     LogHelper.d(TAG, "Update available: $downloadUrl")
-                    onComplete(versionInfo)
+                    onComplete(UpdateCheckResult.UpdateAvailable(versionInfo))
                 } else {
                     LogHelper.d(TAG, "No update needed or invalid URL")
-                    onComplete(null)
+                    onComplete(UpdateCheckResult.NoUpdate)
                 }
             },
             onError = { error ->
@@ -461,7 +473,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
                 completed = true
                 handler.removeCallbacks(timeoutRunnable)
                 LogHelper.w(TAG, "Version check failed, proceeding normally: ${error.message}")
-                onComplete(null)
+                onComplete(UpdateCheckResult.CheckFailed)
             }
         )
     }
@@ -807,7 +819,7 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
     private fun checkResultAndComplete() {
         val anyDenied = currentPermissionItems.any { !it.isGranted }
         LogHelper.d(TAG, "Permission check complete: anyDenied=$anyDenied")
-        
+
         if (anyDenied && permissionOnDenied != null) {
             // Some permissions denied - call denied callback
             LogHelper.d(TAG, "Calling onPermissionDenied callback")
@@ -869,41 +881,52 @@ class UpdatePermissionCardHelper(private val activity: Activity) {
         titleView?.text = TITLE_UPDATE
         textView?.text = MSG_CHECKING_UPDATE
 
-        checkForAppUpdate { versionInfo ->
+        checkForAppUpdate { result ->
             handler.post {
                 if (activity.isFinishing || activity.isDestroyed) {
                     onComplete(false)
                     return@post
                 }
 
-                if (versionInfo != null) {
-                    textView?.text = "Update available. Opening..."
-                    
-                    // Launch MultipurposeCardActivity (legacy behavior)
-                    val intent = Intent(activity, MultipurposeCardActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_UPDATE)
-                        putExtra(RemoteCardHandler.KEY_DOWNLOAD_URL, "${versionInfo.versionCode}|${versionInfo.downloadUrl}")
-                        putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
-                    }
-                    activity.startActivity(intent)
+                when (result) {
+                    is UpdateCheckResult.UpdateAvailable -> {
+                        val versionInfo = result.versionInfo
+                        textView?.text = "Update available. Opening..."
 
-                    if (versionInfo.forceUpdate) {
-                        activity.finish()
-                    }
+                        val intent = Intent(activity, MultipurposeCardActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_UPDATE)
+                            putExtra(RemoteCardHandler.KEY_DOWNLOAD_URL, "${versionInfo.versionCode}|${versionInfo.downloadUrl}")
+                            putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
+                        }
+                        activity.startActivity(intent)
 
-                    handler.postDelayed({
-                        if (!activity.isFinishing && !activity.isDestroyed) {
-                            onComplete(true)
+                        if (versionInfo.forceUpdate) {
+                            activity.finish()
                         }
-                    }, PHASE_DELAY_MS)
-                } else {
-                    textView?.text = MSG_UP_TO_DATE
-                    handler.postDelayed({
-                        if (!activity.isFinishing && !activity.isDestroyed) {
-                            onComplete(false)
-                        }
-                    }, PHASE_DELAY_MS)
+
+                        handler.postDelayed({
+                            if (!activity.isFinishing && !activity.isDestroyed) {
+                                onComplete(true)
+                            }
+                        }, PHASE_DELAY_MS)
+                    }
+                    UpdateCheckResult.NoUpdate -> {
+                        textView?.text = MSG_UP_TO_DATE
+                        handler.postDelayed({
+                            if (!activity.isFinishing && !activity.isDestroyed) {
+                                onComplete(false)
+                            }
+                        }, PHASE_DELAY_MS)
+                    }
+                    UpdateCheckResult.CheckFailed -> {
+                        textView?.text = MSG_UPDATE_CHECK_FAILED
+                        handler.postDelayed({
+                            if (!activity.isFinishing && !activity.isDestroyed) {
+                                onComplete(false)
+                            }
+                        }, PHASE_DELAY_MS)
+                    }
                 }
             }
         }

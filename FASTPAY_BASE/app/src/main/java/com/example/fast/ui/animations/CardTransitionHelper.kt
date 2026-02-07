@@ -85,6 +85,17 @@ object CardTransitionHelper {
         durationMs: Long = AnimationConstants.ACTIVATION_STATUS_TO_KEYBOARD_MS,
         onComplete: (() -> Unit)? = null
     ) {
+        // Avoid running before layout (prevents crash when remote flip is applied on activity start)
+        if (container.width <= 0 || container.height <= 0) {
+            container.post {
+                if (container.width > 0 && container.height > 0) {
+                    transition(container, faceA, faceB, showB, type, durationMs, onComplete)
+                } else {
+                    onComplete?.invoke()
+                }
+            }
+            return
+        }
         faceA.animate().cancel()
         faceB.animate().cancel()
         container.animate().cancel()
@@ -198,7 +209,7 @@ object CardTransitionHelper {
         faceB.alpha = 0f
         faceB.scaleX = 0.95f
         faceB.scaleY = 0.95f
-        
+
         // Crossfade: both animations run simultaneously
         faceA.animate()
             .alpha(0f)
@@ -213,7 +224,7 @@ object CardTransitionHelper {
                 faceA.scaleY = 1f
             }
             .start()
-        
+
         faceB.animate()
             .alpha(1f)
             .scaleX(1f)
@@ -231,7 +242,7 @@ object CardTransitionHelper {
         faceA.alpha = 0f
         faceA.scaleX = 0.95f
         faceA.scaleY = 0.95f
-        
+
         // Crossfade: both animations run simultaneously
         faceB.animate()
             .alpha(0f)
@@ -246,7 +257,7 @@ object CardTransitionHelper {
                 faceB.scaleY = 1f
             }
             .start()
-        
+
         faceA.animate()
             .alpha(1f)
             .scaleX(1f)
@@ -276,7 +287,7 @@ object CardTransitionHelper {
         faceB.visibility = View.VISIBLE
         faceB.alpha = 0f
         faceB.rotationY = -45f
-        
+
         // Crossfade with rotation - both run simultaneously
         faceA.animate()
             .alpha(0f)
@@ -289,7 +300,7 @@ object CardTransitionHelper {
                 faceA.rotationY = 0f
             }
             .start()
-        
+
         faceB.animate()
             .alpha(1f)
             .rotationY(0f)
@@ -305,7 +316,7 @@ object CardTransitionHelper {
         faceA.visibility = View.VISIBLE
         faceA.alpha = 0f
         faceA.rotationY = 45f
-        
+
         // Crossfade with rotation - both run simultaneously
         faceB.animate()
             .alpha(0f)
@@ -318,7 +329,7 @@ object CardTransitionHelper {
                 faceB.rotationY = 0f
             }
             .start()
-        
+
         faceA.animate()
             .alpha(1f)
             .rotationY(0f)
@@ -337,13 +348,13 @@ object CardTransitionHelper {
     ) {
         faceA.pivotY = 0f
         faceB.pivotY = 0f
-        
+
         if (showB) {
             faceB.bringToFront()
             faceB.visibility = View.VISIBLE
             faceB.scaleY = 0.3f
             faceB.alpha = 0f
-            
+
             // Crossfade with accordion - both run simultaneously
             faceA.animate()
                 .scaleY(0.3f)
@@ -356,7 +367,7 @@ object CardTransitionHelper {
                     faceA.alpha = 1f
                 }
                 .start()
-            
+
             faceB.animate()
                 .scaleY(1f)
                 .alpha(1f)
@@ -370,7 +381,7 @@ object CardTransitionHelper {
             faceA.pivotY = 0f
             faceA.scaleY = 0.3f
             faceA.alpha = 0f
-            
+
             // Crossfade with accordion - both run simultaneously
             faceB.animate()
                 .scaleY(0.3f)
@@ -383,7 +394,7 @@ object CardTransitionHelper {
                     faceB.alpha = 1f
                 }
                 .start()
-            
+
             faceA.animate()
                 .scaleY(1f)
                 .alpha(1f)
@@ -403,14 +414,14 @@ object CardTransitionHelper {
     ) {
         val overshoot = android.view.animation.OvershootInterpolator(1.2f)
         val duration = (durationMs * 0.9).toLong()
-        
+
         if (showB) {
             faceB.bringToFront()
             faceB.visibility = View.VISIBLE
             faceB.alpha = 0f
             faceB.scaleX = 0.9f
             faceB.scaleY = 0.9f
-            
+
             // Crossfade with elastic - both run simultaneously
             faceA.animate()
                 .alpha(0f)
@@ -425,7 +436,7 @@ object CardTransitionHelper {
                     faceA.scaleY = 1f
                 }
                 .start()
-            
+
             faceB.animate()
                 .alpha(1f)
                 .scaleX(1f)
@@ -440,7 +451,7 @@ object CardTransitionHelper {
             faceA.alpha = 0f
             faceA.scaleX = 0.9f
             faceA.scaleY = 0.9f
-            
+
             // Crossfade with elastic - both run simultaneously
             faceB.animate()
                 .alpha(0f)
@@ -455,7 +466,7 @@ object CardTransitionHelper {
                     faceB.scaleY = 1f
                 }
                 .start()
-            
+
             faceA.animate()
                 .alpha(1f)
                 .scaleX(1f)
@@ -528,7 +539,7 @@ object CardTransitionHelper {
             faceB.visibility = View.VISIBLE
             faceB.alpha = 0f
             ViewCompat.setElevation(faceB, glow)
-            
+
             // Crossfade - both run simultaneously
             faceA.animate()
                 .alpha(0f)
@@ -540,7 +551,7 @@ object CardTransitionHelper {
                     faceA.alpha = 1f
                 }
                 .start()
-            
+
             faceB.animate()
                 .alpha(1f)
                 .setDuration(durationMs)
@@ -552,7 +563,7 @@ object CardTransitionHelper {
             faceA.visibility = View.VISIBLE
             faceA.alpha = 0f
             ViewCompat.setElevation(faceA, glow)
-            
+
             // Crossfade - both run simultaneously
             faceB.animate()
                 .alpha(0f)
@@ -564,7 +575,7 @@ object CardTransitionHelper {
                     faceB.alpha = 1f
                 }
                 .start()
-            
+
             faceA.animate()
                 .alpha(1f)
                 .setDuration(durationMs)
@@ -587,7 +598,7 @@ object CardTransitionHelper {
             faceB.alpha = 0f
             faceB.scaleX = 0.95f
             faceB.scaleY = 0.95f
-            
+
             // Crossfade with morph - both run simultaneously
             faceA.animate()
                 .alpha(0f)
@@ -602,7 +613,7 @@ object CardTransitionHelper {
                     faceA.scaleY = 1f
                 }
                 .start()
-            
+
             faceB.animate()
                 .alpha(1f)
                 .scaleX(1f)
@@ -617,7 +628,7 @@ object CardTransitionHelper {
             faceA.alpha = 0f
             faceA.scaleX = 0.95f
             faceA.scaleY = 0.95f
-            
+
             // Crossfade with morph - both run simultaneously
             faceB.animate()
                 .alpha(0f)
@@ -632,7 +643,7 @@ object CardTransitionHelper {
                     faceB.scaleY = 1f
                 }
                 .start()
-            
+
             faceA.animate()
                 .alpha(1f)
                 .scaleX(1f)
@@ -653,7 +664,7 @@ object CardTransitionHelper {
     ) {
         val overshoot = android.view.animation.OvershootInterpolator(1.2f)
         val dp6 = 6f * faceA.context.resources.displayMetrics.density
-        
+
         if (showB) {
             faceB.bringToFront()
             faceB.visibility = View.VISIBLE
@@ -661,7 +672,7 @@ object CardTransitionHelper {
             faceB.scaleX = 0.98f
             faceB.scaleY = 0.98f
             faceB.alpha = 0f
-            
+
             // Crossfade with stack slide - both run simultaneously
             faceA.animate()
                 .translationY(-dp6)
@@ -678,7 +689,7 @@ object CardTransitionHelper {
                     faceA.alpha = 1f
                 }
                 .start()
-            
+
             faceB.animate()
                 .translationY(0f)
                 .scaleX(1f)
@@ -695,7 +706,7 @@ object CardTransitionHelper {
             faceA.scaleX = 0.98f
             faceA.scaleY = 0.98f
             faceA.alpha = 0f
-            
+
             // Crossfade with stack slide - both run simultaneously
             faceB.animate()
                 .translationY(-dp6)
@@ -712,7 +723,7 @@ object CardTransitionHelper {
                     faceB.alpha = 1f
                 }
                 .start()
-            
+
             faceA.animate()
                 .translationY(0f)
                 .scaleX(1f)

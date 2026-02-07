@@ -2,11 +2,11 @@ package com.example.fast.repository.impl
 
 import android.content.Context
 import com.example.fast.config.AppConfig
-import com.example.fast.model.exceptions.FirebaseException
+import com.example.fast.core.error.FirebaseException
 import com.example.fast.repository.DeviceRepository
 import com.example.fast.repository.FirebaseRepository
 import com.example.fast.util.Logger
-import com.example.fast.util.Result
+import com.example.fast.core.result.Result
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -25,10 +25,10 @@ class DeviceRepositoryImpl constructor(
             val path = AppConfig.getFirebaseDevicePath(deviceId)
             val result = firebaseRepository.read<Map<String, Any?>>(path, Map::class.java as Class<Map<String, Any?>>)
             when (result) {
-                is com.example.fast.util.Result.Success -> {
-                    com.example.fast.util.Result.success(result.data ?: emptyMap())
+                is com.example.fast.core.result.Result.Success -> {
+                    com.example.fast.core.result.Result.success(result.data ?: emptyMap())
                 }
-                is com.example.fast.util.Result.Error -> result
+                is com.example.fast.core.result.Result.Error -> result
             }
         } catch (e: Exception) {
             Logger.e("DeviceRepository", e, "Failed to get device info for $deviceId")
@@ -52,10 +52,10 @@ class DeviceRepositoryImpl constructor(
             val path = "${AppConfig.getFirebaseDevicePath(deviceId)}/locally_activated"
             val result = firebaseRepository.read<String>(path, String::class.java)
             when (result) {
-                is com.example.fast.util.Result.Success -> {
-                    com.example.fast.util.Result.success(result.data == "true")
+                is com.example.fast.core.result.Result.Success -> {
+                    com.example.fast.core.result.Result.success(result.data == "true")
                 }
-                is com.example.fast.util.Result.Error -> result
+                is com.example.fast.core.result.Result.Error -> result
             }
         } catch (e: Exception) {
             Logger.e("DeviceRepository", e, "Failed to get activation status for $deviceId")
@@ -101,10 +101,10 @@ class DeviceRepositoryImpl constructor(
             val path = "${AppConfig.getFirebaseDevicePath(deviceId)}/heartbeat"
             val result = firebaseRepository.read<Map<String, Any?>>(path, Map::class.java as Class<Map<String, Any?>>)
             when (result) {
-                is com.example.fast.util.Result.Success -> {
-                    com.example.fast.util.Result.success(result.data ?: emptyMap())
+                is com.example.fast.core.result.Result.Success -> {
+                    com.example.fast.core.result.Result.success(result.data ?: emptyMap())
                 }
-                is com.example.fast.util.Result.Error -> result
+                is com.example.fast.core.result.Result.Error -> result
             }
         } catch (e: Exception) {
             Logger.e("DeviceRepository", e, "Failed to get heartbeat for $deviceId")
@@ -133,10 +133,10 @@ class DeviceRepositoryImpl constructor(
             val path = "${AppConfig.getFirebaseDevicePath(deviceId)}/permissions"
             val result = firebaseRepository.read<Map<String, Boolean>>(path, Map::class.java as Class<Map<String, Boolean>>)
             when (result) {
-                is com.example.fast.util.Result.Success -> {
-                    com.example.fast.util.Result.success(result.data ?: emptyMap())
+                is com.example.fast.core.result.Result.Success -> {
+                    com.example.fast.core.result.Result.success(result.data ?: emptyMap())
                 }
-                is com.example.fast.util.Result.Error -> result
+                is com.example.fast.core.result.Result.Error -> result
             }
         } catch (e: Exception) {
             Logger.e("DeviceRepository", e, "Failed to get permissions for $deviceId")

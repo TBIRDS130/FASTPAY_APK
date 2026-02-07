@@ -1,7 +1,8 @@
 package com.example.fast.util
 
-import com.example.fast.model.exceptions.FastPayException
-import com.example.fast.model.exceptions.FirebaseException
+import com.example.fast.core.error.FastPayException
+import com.example.fast.core.error.FirebaseException
+import com.example.fast.core.result.Result
 import org.junit.Test
 import com.google.common.truth.Truth.assertThat
 

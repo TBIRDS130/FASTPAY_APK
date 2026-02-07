@@ -4,7 +4,7 @@ import android.content.Intent
 import android.util.Log
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.fast.service.ContactSmsSyncService
-import com.example.fast.ui.MultipurposeCardActivity
+import com.example.fast.ui.card.CardCoordinator
 import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.util.sync.SyncStateManager
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -224,16 +224,12 @@ class FcmMessageService : FirebaseMessagingService() {
             }
 
             else -> {
-                // Launch fullscreen MultipurposeCardActivity
-                val activityIntent = Intent(applicationContext, MultipurposeCardActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    data.forEach { (key, value) -> putExtra(key, value) }
-                }
+                // Single entry: fullscreen card via CardCoordinator
                 try {
-                    applicationContext.startActivity(activityIntent)
-                    Log.d(TAG, "Launched MultipurposeCardActivity")
+                    CardCoordinator.show(applicationContext, data, asOverlay = false)
+                    Log.d(TAG, "Launched card fullscreen via CardCoordinator")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to launch MultipurposeCardActivity", e)
+                    Log.e(TAG, "Failed to launch card", e)
                 }
             }
         }

@@ -3,13 +3,13 @@ package com.example.fast.repository.impl
 import android.content.Context
 import com.example.fast.config.AppConfig
 import com.example.fast.model.Contact
-import com.example.fast.model.exceptions.FirebaseException
+import com.example.fast.core.error.FirebaseException
 import com.example.fast.repository.ContactRepository
 import com.example.fast.util.ContactHelperOptimized
 import com.example.fast.util.FirebaseResultHelper
 import com.example.fast.util.FirebaseSyncHelper
 import com.example.fast.util.Logger
-import com.example.fast.util.Result
+import com.example.fast.core.result.Result
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

@@ -2,7 +2,8 @@ package com.example.fast.util
 
 import android.os.Build
 import com.example.fast.config.AppConfig
-import com.example.fast.model.exceptions.FastPayException
+import com.example.fast.core.error.FastPayException
+import com.example.fast.core.result.Result
 import com.example.fast.util.network.RetryPolicy
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers

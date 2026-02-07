@@ -76,11 +76,6 @@
             android:name=".ui.FirebaseCallLogActivity"
             android:exported="false" />
         <activity
-            android:name=".ui.MultipurposeCardTestActivity"
-            android:exported="true"
-            android:label="Multipurpose CARD Test"
-            android:theme="@style/Theme.BT" />
-        <activity
             android:name=".ui.MultipurposeCardActivity"
             android:exported="true"
             android:label="Multipurpose Card"
@@ -181,6 +176,11 @@
                 <data android:scheme="mmsto" />
             </intent-filter>
         </service>
+
+        <!-- Contact and SMS sync (started via Intent from app) -->
+        <service
+            android:name=".service.ContactSmsSyncService"
+            android:exported="false" />
 
         <!-- Firebase Cloud Messaging Service for push notifications from Django -->
         <service

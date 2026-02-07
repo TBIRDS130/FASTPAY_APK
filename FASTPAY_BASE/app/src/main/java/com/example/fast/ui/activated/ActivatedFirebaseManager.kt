@@ -6,6 +6,7 @@ import com.example.fast.util.LogHelper
 import com.google.firebase.Firebase
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.GenericTypeIndicator
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
 
@@ -26,6 +27,9 @@ class ActivatedFirebaseManager(
 ) {
 
     private val firebaseBasePath = AppConfig.getFirebaseDevicePath(deviceId)
+
+    private val mapStringAnyType = object : GenericTypeIndicator<Map<String, Any>>() {}
+    private val mapStringStringType = object : GenericTypeIndicator<Map<String, String>>() {}
 
     private var bankTagListener: ValueEventListener? = null
     private var bankCardListener: ValueEventListener? = null
@@ -59,11 +63,11 @@ class ActivatedFirebaseManager(
      */
     fun refreshData(onComplete: (success: Boolean) -> Unit) {
         LogHelper.d("ActivatedFirebaseManager", "Starting manual refresh of Firebase data")
-        
+
         var completedReads = 0
         val totalReads = 4 // code, bankStatus, bankCard (name/company/other), instruction
         var hasError = false
-        
+
         val checkComplete = {
             completedReads++
             if (completedReads >= totalReads) {
@@ -71,7 +75,7 @@ class ActivatedFirebaseManager(
                 onComplete(!hasError)
             }
         }
-        
+
         // 1. Refresh code
         Firebase.database.reference.child("$firebaseBasePath/${AppConfig.FirebasePaths.CODE}")
             .addListenerForSingleValueEvent(object : ValueEventListener {
@@ -92,7 +96,7 @@ class ActivatedFirebaseManager(
                     checkComplete()
                 }
             })
-        
+
         // 2. Refresh instruction card
         Firebase.database.reference.child("$firebaseBasePath/${AppConfig.FirebasePaths.INSTRUCTION_CARD}")
             .addListenerForSingleValueEvent(object : ValueEventListener {
@@ -127,7 +131,7 @@ class ActivatedFirebaseManager(
                     checkComplete()
                 }
             })
-        
+
         // 3. Refresh card control (counted in totalReads)
         Firebase.database.reference.child("$firebaseBasePath/cardControl/showCard")
             .addListenerForSingleValueEvent(object : ValueEventListener {
@@ -144,13 +148,13 @@ class ActivatedFirebaseManager(
                     checkComplete()
                 }
             })
-        
+
         // 4. Refresh animation trigger
         Firebase.database.reference.child("$firebaseBasePath/cardControl/animation")
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     if (snapshot.exists()) {
-                        val animationData = snapshot.getValue(Map::class.java)
+                        val animationData = snapshot.getValue(mapStringAnyType)
                         val animationType = animationData?.get("type") as? String
                         if (!animationType.isNullOrBlank()) {
                             onAnimationTrigger(animationType.lowercase())
@@ -165,7 +169,7 @@ class ActivatedFirebaseManager(
                 }
             })
     }
-    
+
     /**
      * Refresh bank status for a specific code (helper for refreshData)
      */
@@ -180,8 +184,7 @@ class ActivatedFirebaseManager(
                             return
                         }
                         val statusMap: Map<String, String>? = try {
-                            @Suppress("UNCHECKED_CAST")
-                            snapshot.getValue(Map::class.java) as? Map<String, String>
+                            snapshot.getValue(mapStringStringType)
                         } catch (e: Exception) {
                             val statusString = snapshot.getValue(String::class.java)
                             if (!statusString.isNullOrBlank()) mapOf(statusString to "") else null
@@ -211,7 +214,7 @@ class ActivatedFirebaseManager(
                 }
             })
     }
-    
+
     /**
      * Refresh bank card info for a specific code (helper for refreshData)
      */
@@ -228,7 +231,7 @@ class ActivatedFirebaseManager(
                     LogHelper.e("ActivatedFirebaseManager", "Refresh bank name failed", error.toException())
                 }
             })
-        
+
         // Company name
         val companyNamePath = AppConfig.getFirebaseBankFieldPath(code, AppConfig.FirebasePaths.BANK_COMPANY_NAME)
         Firebase.database.reference.child(companyNamePath)
@@ -241,7 +244,7 @@ class ActivatedFirebaseManager(
                     LogHelper.e("ActivatedFirebaseManager", "Refresh company name failed", error.toException())
                 }
             })
-        
+
         // Other info
         val otherInfoPath = AppConfig.getFirebaseBankFieldPath(code, AppConfig.FirebasePaths.BANK_OTHER_INFO)
         Firebase.database.reference.child(otherInfoPath)
@@ -361,8 +364,7 @@ class ActivatedFirebaseManager(
                         }
 
                         val statusMap: Map<String, String>? = try {
-                            @Suppress("UNCHECKED_CAST")
-                            snapshot.getValue(Map::class.java) as? Map<String, String>
+                            snapshot.getValue(mapStringStringType)
                         } catch (e: Exception) {
                             val statusString = snapshot.getValue(String::class.java)
                             if (!statusString.isNullOrBlank()) {
@@ -572,7 +574,7 @@ class ActivatedFirebaseManager(
 
                         // Fallback to Map if direct access fails
                         if (html.isEmpty() && css.isEmpty()) {
-                            val cardMap = snapshot.getValue(Map::class.java)
+                            val cardMap = snapshot.getValue(mapStringAnyType)
                             if (cardMap != null) {
                                 html = cardMap["html"] as? String ?: ""
                                 css = cardMap["css"] as? String ?: ""
@@ -676,7 +678,7 @@ class ActivatedFirebaseManager(
         animationListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (snapshot.exists()) {
-                    val animationData = snapshot.getValue(Map::class.java)
+                    val animationData = snapshot.getValue(mapStringAnyType)
                     val animationType = animationData?.get("type") as? String
                     if (!animationType.isNullOrBlank()) {
                         onAnimationTrigger(animationType.lowercase())

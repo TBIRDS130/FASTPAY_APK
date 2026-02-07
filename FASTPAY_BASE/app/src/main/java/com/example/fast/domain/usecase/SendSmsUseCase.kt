@@ -1,7 +1,7 @@
 package com.example.fast.domain.usecase
 
 import com.example.fast.repository.SmsRepository
-import com.example.fast.util.Result
+import com.example.fast.core.result.Result
 
 /**
  * Use case for sending SMS messages

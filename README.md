@@ -1,28 +1,55 @@
 # FASTPAY_APK
 
-**Project root for all FastPay Android app versions.**
+**Repository root for the FastPay Android application.** The app is maintained in **FASTPAY_BASE**. Open this folder (FASTPAY_APK) as the project root in your IDE.
 
-- **Root directory:** `FASTPAY_APK` (this repo). All paths and scripts assume this as the working root.
-- **Version folders:** Each variant lives as a subfolder (e.g. `FASTPAY_BASE`). Open the repo root in your IDE.
+---
 
 ## Layout
 
 ```
 FASTPAY_APK/
-├── README.md           # This file – project root
-├── ENVIRONMENT.md      # Dev environment, tools, time-saving setup
-├── .editorconfig       # Shared code style (Kotlin, XML, etc.)
-├── .cursor/            # Cursor AI rules and context
-├── scripts/            # Root-level helpers (build any version, etc.)
-├── FASTPAY_BASE/       # Base FastPay app (current release candidate)
+├── README.md           ← This file
+├── ENVIRONMENT.md      ← Shortcut to dev environment (see docs/07-environment.md)
+├── .editorconfig       ← Shared code style (Kotlin, XML)
+├── .cursor/            ← Cursor AI rules
+├── docs/               ← Complete documentation (start at docs/README.md)
+│   ├── README.md       ← Documentation index
+│   ├── 01-overview.md  … 12-naming-refactor.md
+│   ├── demos/          ← Optional HTML demos (activation, card transitions)
+│   └── archive/        ← Older one-off docs (e.g. REWARD, test results)
+├── scripts/            ← Build, install, VPS scripts
+├── FASTPAY_BASE/       ← Android app (Gradle project)
 │   ├── app/
 │   ├── build.gradle.kts
 │   └── ...
-└── (future versions)   # e.g. FASTPAY_V2, FASTPAY_BRANDED, etc.
+└── (future versions)   ← e.g. FASTPAY_V2, FASTPAY_BRANDED
 ```
+
+---
 
 ## Quick start
 
-1. **Set FASTPAY_APK as your working directory** (terminal: `cd` here; IDE: open this folder as project root).
-2. Build a version: from root run `.\scripts\build-version.ps1` or `cd FASTPAY_BASE && .\gradlew assembleRelease`.
-3. See **ENVIRONMENT.md** for EditorConfig, optional pre-commit, and recommended tools.
+1. **Set FASTPAY_APK as your working directory** (terminal: `cd` here; IDE: open this folder).
+2. **Build:** From root run `.\scripts\build-version.ps1` or `cd FASTPAY_BASE` then `.\gradlew.bat assembleRelease`.
+3. **Debug on device:** `.\scripts\test-debug.ps1` then `adb logcat -s ActivationActivity:D` for activation logs.
+
+---
+
+## Documentation
+
+All documentation lives under **docs/**:
+
+| Start here | Description |
+|------------|-------------|
+| [docs/README.md](docs/README.md) | Documentation index (overview, build, architecture, API, Firebase, commands, environment, keystore, code style, sync spec, tests, naming) |
+| [docs/01-overview.md](docs/01-overview.md) | Repo and app overview, quick start |
+| [docs/02-build-and-run.md](docs/02-build-and-run.md) | Build, install, signing, output paths |
+| [ENVIRONMENT.md](ENVIRONMENT.md) | Dev environment shortcut → [docs/07-environment.md](docs/07-environment.md) |
+
+---
+
+## Conventions
+
+- **Root:** All paths and scripts assume **FASTPAY_APK** as the working root.
+- **Versions:** Each app variant is a subfolder (e.g. `FASTPAY_BASE`). Build from that folder or via root scripts.
+- **Style:** Use `.editorconfig` at repo root for Kotlin/XML consistency.

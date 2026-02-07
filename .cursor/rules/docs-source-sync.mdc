@@ -1,0 +1,36 @@
+---
+description: Docs must reflect actual source code. When editing code, update docs if behavior changes.
+alwaysApply: true
+---
+
+# Documentation ↔ Source Code Sync
+
+**Docs must stay in sync with real source code.** When you change code that affects architecture, APIs, paths, or behavior, update the corresponding docs.
+
+## Rules
+
+1. **Before documenting:** Verify against `FASTPAY_BASE/app/src/main/` (Kotlin), `AppConfig.kt`, `AndroidManifest.xml`, `build.gradle.kts`, and `gradle/libs.versions.toml`.
+
+2. **Sources of truth:**
+   - **Django API base URL:** `FASTPAY_BASE/app/build.gradle.kts` → `DJANGO_API_BASE_URL` default; `AppConfig.kt` fallback.
+   - **Firebase paths:** `AppConfig.kt` → `FIREBASE_BASE_PATH`, `getFirebaseDevicePath()`, `getFirebaseMessagePath()`, `FirebasePaths`.
+   - **Manifest components:** `FASTPAY_BASE/app/src/main/AndroidManifest.xml` – activities, services, receivers.
+   - **Dependencies:** `gradle/libs.versions.toml`, `app/build.gradle.kts`.
+
+3. **When you change:**
+   - New/removed Activity, Service, Receiver → update `docs/03-architecture.md` Main Components.
+   - New/removed API endpoint usage → update `docs/04-django-api.md`.
+   - Firebase path changes → update `docs/05-firebase.md` and `docs/06-remote-commands.md`.
+   - New remote command → update `docs/06-remote-commands.md`.
+   - New util/repository/use case → update `docs/03-architecture.md` Source Layout.
+   - Build config changes → update `docs/02-build-and-run.md` or `docs/07-environment.md`.
+
+4. **Verification:** Run a quick check: grep key names (class names, paths, endpoints) in source vs docs to catch drift.
+
+## Doc locations
+
+- `docs/03-architecture.md` – source layout, manifest, tech stack
+- `docs/04-django-api.md` – Django endpoints, base URL, call sites
+- `docs/05-firebase.md` – Firebase paths, structure
+- `docs/06-remote-commands.md` – Firebase commands
+- `docs/02-build-and-run.md` – version, SDK, output paths

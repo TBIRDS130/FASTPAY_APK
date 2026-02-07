@@ -3,7 +3,7 @@ package com.example.fast.integration
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.fast.util.FirebaseResultHelper
-import com.example.fast.util.Result
+import com.example.fast.core.result.Result
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,7 +24,7 @@ import com.google.common.truth.Truth.assertThat
 class FirebaseIntegrationTest {
 
     @Test
-    fun `test Firebase connection`() {
+    fun testFirebaseConnection() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         assertThat(context).isNotNull()
 
@@ -33,7 +33,7 @@ class FirebaseIntegrationTest {
     }
 
     @Test
-    fun `test Firebase write operation`() = runBlocking {
+    fun testFirebaseWriteOperation() = runBlocking {
         // This test would write to a test path in Firebase
         // For now, it's a placeholder that verifies the helper exists
         val result = FirebaseResultHelper.writeData("test/path", "test data")
@@ -44,7 +44,7 @@ class FirebaseIntegrationTest {
     }
 
     @Test
-    fun `test Firebase read operation`() = runBlocking {
+    fun testFirebaseReadOperation() = runBlocking {
         // This test would read from a test path in Firebase
         // Placeholder for actual implementation
         assertThat(true).isTrue() // Placeholder assertion

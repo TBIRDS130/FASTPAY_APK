@@ -1,6 +1,7 @@
 package com.example.fast.util
 
-import com.example.fast.model.exceptions.FirebaseException
+import com.example.fast.core.error.FirebaseException
+import com.example.fast.core.result.Result
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.tasks.await
