@@ -31,6 +31,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.util.Pair
 import com.example.fast.R
 import com.example.fast.config.AppConfig
+import com.example.fast.ui.animations.AnimationConstants
+import com.example.fast.ui.splash.SplashUIManager
 import com.example.fast.util.VersionChecker
 import com.example.fast.util.DebugLogger
 import com.google.firebase.Firebase
@@ -72,6 +74,13 @@ class SplashActivity : AppCompatActivity() {
     // Store Handler references for cleanup
     private val handler = Handler(Looper.getMainLooper())
     private val handlerRunnables = mutableListOf<Runnable>()
+    private val snapshotIntervalMs = 1000L
+    private val snapshotRunnable: Runnable = object : Runnable {
+        override fun run() {
+            if (!isDestroyed && !isFinishing) logSplashSnapshot()
+            handler.postDelayed(this, snapshotIntervalMs)
+        }
+    }
 
     private var isNavigating = false
     private var hasStartedNavigation = false // Prevent double navigation during animation
@@ -92,6 +101,12 @@ class SplashActivity : AppCompatActivity() {
     // Minimum splash screen display time (6 seconds)
     private val MIN_SPLASH_DISPLAY_TIME_MS = 6000L
     private var splashStartTime = 0L
+
+    private var splashUIManager: SplashUIManager? = null
+
+    /** Running logo/tagline animators; cancel before prepareForTransition() in both nav paths. */
+    private var logoAnimatorSet: AnimatorSet? = null
+    private var taglineAnimatorSet: AnimatorSet? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,6 +133,7 @@ class SplashActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_splash)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        DebugLogger.logFlow("Splash", "START", "")
 
         // CRITICAL: Start postponed transition when first frame is ready (fixes stuck/black screen on 2nd launch)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -167,6 +183,10 @@ class SplashActivity : AppCompatActivity() {
         val defaultTagline = getString(R.string.app_tagline)
         taglineTextView?.text = defaultTagline
         logoTextView?.text = defaultLogoName
+
+        if (logoTextView != null && taglineTextView != null) {
+            splashUIManager = SplashUIManager(logoTextView, taglineTextView)
+        }
 
         // Grid animation already set in onCreate - continue with logo animation (require views)
         if (logoTextView != null && taglineTextView != null && letterContainer != null) {
@@ -339,28 +359,31 @@ class SplashActivity : AppCompatActivity() {
      */
     private fun animateNeonLogo(logoTextView: TextView, taglineTextView: TextView) {
         if (isFinishing) return
+        DebugLogger.logAnimationStart("Logo", "start")
 
+        val logoDurationMs = AnimationConstants.SPLASH_LOGO_TAGLINE_DURATION_MS
         // Create neon glow animation set
         val logoAnimator = AnimatorSet().apply {
             playTogether(
                 // Fade in
                 ObjectAnimator.ofFloat(logoTextView, "alpha", 0f, 1f).apply {
-                    duration = 800
+                    duration = logoDurationMs
                     interpolator = DecelerateInterpolator()
                 },
                 // Scale in with slight overshoot
                 ObjectAnimator.ofFloat(logoTextView, "scaleX", 0.8f, 1.05f, 1f).apply {
-                    duration = 800
+                    duration = logoDurationMs
                     interpolator = OvershootInterpolator(1.2f)
                 },
                 ObjectAnimator.ofFloat(logoTextView, "scaleY", 0.8f, 1.05f, 1f).apply {
-                    duration = 800
+                    duration = logoDurationMs
                     interpolator = OvershootInterpolator(1.2f)
                 }
             )
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     if (!isFinishing && !isDestroyed) {
+                        DebugLogger.logAnimationEnd("Logo", logoDurationMs)
                         // Start continuous neon glow pulse
                         startNeonGlowPulse(logoTextView)
 
@@ -371,6 +394,7 @@ class SplashActivity : AppCompatActivity() {
             })
         }
 
+        logoAnimatorSet = logoAnimator
         logoAnimator.start()
     }
 
@@ -393,7 +417,7 @@ class SplashActivity : AppCompatActivity() {
 
         // Create pulsing glow effect using shadow radius
         val glowPulse = ValueAnimator.ofFloat(20f, 40f, 20f).apply {
-            duration = 2000
+            duration = AnimationConstants.SPLASH_GLOW_PULSE_DURATION_MS
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.REVERSE
             interpolator = AccelerateDecelerateInterpolator()
@@ -413,6 +437,7 @@ class SplashActivity : AppCompatActivity() {
 
     private fun animateTagline(taglineTextView: TextView) {
         if (isFinishing) return
+        DebugLogger.logAnimation("Tagline", "start")
 
         // Apply font styling
         taglineTextView.typeface = resources.getFont(R.font.inter)
@@ -423,35 +448,38 @@ class SplashActivity : AppCompatActivity() {
         taglineTextView.setShadowLayer(15f, 0f, 0f, themePrimary)
         taglineTextView.alpha = 0.7f
 
+        val taglineDurationMs = AnimationConstants.SPLASH_LOGO_TAGLINE_DURATION_MS
         // Neon grid style animation: Fade + Slide Up
         val taglineAnimator = AnimatorSet().apply {
             playTogether(
                 // Fade in
                 ObjectAnimator.ofFloat(taglineTextView, "alpha", 0f, 0.7f).apply {
-                    duration = 800
+                    duration = taglineDurationMs
                     interpolator = DecelerateInterpolator()
                 },
                 // Slide up
                 ObjectAnimator.ofFloat(taglineTextView, "translationY", 20f, 0f).apply {
-                    duration = 800
+                    duration = taglineDurationMs
                     interpolator = OvershootInterpolator(1.2f)
                 }
             )
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     if (!isFinishing && !isDestroyed) {
+                        DebugLogger.logAnimationEnd("Tagline", taglineDurationMs)
                         // Update neon glow at last: pulse tagline to match logo, then navigate after brief hold
                         startNeonGlowPulse(taglineTextView)
                         val navRunnable = Runnable {
                             if (!isFinishing && !isDestroyed) navigateToNextWithFade()
                         }
                         handlerRunnables.add(navRunnable)
-                        handler.postDelayed(navRunnable, 1500L)
+                        handler.postDelayed(navRunnable, AnimationConstants.SPLASH_NAV_DELAY_AFTER_TAGLINE_MS)
                     }
                 }
             })
         }
 
+        taglineAnimatorSet = taglineAnimator
         taglineAnimator.start()
     }
 
@@ -491,6 +519,34 @@ class SplashActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        handler.postDelayed(snapshotRunnable, snapshotIntervalMs)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        handler.removeCallbacks(snapshotRunnable)
+    }
+
+    private fun viewState(v: View): String = when (v.visibility) {
+        View.VISIBLE -> "V(${v.alpha})"
+        View.GONE -> "G"
+        View.INVISIBLE -> "I"
+        else -> "?"
+    }
+
+    /** Log full Splash screen state (every 1s when timer runs). */
+    private fun logSplashSnapshot() {
+        try {
+            val logo = findViewById<View>(R.id.logoTextView)
+            val tagline = findViewById<View>(R.id.taglineTextView)
+            val elements = mapOf(
+                "logo" to (logo?.let { viewState(it) } ?: "?"),
+                "tagline" to (tagline?.let { viewState(it) } ?: "?")
+            )
+            DebugLogger.logScreenSnapshot("Splash", elements)
+        } catch (e: Exception) {
+            android.util.Log.e("SplashActivity", "Error in logSplashSnapshot", e)
+        }
     }
 
     private fun navigateToNextWithFade() {
@@ -529,7 +585,25 @@ class SplashActivity : AppCompatActivity() {
         // Add timeout fallback to ensure navigation always happens
         val timeoutRunnable = Runnable {
             if (!isFinishing && !isDestroyed && isNavigating) {
-                // If Firebase check takes too long, navigate to ActivationActivity (safe default after reset)
+                // If locally activated with valid code, try Django then local fallback instead of forcing Activation
+                if (isLocallyActivated()) {
+                    val localCode = getLocalActivationCode()
+                    val deviceIdRaw = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                    if (!deviceIdRaw.isNullOrBlank()) {
+                        val deviceId = deviceIdRaw
+                        val hasValidLocalCode = isValidLocalActivationCode(localCode)
+                        android.util.Log.w("SplashActivity", "Navigation timeout - trying Django/local fallback (locally activated)")
+                        tryDjangoThenLocalFallback(localCode, deviceId, hasValidLocalCode) { isActivated ->
+                            handler.post {
+                                if (!isFinishing && !isDestroyed && isNavigating) {
+                                    navigateWithFadeAnimation(isActivated, letterContainer, taglineTextView, splashContent)
+                                }
+                            }
+                        }
+                        return@Runnable
+                    }
+                }
+                android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATION reason=6s_timeout_not_locally_activated")
                 android.util.Log.w("SplashActivity", "Navigation timeout, navigating to ActivationActivity")
                 navigateWithFadeAnimation(false, letterContainer, taglineTextView, splashContent)
             }
@@ -694,7 +768,7 @@ class SplashActivity : AppCompatActivity() {
         callback: (Boolean) -> Unit
     ) {
         if (localCode.isNullOrBlank()) {
-            // No local code to validate - not activated
+            android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATION reason=django_fallback_no_code")
             android.util.Log.d("SplashActivity", "No local code available - navigating to ActivationActivity")
             callback(false)
             return
@@ -710,25 +784,26 @@ class SplashActivity : AppCompatActivity() {
                 when (result) {
                     is com.example.fast.core.result.Result.Success<Boolean> -> {
                         if (result.data) {
-                            // Django says code is valid - activated
+                            android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATED reason=django_valid")
                             android.util.Log.d("SplashActivity", "Django validation success - code is valid")
                             DebugLogger.logActivationCheck("Django", "Code valid - activated")
                             handler.post { callback(true) }
                         } else {
-                            // Django says code is NOT valid - not activated (don't use local fallback)
+                            android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATION reason=django_invalid")
                             android.util.Log.d("SplashActivity", "Django validation: code is invalid - navigating to ActivationActivity")
                             DebugLogger.logActivationCheck("Django", "Code invalid - NOT activated")
                             handler.post { callback(false) }
                         }
                     }
                     is com.example.fast.core.result.Result.Error -> {
-                        // Django also failed (network error) - NOW use local fallback
                         android.util.Log.w("SplashActivity", "Django validation failed (${result.exception.message}) - BOTH Firebase and Django failed")
                         if (hasValidLocalCode) {
+                            android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATED reason=offline_local_fallback")
                             android.util.Log.d("SplashActivity", "Using local code as offline fallback (activated=true)")
                             DebugLogger.logActivationCheck("Offline", "Both Firebase and Django failed - using local fallback")
                             handler.post { callback(true) }
                         } else {
+                            android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATION reason=offline_no_local_code")
                             android.util.Log.d("SplashActivity", "No valid local code - navigating to ActivationActivity")
                             DebugLogger.logActivationCheck("Offline", "Both Firebase and Django failed, no local code - NOT activated")
                             handler.post { callback(false) }
@@ -736,12 +811,13 @@ class SplashActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: Exception) {
-                // Exception during Django call - use local fallback
                 android.util.Log.e("SplashActivity", "Django validation exception: ${e.message}")
                 if (hasValidLocalCode) {
+                    android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATED reason=django_exception_local_fallback")
                     android.util.Log.d("SplashActivity", "Using local code as offline fallback (activated=true)")
                     handler.post { callback(true) }
                 } else {
+                    android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATION reason=django_exception_no_local_code")
                     handler.post { callback(false) }
                 }
             }
@@ -753,9 +829,16 @@ class SplashActivity : AppCompatActivity() {
         var callbackInvoked = false
         val callbackLock = Any()
 
+        // REACTIVATION log: prefs state (grep "REACTIVATION" in logcat)
+        val prefsFirstLaunch = sharedPreferences.getBoolean(KEY_FIRST_LAUNCH, true)
+        val prefsLocallyActivated = sharedPreferences.getBoolean(KEY_LOCALLY_ACTIVATED, false)
+        val prefsCode = sharedPreferences.getString(KEY_ACTIVATION_CODE, null)?.take(4) ?: "null"
+        android.util.Log.w("SplashActivity", "REACTIVATION: prefs first_launch=$prefsFirstLaunch locally_activated=$prefsLocallyActivated code=${prefsCode}...")
+
         // CRITICAL: Always check local status first
         // If this is the first launch, always go to ActivationActivity (new installation)
         if (isFirstLaunch()) {
+            android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATION reason=first_launch")
             android.util.Log.d("SplashActivity", "First launch detected - navigating to ActivationActivity")
             DebugLogger.logActivationCheck("Local", "First launch - not activated")
             callbackInvoked = true
@@ -766,6 +849,7 @@ class SplashActivity : AppCompatActivity() {
         // If not locally activated, always go to ActivationActivity
         // This ensures fresh installations always go through activation flow
         if (!isLocallyActivated()) {
+            android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATION reason=not_locally_activated")
             android.util.Log.d("SplashActivity", "Not locally activated - navigating to ActivationActivity")
             DebugLogger.logActivationCheck("Local", "Not locally activated")
             callbackInvoked = true
@@ -781,6 +865,7 @@ class SplashActivity : AppCompatActivity() {
         // Get deviceId early so it's available for timeout handler
         val deviceIdRaw = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         if (deviceIdRaw.isNullOrBlank()) {
+            android.util.Log.w("SplashActivity", "REACTIVATION: decision=${if (hasValidLocalCode) "ACTIVATED" else "ACTIVATION"} reason=no_device_id")
             callbackInvoked = true
             callback(hasValidLocalCode)
             return
@@ -794,10 +879,13 @@ class SplashActivity : AppCompatActivity() {
             synchronized(callbackLock) {
                 if (!callbackInvoked) {
                     callbackInvoked = true
-                    // Firebase timeout - try Django validation before local fallback
+                    android.util.Log.w("SplashActivity", "REACTIVATION: decision path=timeout - trying Django/local fallback")
                     android.util.Log.w("SplashActivity", "Firebase check timeout - trying Django validation")
                     DebugLogger.logActivationCheck("Firebase", "Timeout - falling back to Django")
-                    tryDjangoThenLocalFallback(localCode, deviceId, hasValidLocalCode, callback)
+                    tryDjangoThenLocalFallback(localCode, deviceId, hasValidLocalCode) { result ->
+                        android.util.Log.w("SplashActivity", "REACTIVATION: decision=${if (result) "ACTIVATED" else "ACTIVATION"} reason=timeout_fallback")
+                        callback(result)
+                    }
                 }
             }
         }
@@ -833,7 +921,7 @@ class SplashActivity : AppCompatActivity() {
 
                         if (!isActiveOk || code.isEmpty()) {
                             // Firebase explicitly shows not active or no code - do NOT use local fallback
-                            // Server said "not activated" - respect that decision
+                            android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATION reason=firebase_not_active isActive=$isActiveOk hasCode=${code.isNotEmpty()}")
                             android.util.Log.d("SplashActivity", "Firebase shows not active (isActive=$isActiveOk, code=${code.isNotEmpty()}) - navigating to ActivationActivity")
                             DebugLogger.logActivationCheck("Firebase", "isActive=$isActiveOk, hasCode=${code.isNotEmpty()} - NOT activated")
                             callbackInvoked = true
@@ -872,6 +960,7 @@ class SplashActivity : AppCompatActivity() {
                                         val isFullyActivated = deviceListDeviceId == deviceId
 
                                         if (isFullyActivated) {
+                                            android.util.Log.w("SplashActivity", "REACTIVATION: decision=ACTIVATED reason=firebase_device_list_ok")
                                             // Ensure device is registered at Django backend
                                             DebugLogger.logActivationCheck("Firebase", "Fully activated - device verified")
                                             lifecycleScope.launch {
@@ -885,14 +974,22 @@ class SplashActivity : AppCompatActivity() {
                                                 )
                                                 DjangoApiHelper.registerDevice(deviceId, map)
                                             }
+                                            callbackInvoked = true
+                                            callback(true)
                                         } else {
-                                            // Device-list mismatch - server says not activated, do NOT use local fallback
-                                            android.util.Log.d("SplashActivity", "Device-list mismatch (deviceId not found) - navigating to ActivationActivity")
-                                            DebugLogger.logActivationCheck("Firebase", "Device-list mismatch - NOT activated")
+                                            android.util.Log.w("SplashActivity", "REACTIVATION: device_list_mismatch - trying Django/local fallback")
+                                            // Device-list mismatch - try Django then local fallback (eventual consistency)
+                                            android.util.Log.d("SplashActivity", "Device-list mismatch (deviceId not found) - trying Django/local fallback")
+                                            DebugLogger.logActivationCheck("Firebase", "Device-list mismatch - trying fallback")
+                                            tryDjangoThenLocalFallback(localCode, deviceId, hasValidLocalCode) { isActivated ->
+                                                synchronized(callbackLock) {
+                                                    if (callbackInvoked) return@tryDjangoThenLocalFallback
+                                                    callbackInvoked = true
+                                                    android.util.Log.w("SplashActivity", "REACTIVATION: decision=${if (isActivated) "ACTIVATED" else "ACTIVATION"} reason=device_list_fallback")
+                                                    callback(isActivated)
+                                                }
+                                            }
                                         }
-
-                                        callbackInvoked = true
-                                        callback(isFullyActivated)
                                     }
                                 }
 
@@ -949,6 +1046,7 @@ class SplashActivity : AppCompatActivity() {
         if (isFinishing || isDestroyed || !isNavigating) return
 
         android.util.Log.d("SplashActivity", "navigateWithFadeAnimation: Starting smooth shared element transition")
+        DebugLogger.logAnimation("Navigate", "to ${if (isActivated) "ActivatedActivity" else "ActivationActivity"}")
 
         // Get logoTextView for shared element transition
         val logoTextView = findViewById<TextView>(R.id.logoTextView)
@@ -963,15 +1061,13 @@ class SplashActivity : AppCompatActivity() {
             return
         }
 
-        // Ensure transition names are set
-        logoTextView.transitionName = "logo_transition"
-        taglineTextView.transitionName = "tagline_transition"
-
-        // Ensure views are visible and ready for transition
-        logoTextView.visibility = View.VISIBLE
-        logoTextView.alpha = 1f
-        taglineTextView.visibility = View.VISIBLE
-        taglineTextView.alpha = 1f
+        logoAnimatorSet?.cancel()
+        taglineAnimatorSet?.cancel()
+        logoAnimatorSet = null
+        taglineAnimatorSet = null
+        logoTextView.animate().cancel()
+        taglineTextView.animate().cancel()
+        splashUIManager?.prepareForTransition()
 
         // Navigate directly with shared element transition
         if (!isFinishing && !isDestroyed && isNavigating && !hasStartedNavigation) {
@@ -991,7 +1087,9 @@ class SplashActivity : AppCompatActivity() {
             isNavigating = true
         }
 
+        android.util.Log.w("SplashActivity", "REACTIVATION: final → ${if (isActivated) "ActivatedActivity" else "ActivationActivity"}")
         android.util.Log.d("SplashActivity", "navigateToActivity: Navigating to ${if (isActivated) "ActivatedActivity" else "ActivationActivity"}")
+        DebugLogger.logFlow("Splash", "Navigate", "decision: ${if (isActivated) "ACTIVATED" else "NOT_ACTIVATED"} → ${if (isActivated) "ActivatedActivity" else "ActivationActivity"}")
 
         // Update check is on ActivationActivity (status card); Splash just navigates.
         if (isActivated) {
@@ -1023,22 +1121,20 @@ class SplashActivity : AppCompatActivity() {
                 val taglineTextView = findViewById<TextView>(R.id.taglineTextView)
 
                 if (logoTextView != null && taglineTextView != null) {
-                    // Ensure transition names are set
-                    logoTextView.transitionName = "logo_transition"
-                    taglineTextView.transitionName = "tagline_transition"
-
-                    // Ensure views are visible and ready for transition
-                    logoTextView.visibility = View.VISIBLE
-                    logoTextView.alpha = 1f
-                    taglineTextView.visibility = View.VISIBLE
-                    taglineTextView.alpha = 1f
+                    logoAnimatorSet?.cancel()
+                    taglineAnimatorSet?.cancel()
+                    logoAnimatorSet = null
+                    taglineAnimatorSet = null
+                    logoTextView.animate().cancel()
+                    taglineTextView.animate().cancel()
+                    splashUIManager?.prepareForTransition()
 
                     // Create smooth shared element transition with custom duration
-                val options = ActivityOptionsCompat.makeSceneTransitionAnimation(
-                    this,
-                    Pair.create(logoTextView, "logo_transition"),
-                    Pair.create(taglineTextView, "tagline_transition")
-                ).toBundle()
+                    val options = ActivityOptionsCompat.makeSceneTransitionAnimation(
+                        this,
+                        Pair.create(logoTextView, "logo_transition"),
+                        Pair.create(taglineTextView, "tagline_transition")
+                    ).toBundle()
 
                     try {
                         // Set window exit transition to keep background visible
@@ -1050,28 +1146,29 @@ class SplashActivity : AppCompatActivity() {
 
                             // CRITICAL: Smooth shared element exit transition
                             // This ensures logo and tagline transition seamlessly without glitches
+                            val sharedDuration = AnimationConstants.SPLASH_SHARED_ELEMENT_TRANSITION_MS
                             window.sharedElementExitTransition = android.transition.TransitionSet().apply {
                                 // ChangeBounds handles position changes
                                 addTransition(android.transition.ChangeBounds().apply {
-                                    duration = 500
+                                    duration = sharedDuration
                                     interpolator = AccelerateDecelerateInterpolator()
                                 })
                                 // ChangeTransform handles scale and rotation
                                 addTransition(android.transition.ChangeTransform().apply {
-                                    duration = 500
+                                    duration = sharedDuration
                                     interpolator = AccelerateDecelerateInterpolator()
                                 })
                                 // ChangeClipBounds handles clipping changes
                                 addTransition(android.transition.ChangeClipBounds().apply {
-                                    duration = 500
+                                    duration = sharedDuration
                                     interpolator = AccelerateDecelerateInterpolator()
                                 })
                                 // ChangeImageTransform for better image/text transitions
                                 addTransition(android.transition.ChangeImageTransform().apply {
-                                    duration = 500
+                                    duration = sharedDuration
                                     interpolator = AccelerateDecelerateInterpolator()
                                 })
-                                duration = 500
+                                duration = sharedDuration
                                 interpolator = AccelerateDecelerateInterpolator()
                             }
 
@@ -1166,6 +1263,7 @@ class SplashActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
 
+        handler.removeCallbacks(snapshotRunnable)
         // Cancel all Handler callbacks to prevent memory leaks
         handlerRunnables.forEach { handler.removeCallbacks(it) }
         handlerRunnables.clear()

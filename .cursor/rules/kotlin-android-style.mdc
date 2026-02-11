@@ -1,0 +1,31 @@
+---
+description: Kotlin and Android conventions; follow code style, Logger, Result, Koin. Use when editing Kotlin or Android resources.
+globs: "**/*.kt", "FASTPAY_BASE/app/src/main/res/**/*.xml"
+alwaysApply: false
+---
+
+# Kotlin & Android Style
+
+Follow **docs/09-code-style.md** and repo **.editorconfig** (4 spaces, no tabs, UTF-8, trim trailing whitespace, final newline).
+
+## Logging
+
+- Use the app **Logger** (e.g. `Logger.d("Tag", "message")`, `Logger.e("Tag", exception, "message")`).
+- Do **not** use `Log.d`/`Log.e` or `println` for app logging.
+
+## Errors and results
+
+- **Exceptions** live only in **core/error/** (e.g. FastPayException, FirebaseException).
+- **Result&lt;T&gt;** lives only in **core/result/Result.kt**.
+- Do **not** add new exception or Result types in `util` or `model`. Use **Result** pattern: `result.onSuccess { }.onError { }`.
+
+## DI and UI
+
+- **Koin** only (no Hilt). ViewModels from `KoinModules.kt`; inject with `by viewModel()`.
+- Use **ViewBinding**; set content in `onCreate`.
+- Prefer expression bodies, `when`, and safe calls over long `if-else` chains.
+
+## Resources
+
+- Use string resources (e.g. `getString(R.string.welcome_message)`).
+- Shared constants in `Constants.kt` or resources.

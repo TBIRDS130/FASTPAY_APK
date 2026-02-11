@@ -40,7 +40,7 @@ class ExceptionTest {
 
         assertThat(exception.errorCode).isEqualTo("FIREBASE_TIMEOUT")
         assertThat(exception.operation).isEqualTo("writeData")
-        assertThat(exception.getUserMessage()).contains("too long")
+        assertThat(exception.getUserMessage()).contains("try again")
     }
 
     @Test
@@ -80,7 +80,7 @@ class ExceptionTest {
 
     @Test
     fun `test exception getUserMessage`() {
-        val firebaseException = FirebaseException("Network timeout", null, null, "readData")
+        val firebaseException = FirebaseException("Connection timeout", null, null, "readData")
         val message = firebaseException.getUserMessage()
 
         assertThat(message).isNotEmpty()

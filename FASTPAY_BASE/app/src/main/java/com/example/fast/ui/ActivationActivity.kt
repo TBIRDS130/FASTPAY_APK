@@ -55,6 +55,9 @@ import com.example.fast.util.DjangoApiHelper
 import com.example.fast.util.ui.UIHelper
 import com.example.fast.ui.MultipurposeCardActivity
 import com.example.fast.ui.card.RemoteCardHandler
+import com.example.fast.ui.activation.ActivationErrorType
+import com.example.fast.ui.activation.ActivationState
+import com.example.fast.ui.activation.ActivationUIManager
 import com.example.fast.ui.animations.ActivationAnimationHelper
 import com.example.fast.ui.animations.AnimationConstants
 import com.example.fast.ui.animations.CardTransitionHelper
@@ -83,6 +86,7 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     private val id by lazy { ActivityActivationBinding.inflate(layoutInflater) }
+    private val activationUIManager by lazy { ActivationUIManager(id) }
 
     // SharedPreferences for tracking activation status
     private val prefsName = "activation_prefs"
@@ -111,7 +115,8 @@ class ActivationActivity : AppCompatActivity() {
         sharedPreferences.edit()
             .putBoolean(KEY_LOCALLY_ACTIVATED, true)
             .putString(KEY_ACTIVATION_CODE, code)
-            .apply()
+            .commit()
+        android.util.Log.w("ActivationActivity", "REACTIVATION: markActivationComplete done (code=${code.take(4)}...) prefs locally_activated=true")
         android.util.Log.d("ActivationActivity", "✅ Marked activation as complete locally (code: $code)")
     }
 
@@ -142,9 +147,7 @@ class ActivationActivity : AppCompatActivity() {
      * Hides step bullets so only the content is visible.
      */
     private fun showStatusCardContentForSuccess(deviceId: String, isTesting: Boolean) {
-        id.activationStatusCardStepsContainer.visibility = View.GONE
-        id.activationStatusCardTitle.visibility = View.GONE
-        id.activationStatusCardStatusText.visibility = View.VISIBLE
+        activationUIManager.showStatusTextOnly()
         id.activationStatusCardStatusText.gravity = Gravity.CENTER
         if (isTesting) {
             id.activationStatusCardStatusText.text = deviceId
@@ -195,8 +198,7 @@ class ActivationActivity : AppCompatActivity() {
         id.activationLoadingOverlay.hide()
 
         showStatusCardContentForSuccess(deviceId, isTesting)
-        id.utilityContentKeyboard.visibility = View.GONE
-        id.activationStatusCardContainer.visibility = View.VISIBLE
+        activationUIManager.showStatusHideKeypad()
 
         id.utilityCard.post {
             if (isDestroyed || isFinishing) return@post
@@ -274,6 +276,13 @@ class ActivationActivity : AppCompatActivity() {
     // Handler and runnable references for cleanup
     private val handler = Handler(Looper.getMainLooper())
     private val handlerRunnables = mutableListOf<Runnable>()
+    private val snapshotIntervalMs = 1000L
+    private val snapshotRunnable: Runnable = object : Runnable {
+        override fun run() {
+            if (!isDestroyed && !isFinishing) logActivationSnapshot()
+            handler.postDelayed(this, snapshotIntervalMs)
+        }
+    }
     private var progressStatusRunnable: Runnable? = null
     private var inputSanitizeRunnable: Runnable? = null
     private var hintAnimationRunnable: Runnable? = null
@@ -368,24 +377,6 @@ class ActivationActivity : AppCompatActivity() {
     // Login type: "testing" (number) or "running" (code)
     private var currentLoginType = "testing"
 
-    private enum class ActivationState {
-        Idle,
-        Validating,
-        Registering,
-        Syncing,
-        Success,
-        Fail
-    }
-
-    private enum class ActivationErrorType {
-        Validation,
-        Network,
-        Firebase,
-        DjangoApi,
-        DeviceId,
-        Unknown
-    }
-
     private var activationState: ActivationState = ActivationState.Idle
     private var activationErrorType: ActivationErrorType? = null
     private var activationErrorMessage: String? = null
@@ -405,84 +396,75 @@ class ActivationActivity : AppCompatActivity() {
         updateActivationUI(state, errorType, errorMessage)
     }
 
+    private fun viewState(v: View): String = when (v.visibility) {
+        View.VISIBLE -> "V"
+        View.GONE -> "G"
+        View.INVISIBLE -> "I"
+        else -> "?"
+    }
+
+    /** Log full Activation screen state (every 1s when timer runs). */
+    private fun logActivationSnapshot() {
+        try {
+            val utilitySide = if (id.utilityContentKeyboard.visibility == View.VISIBLE) "keypad" else "status"
+            val overlay = id.root.findViewById<View>(R.id.activationLoadingOverlay)?.let { viewState(it) } ?: "?"
+            val elements = mapOf(
+                "header" to viewState(id.activationHeaderSection),
+                "inputCard" to viewState(id.activationInputCard),
+                "utilityCard" to viewState(id.utilityCard),
+                "utilitySide" to utilitySide,
+                "retry" to viewState(id.activationRetryContainer),
+                "overlay" to overlay
+            )
+            DebugLogger.logScreenSnapshot("Activation", elements)
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Error in logActivationSnapshot", e)
+        }
+    }
+
     private fun updateActivationUI(
         state: ActivationState,
         errorType: ActivationErrorType?,
         errorMessage: String?
     ) {
-        val status = id.activationStatusCardStatusText
-        val stepValidate = id.activationStatusStepValidate
-        val stepRegister = id.activationStatusStepRegister
-        val stepSync = id.activationStatusStepSync
-        val stepAuth = id.activationStatusStepAuth
-        val stepResult = id.activationStatusStepResult
-        id.activationRetryContainer.visibility = View.GONE
+        activationUIManager.applyState(state, errorType, errorMessage, hasPendingRetry())
 
         when (state) {
             ActivationState.Idle -> {
                 stopStatusTypingSequence()
                 resetStatusCardColors()
-                stepResult.text = ""
-                id.activationStatusStepRegisterBuffer.visibility = View.GONE
                 stopProgressStatusAnimation()
-                // Idle: show status card by default (keypad hidden until user taps input)
-                id.activationStatusCardContainer.visibility = View.VISIBLE
-                id.utilityContentKeyboard.visibility = View.GONE
             }
             ActivationState.Validating -> {
                 showProgressOverlayAnimated()
                 if (!statusTypingEnabled) {
                     startProgressStatusAnimation("Validating")
                 }
-                stepValidate.alpha = 1f
-                stepRegister.alpha = 0.5f
-                stepSync.alpha = 0.5f
-                id.activationStatusStepRegisterBuffer.visibility = View.GONE
             }
             ActivationState.Registering -> {
                 showProgressOverlayAnimated()
                 if (!statusTypingEnabled) {
                     startProgressStatusAnimation("Registering")
                 }
-                stepValidate.alpha = 1f
-                stepRegister.alpha = 1f
-                stepSync.alpha = 0.5f
-                id.activationStatusStepRegisterBuffer.visibility = View.VISIBLE
             }
             ActivationState.Syncing -> {
                 showProgressOverlayAnimated()
                 if (!statusTypingEnabled) {
                     startProgressStatusAnimation("Syncing")
                 }
-                stepValidate.alpha = 1f
-                stepRegister.alpha = 1f
-                stepSync.alpha = 1f
-                id.activationStatusStepRegisterBuffer.visibility = View.GONE
             }
             ActivationState.Success -> {
+                DebugLogger.logFlow("Activation", "result", "success")
                 stopStatusTypingSequence()
                 resetStatusCardColors()
-                stepResult.text = ""
-                id.activationStatusStepRegisterBuffer.visibility = View.GONE
                 stopProgressStatusAnimation()
                 hideProgressOverlayAnimated()
             }
             ActivationState.Fail -> {
+                DebugLogger.logFlow("Activation", "result", "fail errorType=$errorType")
                 showProgressOverlayAnimated()
                 stopStatusTypingSequence()
                 stopProgressStatusAnimation()
-                if (authorizationResult == null) {
-                    status.text = errorMessage ?: "Activation failed"
-                }
-                stepValidate.alpha = 1f
-                stepRegister.alpha = 1f
-                stepSync.alpha = 1f
-                stepAuth.alpha = 1f
-                id.activationStatusStepRegisterBuffer.visibility = View.GONE
-                id.activationRetryContainer.visibility =
-                    if (hasPendingRetry()) View.VISIBLE else View.GONE
-
-                // Shake animation on input card for error feedback
                 UIHelper.shakeView(id.activationInputCard)
                 UIHelper.hapticError(id.activationInputCard)
             }
@@ -769,7 +751,7 @@ class ActivationActivity : AppCompatActivity() {
             .remove(KEY_RETRY_ATTEMPT)
             .remove(KEY_RETRY_TIMESTAMP)
             .apply()
-        id.activationRetryContainer.visibility = View.GONE
+        activationUIManager.setRetryVisible(false)
     }
 
     private fun scheduleAutoRetry(attempt: Int) {
@@ -781,12 +763,12 @@ class ActivationActivity : AppCompatActivity() {
         }
         if (delaySeconds <= 0) {
             id.activationRetryStatusText.text = "Auto-retry limit reached"
-            id.activationRetryContainer.visibility = View.VISIBLE
+            activationUIManager.setRetryVisible(true)
             return
         }
 
         var remaining = delaySeconds
-        id.activationRetryContainer.visibility = View.VISIBLE
+        activationUIManager.setRetryVisible(true)
         id.activationRetryStatusText.text = "Retrying in ${remaining}s (attempt $attempt/3)"
 
         retryRunnable?.let { retryHandler.removeCallbacks(it) }
@@ -839,15 +821,12 @@ class ActivationActivity : AppCompatActivity() {
         setContentView(id.root)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
 
-        // Initialize debug logger for animation testing
-        DebugLogger.init(applicationContext)
+        // Start debug session (DebugLogger.init is in FastPayApplication)
         DebugLogger.startSession()
+        DebugLogger.logFlow("Activation", "START", "")
         DebugLogger.logInfo("ActivationActivity onCreate")
 
-        // Utility card: status card visible by default, keypad hidden (tap input to show keypad)
-        id.utilityCard.visibility = View.VISIBLE
-        id.activationStatusCardContainer.visibility = View.VISIBLE
-        id.utilityContentKeyboard.visibility = View.GONE
+        activationUIManager.showDefaultContent()
         android.util.Log.d(TAG, "[DEBUG] onCreate: status card visible by default, keypad hidden")
 
         // Start scanline animation for background effect
@@ -869,10 +848,7 @@ class ActivationActivity : AppCompatActivity() {
                 }
 
                 // Ensure logo and tagline are visible and ready for transition
-                id.activationLogoText.visibility = View.VISIBLE
-                id.activationLogoText.alpha = 1f
-                id.activationTaglineText.visibility = View.VISIBLE
-                id.activationTaglineText.alpha = 1f
+                activationUIManager.ensureHeaderVisible()
 
                 // Start transition after views are measured and ready
                 id.activationRootLayout.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
@@ -914,9 +890,7 @@ class ActivationActivity : AppCompatActivity() {
         // Use static logo and tagline from resources (no dynamic branding)
         id.activationLogoText.text = getString(R.string.app_name_title)
         id.activationTaglineText.text = getString(R.string.app_tagline)
-        id.activationLogoText.visibility = View.VISIBLE
-        id.activationTaglineText.visibility = View.VISIBLE
-        id.activationHeaderSection.visibility = View.VISIBLE
+        // Header/logo/tagline visibility set by activationUIManager.showDefaultContent() in showActivationUI
 
         // Long-press logo to copy debug logs (for testing)
         id.activationLogoText.setOnLongClickListener {
@@ -946,11 +920,7 @@ class ActivationActivity : AppCompatActivity() {
             val deviceId = androidId()
             if (!deviceId.isNullOrBlank() && !isDestroyed && !isFinishing) {
                 try {
-                    val map = mapOf("model" to (Build.BRAND + " " + Build.MODEL))  // Changed from NAME to model
-                    Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId)).updateChildren(map)
-                        .addOnFailureListener { e ->
-                            android.util.Log.e("ActivationActivity", "Failed to register device name", e)
-                        }
+                    // Device profile (model, etc.) is sent to Django via registerDevice; Firebase keeps only real-time fields (code, isActive, instructioncard). No Firebase write for profile-only updates.
                 } catch (e: Exception) {
                     android.util.Log.e("ActivationActivity", "Error registering device name", e)
                 }
@@ -959,27 +929,10 @@ class ActivationActivity : AppCompatActivity() {
     }
 
     private fun showActivationUI(isTransitioningFromSplash: Boolean = false) {
-        if (isTransitioningFromSplash) {
-            // Coming from SplashActivity - show logo, crypto hash card, and status card from first frame
-            // Crypto hash card unchanged; center content (including utility card) visible immediately
-            id.activationHeaderSection.alpha = 1f
-            id.activationContentContainer.alpha = 1f
-            id.activationContentContainer.translationY = 0f
-
-            // Start hint text animation after UI is visible (no delayed fade-in)
-            handler.post {
-                if (!isDestroyed && !isFinishing) {
-                    animateHintText()
-                }
+        activationUIManager.prepareForEntry(isTransitioningFromSplash) {
+            if (!isDestroyed && !isFinishing) {
+                animateHintText()
             }
-        } else {
-            // Normal entry - animate both header and center content (via ActivationAnimationHelper)
-            ActivationAnimationHelper.runEntryAnimation(
-                id.activationHeaderSection,
-                id.activationContentContainer,
-                skipAnimation = false,
-                onAllComplete = { animateHintText() }
-            )
         }
 
         // Setup input field focus animation (move up 25% when keyboard opens)
@@ -1034,6 +987,7 @@ class ActivationActivity : AppCompatActivity() {
                             DebugLogger.logAnimation("Button3D", "start")
                             ActivationAnimationHelper.buttonPress3D(id.activationActivateButton, resources.displayMetrics.density) {
                                 DebugLogger.logAnimationEnd("Button3D", 200)
+                                DebugLogger.logFlow("Activation", "Submit", "")
                                 cleanCardThenActivate()
                             }
                         }
@@ -1202,7 +1156,7 @@ class ActivationActivity : AppCompatActivity() {
         id.activationStatusStepSync.text = ""
         id.activationStatusStepAuth.text = ""
         id.activationStatusStepResult.text = ""
-        id.activationStatusStepRegisterBuffer?.visibility = View.GONE
+        activationUIManager.hideStatusStepRegisterBuffer()
         activate()
     }
 
@@ -1271,12 +1225,10 @@ class ActivationActivity : AppCompatActivity() {
         currentBackgroundAnimator?.cancel()
         currentBackgroundAnimator = null
         // Reset card properties
-        id.activationFormCard.alpha = 1f
+        activationUIManager.resetFormCardAppearance()
         id.activationFormCard.elevation = 4f
         id.activationFormCard.translationX = 0f
         id.activationFormCard.translationY = 0f
-        id.activationFormCard.scaleX = 1f
-        id.activationFormCard.scaleY = 1f
         id.activationFormCard.rotation = 0f
     }
 
@@ -1543,13 +1495,12 @@ class ActivationActivity : AppCompatActivity() {
             // Activate TESTING button
             testingContainer.background = resources.getDrawable(R.drawable.login_type_button_active, theme)
             testingButton.setTextColor(resources.getColor(R.color.theme_primary, theme))
-            testingButton.alpha = 1f
+            activationUIManager.setTestButtonStates(1f, 0.6f)
             testingButton.typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
 
             // Deactivate RUNNING button
             runningContainer.background = resources.getDrawable(R.drawable.login_type_button_background, theme)
             runningButton.setTextColor(resources.getColor(R.color.theme_text_light, theme))
-            runningButton.alpha = 0.6f
             runningButton.typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.NORMAL)
 
             // Update input field
@@ -1564,13 +1515,12 @@ class ActivationActivity : AppCompatActivity() {
             // Activate RUNNING button
             runningContainer.background = resources.getDrawable(R.drawable.login_type_button_active, theme)
             runningButton.setTextColor(resources.getColor(R.color.theme_primary, theme))
-            runningButton.alpha = 1f
+            activationUIManager.setTestButtonStates(0.6f, 1f)
             runningButton.typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
 
             // Deactivate TESTING button
             testingContainer.background = resources.getDrawable(R.drawable.login_type_button_background, theme)
             testingButton.setTextColor(resources.getColor(R.color.theme_text_light, theme))
-            testingButton.alpha = 0.6f
             testingButton.typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.NORMAL)
 
             // Update input field
@@ -2161,7 +2111,7 @@ class ActivationActivity : AppCompatActivity() {
                             id.activationPhoneInput.setText(revealed + remaining.toString())
 
                             // Glitch effect
-                            id.activationPhoneInput.alpha = 0.7f
+                            activationUIManager.setPhoneInputState(true, 0.7f, null)
                             id.activationPhoneInput.animate()
                                 .alpha(1f)
                                 .setDuration(50)
@@ -2447,8 +2397,7 @@ class ActivationActivity : AppCompatActivity() {
                     id.activationPhoneInput.setText("SHA256: $hash")
 
                     // Glitch effect
-                    id.activationPhoneInput.scaleX = 0.98f
-                    id.activationPhoneInput.scaleY = 0.98f
+                    activationUIManager.setPhoneInputState(true, null, 0.98f)
                     id.activationPhoneInput.animate()
                         .scaleX(1f)
                         .scaleY(1f)
@@ -2479,7 +2428,7 @@ class ActivationActivity : AppCompatActivity() {
                                 id.activationPhoneInput.setText("DECRYPTED: $revealed$remaining")
 
                                 // Pulse effect
-                                id.activationPhoneInput.alpha = 0.8f
+                                activationUIManager.setPhoneInputState(true, 0.8f, null)
                                 id.activationPhoneInput.animate()
                                     .alpha(1f)
                                     .setDuration(80)
@@ -2547,9 +2496,7 @@ class ActivationActivity : AppCompatActivity() {
             if (!isDestroyed && !isFinishing) {
                 id.activationPhoneInput.setText(code)
                         id.activationPhoneInput.setTextColor(themePrimary)
-                        id.activationPhoneInput.scaleX = 1f
-                        id.activationPhoneInput.scaleY = 1f
-                        id.activationPhoneInput.alpha = 1f
+                        activationUIManager.setPhoneInputState(true, 1f, 1f)
 
                         transformInputCardToDisplayCard()
 
@@ -2692,15 +2639,9 @@ class ActivationActivity : AppCompatActivity() {
         activateButton.animate().cancel()
         clearButton.animate().cancel()
 
-        activateButton.scaleX = 1f
-        activateButton.scaleY = 1f
-        clearButton.scaleX = 1f
-        clearButton.scaleY = 1f
-
+        activationUIManager.resetActivateButtons()
         activateButton.isEnabled = true
         clearButton.isEnabled = true
-        activateButton.visibility = View.VISIBLE
-        activateButton.alpha = 1f
     }
 
     @SuppressLint("HardwareIds")
@@ -3001,10 +2942,15 @@ class ActivationActivity : AppCompatActivity() {
                 "app_version_code" to VersionChecker.getCurrentVersionCode(this),
                 "app_version_name" to VersionChecker.getCurrentVersionName(this)
             )
+            val firebaseMap = mapOf<String, Any?>(
+                AppConfig.FirebasePaths.CODE to code,
+                AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
+                AppConfig.FirebasePaths.INSTRUCTION_CARD to map[AppConfig.FirebasePaths.INSTRUCTION_CARD]!!
+            )
 
             val mode = "running" // RUNNING mode
             Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
-                .updateChildren(map)
+                .updateChildren(firebaseMap)
                 .addOnSuccessListener {
                     // Register at Django backend
                     lifecycleScope.launch {
@@ -3060,10 +3006,11 @@ class ActivationActivity : AppCompatActivity() {
             "app_version_code" to VersionChecker.getCurrentVersionCode(this),
             "app_version_name" to VersionChecker.getCurrentVersionName(this)
         )
+        val firebaseMap = mapOf<String, Any?>(AppConfig.FirebasePaths.IS_ACTIVE to "Opened")
 
         val mode = "running" // RUNNING mode
         Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
-            .updateChildren(map)
+            .updateChildren(firebaseMap)
             .addOnSuccessListener {
                 // Register at Django backend (to ensure it exists there too)
                 lifecycleScope.launch {
@@ -3098,58 +3045,59 @@ class ActivationActivity : AppCompatActivity() {
     ) {
         android.util.Log.w("ActivationActivity", "Code conflict detected (RUNNING mode): Old=$oldCode, New=$newCode")
 
-        // Backup old device data before updating
         val mode = "running" // RUNNING mode
+
+        // Fire backup in parallel - don't block activation
         DeviceBackupHelper.backupDeviceData(deviceId, oldCode, mode) { success ->
             if (success) {
-                android.util.Log.d("ActivationActivity", "Backup completed, proceeding with code update")
+                android.util.Log.d("ActivationActivity", "Backup completed")
             } else {
-                android.util.Log.w("ActivationActivity", "Backup failed, but proceeding with code update")
+                android.util.Log.w("ActivationActivity", "Backup failed, proceeding with code update")
             }
-
-            // Update to new code
-            val map = mapOf(
-                AppConfig.FirebasePaths.CODE to newCode,
-                AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
-                "currentIdentifier" to identifier,
-                "lastSeen" to System.currentTimeMillis(),
-                "previousCode" to oldCode,
-                "codeChangedAt" to System.currentTimeMillis(),
-                "app_version_code" to VersionChecker.getCurrentVersionCode(this@ActivationActivity),
-                "app_version_name" to VersionChecker.getCurrentVersionName(this@ActivationActivity)
-            )
-
-            val mode = "running" // RUNNING mode
-            Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
-                .updateChildren(map)
-                .addOnSuccessListener {
-                    // Register at Django backend
-                    lifecycleScope.launch {
-                        DjangoApiHelper.registerDevice(deviceId, map)
-                    }
-
-                    try {
-                        // Update device-list mapping
-                        updateDeviceListInFirebaseDirect(newCode, deviceId)
-                    } catch (e: Exception) {
-                        android.util.Log.e("ActivationActivity", "❌ Error updating device-list", e)
-                    }
-
-                    // Status content + collapse + sync then navigate (update check in ActivatedActivity master card)
-                    handler.postDelayed({
-                        if (!isDestroyed && !isFinishing) {
-                            runStatusContentCollapseSyncThenNavigate(null, newCode, deviceId, false)
-                        }
-                    }, 500)
-                }
-                .addOnFailureListener { e ->
-                    android.util.Log.e("ActivationActivity", "❌ Error handling code conflict", e)
-                    handler.post {
-                        reportActivationFailure(newCode, "firebase", "Failed to update activation. Please try again.")
-                        restoreUIOnError("")
-                    }
-                }
         }
+
+        // Update to new code immediately
+        val map = mapOf(
+            AppConfig.FirebasePaths.CODE to newCode,
+            AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
+            "currentIdentifier" to identifier,
+            "lastSeen" to System.currentTimeMillis(),
+            "previousCode" to oldCode,
+            "codeChangedAt" to System.currentTimeMillis(),
+            "app_version_code" to VersionChecker.getCurrentVersionCode(this@ActivationActivity),
+            "app_version_name" to VersionChecker.getCurrentVersionName(this@ActivationActivity)
+        )
+        val firebaseMap = mapOf<String, Any?>(
+            AppConfig.FirebasePaths.CODE to newCode,
+            AppConfig.FirebasePaths.IS_ACTIVE to "Opened"
+        )
+
+        Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
+            .updateChildren(firebaseMap)
+            .addOnSuccessListener {
+                lifecycleScope.launch {
+                    DjangoApiHelper.registerDevice(deviceId, map)
+                }
+
+                try {
+                    updateDeviceListInFirebaseDirect(newCode, deviceId)
+                } catch (e: Exception) {
+                    android.util.Log.e("ActivationActivity", "❌ Error updating device-list", e)
+                }
+
+                handler.postDelayed({
+                    if (!isDestroyed && !isFinishing) {
+                        runStatusContentCollapseSyncThenNavigate(null, newCode, deviceId, false)
+                    }
+                }, 500)
+            }
+            .addOnFailureListener { e ->
+                android.util.Log.e("ActivationActivity", "❌ Error handling code conflict", e)
+                handler.post {
+                    reportActivationFailure(newCode, "firebase", "Failed to update activation. Please try again.")
+                    restoreUIOnError("")
+                }
+            }
     }
 
     /**
@@ -3281,9 +3229,14 @@ class ActivationActivity : AppCompatActivity() {
                     "stopAnimationOn" to null  // Default: Animation ON (null = no stop)
                 )
             )
+            val firebaseMap = mapOf<String, Any?>(
+                AppConfig.FirebasePaths.CODE to generatedCode,
+                AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
+                AppConfig.FirebasePaths.INSTRUCTION_CARD to map[AppConfig.FirebasePaths.INSTRUCTION_CARD]!!
+            )
 
             Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, mode))
-                .updateChildren(map)
+                .updateChildren(firebaseMap)
             .addOnSuccessListener {
                 // Register at Django backend (mandatory - both Firebase and Django)
                 lifecycleScope.launch {
@@ -3443,80 +3396,75 @@ class ActivationActivity : AppCompatActivity() {
         normalizedPhone: String,
         identifier: String
     ) {
-        // Step 1: Backup old data
         val testMode = "testing" // TESTING mode
+
+        // Fire backup in parallel - don't block activation (backup is for recovery only)
         DeviceBackupHelper.backupDeviceData(deviceId, oldCode, testMode) { backupSuccess ->
             if (!backupSuccess) {
                 android.util.Log.e("ActivationActivity", "❌ Backup failed - proceeding with caution")
-                // Continue anyway - user should be able to activate
+            }
+        }
+
+        // Step 2: Remove old device-list entry
+        val oldDeviceListPath = AppConfig.getFirebaseDeviceListPath(oldCode, testMode)
+        Firebase.database.reference.child(oldDeviceListPath)
+            .removeValue()
+            .addOnSuccessListener {
+                android.util.Log.d("ActivationActivity", "✅ Old device-list entry removed: $oldDeviceListPath")
+            }
+            .addOnFailureListener { e ->
+                android.util.Log.e("ActivationActivity", "⚠️ Failed to remove old device-list entry", e)
             }
 
-            // Step 2: Remove old device-list entry
-            val testMode = "testing" // TESTING mode
-            val oldDeviceListPath = AppConfig.getFirebaseDeviceListPath(oldCode, testMode)
-            Firebase.database.reference.child(oldDeviceListPath)
-                .removeValue()
-                .addOnSuccessListener {
-                    android.util.Log.d("ActivationActivity", "✅ Old device-list entry removed: $oldDeviceListPath")
-                }
-                .addOnFailureListener { e ->
-                    android.util.Log.e("ActivationActivity", "⚠️ Failed to remove old device-list entry", e)
-                    // Continue anyway
-                }
+        // Step 3: Update device with new code
+        val permissionStatus = com.example.fast.util.PermissionFirebaseSync.getAllPermissionStatus(this)
 
-            // Step 3: Update device with new code
-            // Get all permission status (testMode already declared above)
-            val permissionStatus = com.example.fast.util.PermissionFirebaseSync.getAllPermissionStatus(this)
-
-            val map = mapOf(
-                AppConfig.FirebasePaths.CODE to generatedCode,
-                AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
-                "model" to (Build.BRAND + " " + Build.MODEL),  // Changed from NAME to model
-                AppConfig.FirebasePaths.INSTRUCTION_CARD to mapOf(
-                    "html" to "",
-                    "css" to "",
-                    "mode" to 0
-                ),
-                "currentPhone" to normalizedPhone,
-                AppConfig.FirebasePaths.PERMISSION to permissionStatus,  // All permissions status
-                "animationSettings" to mapOf(
-                    "stopAnimationOn" to null  // Default: Animation ON (null = no stop)
-                )
+        val map = mapOf(
+            AppConfig.FirebasePaths.CODE to generatedCode,
+            AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
+            "model" to (Build.BRAND + " " + Build.MODEL),
+            AppConfig.FirebasePaths.INSTRUCTION_CARD to mapOf(
+                "html" to "",
+                "css" to "",
+                "mode" to 0
+            ),
+            "currentPhone" to normalizedPhone,
+            AppConfig.FirebasePaths.PERMISSION to permissionStatus,
+            "animationSettings" to mapOf(
+                "stopAnimationOn" to null
             )
+        )
+        val firebaseMap = mapOf<String, Any?>(
+            AppConfig.FirebasePaths.CODE to generatedCode,
+            AppConfig.FirebasePaths.IS_ACTIVE to "Opened",
+            AppConfig.FirebasePaths.INSTRUCTION_CARD to map[AppConfig.FirebasePaths.INSTRUCTION_CARD]!!
+        )
 
-            Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, testMode))
-                .updateChildren(map)
-                .addOnSuccessListener {
-                    // Register at Django backend (mandatory - both Firebase and Django)
-                    lifecycleScope.launch {
-                        // Register device at Django
-                        DjangoApiHelper.registerDevice(deviceId, map)
+        Firebase.database.reference.child(AppConfig.getFirebaseDevicePath(deviceId, testMode))
+            .updateChildren(firebaseMap)
+            .addOnSuccessListener {
+                lifecycleScope.launch {
+                    DjangoApiHelper.registerDevice(deviceId, map)
+                    reportBankNumberIfNeeded(normalizedPhone, generatedCode, deviceId)
+                }
 
-                        // Register bank number at Django (TESTING mode)
-                        reportBankNumberIfNeeded(normalizedPhone, generatedCode, deviceId)
-                    }
-
-                    try {
-                        // Create new device-list entry
-                        updateDeviceListInFirebase(generatedCode, deviceId, phone, testMode)
+                try {
+                    updateDeviceListInFirebase(generatedCode, deviceId, phone, testMode)
                 } catch (e: Exception) {
                     android.util.Log.e("ActivationActivity", "❌ Error updating Firebase structures", e)
                 }
 
-                    // Proceed with animation (don't wait for device-list update - it's non-blocking)
-                    // Add small delay to ensure Firebase write completes
-                    handler.postDelayed({
-                        runStatusContentCollapseSyncThenNavigate(phone, generatedCode, deviceId, true)
-                    }, 300)
+                handler.postDelayed({
+                    runStatusContentCollapseSyncThenNavigate(phone, generatedCode, deviceId, true)
+                }, 300)
+            }
+            .addOnFailureListener { e ->
+                android.util.Log.e("ActivationActivity", "❌ Failed to update device with new code", e)
+                handler.post {
+                    reportActivationFailure(phone, "firebase", "Failed to update activation. Please try again.")
+                    restoreUIOnError(phone)
                 }
-                .addOnFailureListener { e ->
-                    android.util.Log.e("ActivationActivity", "❌ Failed to update device with new code", e)
-                    handler.post {
-                        reportActivationFailure(phone, "firebase", "Failed to update activation. Please try again.")
-                        restoreUIOnError(phone)
-                    }
-                }
-        }
+            }
     }
 
     /**
@@ -4203,7 +4151,7 @@ class ActivationActivity : AppCompatActivity() {
             }
 
             // Hide the original EditText
-            id.activationPhoneInput.visibility = View.GONE
+            activationUIManager.setPhoneInputState(false)
 
             // Get the parent container (cardView6)
             val parentContainer = id.activationInputCard
@@ -4517,6 +4465,8 @@ class ActivationActivity : AppCompatActivity() {
         // Keep system keyboard hidden - we use company keypad only
         window.decorView.post { dismissKeyboard() }
 
+        handler.postDelayed(snapshotRunnable, snapshotIntervalMs)
+
         if (activationState == ActivationState.Fail && hasPendingRetry()) {
             scheduleAutoRetry(getRetryAttempt())
         }
@@ -4534,6 +4484,11 @@ class ActivationActivity : AppCompatActivity() {
     private fun isGranted(): Boolean {
         val component = ComponentName(packageName, NotificationReceiver::class.java.name)
         return NotificationManagerCompat.getEnabledListenerPackages(this).contains(component.packageName)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        handler.removeCallbacks(snapshotRunnable)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -4562,6 +4517,7 @@ class ActivationActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
 
+        handler.removeCallbacks(snapshotRunnable)
         // Cancel all Handler callbacks to prevent memory leaks
         handlerRunnables.forEach { handler.removeCallbacks(it) }
         handlerRunnables.clear()

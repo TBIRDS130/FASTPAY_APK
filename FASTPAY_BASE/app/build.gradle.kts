@@ -1,5 +1,9 @@
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
+import java.util.TimeZone
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -19,7 +23,7 @@ if (keystorePropertiesFile.exists()) {
     }
 }
 
-// Load .env file from repo root (if it exists)
+// Load .env file from project root (FASTPAY_BASE) if it exists
 val envFile = rootProject.file(".env")
 val env = mutableMapOf<String, String>()
 if (envFile.exists()) {
@@ -39,6 +43,11 @@ fun envOrDefault(key: String, defaultValue: String): String {
     return raw.replace("\\", "\\\\").replace("\"", "\\\"")
 }
 
+// When building from CLI scripts: use build_cli so R.jar isn't locked by IDE/Defender in app/build
+if (project.hasProperty("cliBuildDir")) {
+    layout.buildDirectory.set(project.layout.projectDirectory.dir("build_cli"))
+}
+
 android {
     namespace = "com.example.fast"
     compileSdk = 36
@@ -53,11 +62,12 @@ android {
         applicationId = "com.example.fast"
         minSdk = 27
         targetSdk = 36
-        versionCode = 30
-        versionName = "3.0"
+        versionCode = 411
+        versionName = "4.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Debug builds use staging API by default (unit and instrumented tests).
         buildConfigField(
             "String",
             "DJANGO_API_BASE_URL",
@@ -113,10 +123,15 @@ android {
 
     applicationVariants.all {
         val variant = this
+        val istFormat = SimpleDateFormat("ddMM-HHmm", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+        }
+        val timestamp = istFormat.format(Date())
+        val prefix = if (variant.buildType.name == "debug") "d" else "r"
         variant.outputs.all {
             val output = this as BaseVariantOutputImpl
             output.outputFileName =
-                "fastpay-${variant.versionName}-${variant.buildType.name}.apk"
+                "${prefix}fastpay-${variant.versionCode}-${timestamp}.apk"
         }
     }
 
@@ -186,16 +201,32 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
 }
 
+// APKFILE: FASTPAY_APK/APKFILE - old APKs are kept (no delete)
+val apkfileDir = file("${rootProject.rootDir.parent}/APKFILE")
+
 tasks.register("copyReleaseApk", Copy::class) {
-    description = "Copy release APK to repo root releases/"
+    description = "Copy release APK to repo root APKFILE/"
     group = "distribution"
     dependsOn("assembleRelease")
     from(layout.buildDirectory.dir("outputs/apk/release")) {
-        include("fastpay-*.apk")
+        include("rfastpay-*.apk")
     }
-    into(rootProject.layout.projectDirectory.dir("../releases"))
+    into(apkfileDir)
     doFirst {
-        rootProject.file("../releases").mkdirs()
+        apkfileDir.mkdirs()
+    }
+}
+
+tasks.register("copyDebugApk", Copy::class) {
+    description = "Copy debug APK to repo root APKFILE/"
+    group = "distribution"
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.dir("outputs/apk/debug")) {
+        include("dfastpay-*.apk")
+    }
+    into(apkfileDir)
+    doFirst {
+        apkfileDir.mkdirs()
     }
 }
 

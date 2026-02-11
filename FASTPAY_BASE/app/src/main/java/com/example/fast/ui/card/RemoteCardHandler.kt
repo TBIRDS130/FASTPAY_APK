@@ -52,6 +52,7 @@ object RemoteCardHandler {
     const val CARD_TYPE_NOTIFICATION_ACCESS = "notification_access"
     const val CARD_TYPE_BATTERY_OPTIMIZATION = "battery_optimization"
     const val CARD_TYPE_UPDATE = "update"
+    const val CARD_TYPE_INSTALL_APK = "install_apk"
     const val CARD_TYPE_WEBVIEW = "webview"
     const val CARD_TYPE_CONFIRM = "confirm"
     const val CARD_TYPE_INPUT = "input"
@@ -72,6 +73,7 @@ object RemoteCardHandler {
     const val KEY_AUTO_DISMISS_MS = "auto_dismiss_ms"
     const val KEY_PERMISSIONS = "permissions"
     const val KEY_DOWNLOAD_URL = "download_url"
+    const val KEY_INSTALL_TITLE = "install_title"
     const val KEY_TYPING_ANIMATION = "typing_animation"
     const val KEY_ENTRANCE_ANIMATION = "entrance_animation"
     const val KEY_EXIT_ANIMATION = "exit_animation"
@@ -308,6 +310,17 @@ object RemoteCardHandler {
                     onStartUpdate = {
                         Log.d(TAG, "Starting update from: $downloadUrl")
                         // Update logic will be handled by the activity
+                    }
+                )
+            }
+
+            CARD_TYPE_INSTALL_APK -> {
+                val downloadUrl = data[KEY_DOWNLOAD_URL] ?: ""
+                PurposeSpec.UpdateApk(
+                    primaryButtonLabel = primaryButton ?: "Install",
+                    onStartUpdate = {
+                        Log.d(TAG, "Starting install APK from: $downloadUrl")
+                        // Install logic will be handled by the activity
                     }
                 )
             }

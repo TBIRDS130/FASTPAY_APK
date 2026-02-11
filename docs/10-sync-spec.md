@@ -1,6 +1,6 @@
 # APK ↔ HTML Sync Spec
 
-**Purpose:** When the APK (ActivationActivity and related resources) is updated, use this spec to keep the HTML activation demo in sync. Demo file: `docs/demos/fastpay-activation-ui.html` (or root `fastpay-activation-ui.html` if kept there). Config can be regenerated with `scripts/extract-apk-values.ps1` → `apk-config.js`.
+**Purpose:** When the APK (ActivationActivity and related resources) is updated, use this spec to keep the HTML activation demo in sync. Demo file: `APKTOWEBVIEW/demos/output.html` (hand-written; no HTML generation). Config: run `npm run extract` or `npm run build:tokens` from `APKTOWEBVIEW/` → `APKTOWEBVIEW/apk-config.js`.
 
 ---
 
@@ -71,19 +71,27 @@ activationRootLayout → activationGridBackground, activationScanlineOverlay, ac
 - [ ] Flow: `ActivationActivity.kt` activate, processPhoneActivation, processCodeActivation
 - [ ] Animations: animateButtonPress, shakeView, setupInputFieldAnimation, typing, status card
 - [ ] Layout: `activity_activation.xml` structure
-- [ ] Run `scripts/extract-apk-values.ps1` to regenerate `apk-config.js` if using it
+- [ ] Run `npm run extract` (from APKTOWEBVIEW) to regenerate `apk-config.js` if using it
 
 ---
 
-## 9. Extract Script
+## 9. Optional: design tokens (HTML demo only)
 
 From repo root:
+
+```bash
+npm run build:tokens
+```
+
+**Optional.** Edit `APKTOWEBVIEW/tokens/**/*.json` (color, size, string, animation). Run `npm run build:tokens` from APKTOWEBVIEW. Style Dictionary generates `apk-config.js` in APKTOWEBVIEW. The **HTML demo** (`APKTOWEBVIEW/demos/`) uses it; the **APK is unchanged**. See `APKTOWEBVIEW/README.md`.
+
+## 9b. Extract script (APK as source for apk-config.js)
 
 ```powershell
 .\scripts\extract-apk-values.ps1
 ```
 
-Creates `apk-config.js` from `colors.xml`, `strings.xml`, `dimens.xml`. HTML can optionally load it and use `APK_CONFIG` for values.
+Builds `apk-config.js` from APK layout and resources. Use when not using token-first.
 
 ---
 
@@ -92,3 +100,54 @@ Creates `apk-config.js` from `colors.xml`, `strings.xml`, `dimens.xml`. HTML can
 - CI check: compare APK resources vs `apk-config.js`, fail if out of sync.
 - Pre-commit: run extract script when APK resource files change.
 - Single HTML that always loads `apk-config.js` so one source of truth.
+
+---
+
+## 11. Proven global approach (design tokens)
+
+The **industry-standard, proven approach** for keeping app and web in sync is **design tokens as the single source of truth**, not the app.
+
+### How it works globally
+
+1. **Design Tokens (W3C / DTCG format)**
+   Design decisions (colors, spacing, typography, strings) are stored in **platform-agnostic JSON** (e.g. `tokens/color.json`, `tokens/size.json`), often with `$type` and `$value`. See [Design Tokens Community Group](https://www.designtokens.org/tr/2025.10/format/) (format spec).
+
+2. **Style Dictionary**
+   A **translation tool** reads that token JSON and **generates** platform outputs:
+   - Android: `colors.xml`, `dimens.xml`, (and optionally strings)
+   - Web: CSS variables, JS modules
+   - iOS, Compose, etc.
+   So the flow is: **tokens (JSON) → Android + Web**. One source, many outputs. [Style Dictionary](https://styledictionary.com/) is the widely used open-source choice and is referenced in the DTCG spec.
+
+3. **Figma / design tools**
+   Many teams also sync tokens **from** Figma (or other design tools) into the same token JSON, so design and code share one vocabulary.
+
+### Our current approach vs proven
+
+| | **Proven (token-first)** | **Our current (Android-first)** |
+|--|--------------------------|----------------------------------|
+| Source of truth | Token JSON files | Android layout + `values/` XML |
+| Direction | Tokens → Android, tokens → Web | Android → extract → `apk-config.js` → HTML |
+| Tooling | Style Dictionary (npm) | Custom `extract-apk-values.ps1` (PowerShell) |
+| HTML | Uses generated JS/CSS from tokens | Uses `apk-config.js` generated from APK |
+
+Our setup works and keeps the HTML demo in sync by re-running the extract script after APK changes. It does **not** follow the usual “tokens first” flow.
+
+### Options if we want to align with the proven approach
+
+- **Option A – Token-first (recommended long-term)**
+  Introduce a `tokens/` directory with JSON (e.g. DTCG-style or simple key/value). Use **Style Dictionary** to:
+  - Generate `colors.xml`, `dimens.xml`, and optionally string resources for Android.
+  - Generate a JS (or CSS) bundle for the HTML demo.
+  Then both the APK and the HTML consume **generated** files; no “extract from APK” step. Single source = tokens.
+
+- **Option B – Keep Android as source, use standard converters**
+  Keep Android as the source of truth but replace the custom PowerShell script with a **Node** build step that uses established npm packages:
+  - **android-string-resource** (`asr2js`) for `strings.xml` → JSON/JS.
+  - A small parser or existing lib for `colors.xml` / `dimens.xml` → JSON.
+  Output the same `apk-config.js` (or a DTCG-like format) so the HTML stays unchanged. This uses proven converters instead of custom parsing.
+
+- **Option C – Keep current script**
+  Continue with `extract-apk-values.ps1` reading layout + resources. No new dependencies; script already builds `apk-config.js` from live APK code so the HTML does not need edits when the APK changes.
+
+**Optional:** Design tokens in `tokens/**/*.json` can be built with `npm run build:tokens` to update only `apk-config.js` for the HTML demo; the APK is not modified.

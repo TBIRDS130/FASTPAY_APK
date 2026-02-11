@@ -73,6 +73,14 @@ class MultipurposeCardController(
         val container = overlayRoot.findViewById<FrameLayout>(R.id.multipurposeCardContainer)
         cardContainer = container
 
+        // Block all touch/gestures to background: overlay and container consume every event
+        overlayRoot.isClickable = true
+        overlayRoot.isFocusable = true
+        overlayRoot.setOnTouchListener { _, _ -> true }
+        container.isClickable = true
+        container.isFocusable = true
+        container.setOnTouchListener { _, _ -> true }
+
         val cardView = inflater.inflate(R.layout.multipurpose_card, container, false)
         container.addView(cardView)
         card = cardView
@@ -120,6 +128,13 @@ class MultipurposeCardController(
             onComplete()
         } else {
             o?.let { rootView.removeView(it) }
+            // Restore recedeViews so main UI is fully visible when overlay is removed without death animation
+            spec.birth.recedeViews.forEach { v ->
+                v.scaleX = 1f
+                v.scaleY = 1f
+                v.rotationY = 0f
+                v.alpha = 1f
+            }
             onComplete()
         }
     }

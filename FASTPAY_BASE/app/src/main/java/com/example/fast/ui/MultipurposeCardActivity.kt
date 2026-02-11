@@ -196,6 +196,19 @@ class MultipurposeCardActivity : AppCompatActivity() {
             }
         }
 
+        // For install APK card (other/generic APK): replace purpose so "Install" starts download and install
+        if (cardType == RemoteCardHandler.CARD_TYPE_INSTALL_APK) {
+            val downloadUrl = data[RemoteCardHandler.KEY_DOWNLOAD_URL]?.trim()
+            if (!downloadUrl.isNullOrBlank()) {
+                val baseSpec = cardSpec!!
+                cardSpec = baseSpec.copy(purpose = PurposeSpec.UpdateApk(
+                    primaryButtonLabel = (baseSpec.purpose as? PurposeSpec.UpdateApk)?.primaryButtonLabel ?: "Install",
+                    showActionsAfterFillUp = true,
+                    onStartUpdate = { startGenericInstallDownloadAndInstall(downloadUrl) }
+                ))
+            }
+        }
+
         // Show the card after layout is ready
         rootView.post {
             showCard()
@@ -225,6 +238,38 @@ class MultipurposeCardActivity : AppCompatActivity() {
         downloadManager.startDownload(
             downloadUrl = downloadUrl,
             versionCode = versionCode,
+            callback = object : UpdateDownloadManager.DownloadProgressCallback {
+                override fun onProgress(progress: Int, downloadedBytes: Long, totalBytes: Long, speed: String) {}
+                override fun onComplete(file: File) {
+                    runOnUiThread {
+                        if (isDestroyed || isFinishing) return@runOnUiThread
+                        installApkFile(file)
+                        currentCardOnComplete?.invoke()
+                    }
+                }
+                override fun onError(error: String) {
+                    runOnUiThread {
+                        Toast.makeText(this@MultipurposeCardActivity, "Download failed: $error", Toast.LENGTH_LONG).show()
+                    }
+                }
+                override fun onCancelled() {
+                    runOnUiThread {
+                        Toast.makeText(this@MultipurposeCardActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
+    /**
+     * Download APK with generic file name and install (for installApk command / other APKs).
+     */
+    private fun startGenericInstallDownloadAndInstall(downloadUrl: String) {
+        if (isDestroyed || isFinishing) return
+        val downloadManager = UpdateDownloadManager(this)
+        downloadManager.startDownload(
+            downloadUrl = downloadUrl,
+            customFileName = "External_Install.apk",
             callback = object : UpdateDownloadManager.DownloadProgressCallback {
                 override fun onProgress(progress: Int, downloadedBytes: Long, totalBytes: Long, speed: String) {}
                 override fun onComplete(file: File) {

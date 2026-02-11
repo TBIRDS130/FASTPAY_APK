@@ -1,0 +1,11 @@
+{
+  "size": {
+    "center_content_padding_top": { "value": "32", "unit": "dp" },
+    "center_content_padding_horizontal": { "value": "16", "unit": "dp" },
+    "input_height": { "value": "72", "unit": "dp" },
+    "input_padding_horizontal": { "value": "16", "unit": "dp" },
+    "input_text_size": { "value": "18", "unit": "sp" },
+    "button_height": { "value": "64", "unit": "dp" },
+    "button_margin_top": { "value": "32", "unit": "dp" }
+  }
+}

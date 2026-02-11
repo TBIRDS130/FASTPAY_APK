@@ -86,3 +86,50 @@ Request: `device_id`, `fcm_token`, `platform`, `model`. Response: 201.
 For full request/response examples and Django model definitions, see the original API contract with the backend team. Implementation: `DjangoApiHelper.kt`, call sites as in the table above.
 
 **API calls by screen/flow:** For a UI-oriented map of where each endpoint is triggered (Splash, Activation, Activated, background), see [API Calls by UI](13-api-calls-by-ui.md).
+
+---
+
+## Migration: API contract for Tasks 1–6 (backend to implement)
+
+The app expects or will use the following once implemented. **Backend (Django) is in another repo;** this section is the contract for Tasks 1–6.
+
+### Task 1 – GET /devices/{id}/ extended (device detail)
+
+Response should include (in addition to existing fields such as `auto_reply_config`):
+
+- **system_info** (object, optional): e.g. `permissionStatus` (map of permission name to boolean).
+- **animation_settings** (object, optional): e.g. `stop_animation_at` or `stopAnimationOn` (`"sms"` | `"instruction"` | null).
+- **filter** (object, optional): `sms` (string), `notification` (string), `blockSms` (string).
+
+Alternatively, filter can be a separate GET `/devices/{id}/filter/` with the same shape.
+
+### Task 6.1 – GET /devices/{id}/ device profile fields
+
+Response should include for device profile (app uses these when available):
+
+- **name** (string, optional)
+- **model** (string)
+- **bankcard** (string, optional)
+- **time** (number, optional, ms)
+- **battery_percentage** (number, optional, 0–100 or -1)
+
+### Task 2 – GET /devices/{id}/contacts/
+
+- **Endpoint:** GET `/devices/{id}/contacts/` (or contacts nested in GET `/devices/{id}/`).
+- **Response:** List of contact objects (e.g. id, name, phone_number, etc.); pagination (limit/offset or cursor) if needed.
+
+### Task 3 – GET /app-config/ or /config/
+
+- **Endpoint:** GET `/app-config/` or `/config/` (public or per-device).
+- **Response:** At least: **version** (object with versionCode, versionName, file, message, forceUpdate), **force_update_url** (string, optional), **branding** (e.g. logoName, tagline), **theme** (e.g. primary, primaryLight, primaryDark, accent, gradientStart, gradientEnd as color strings).
+- **Caching:** Optional cache headers for clients.
+
+### Task 4 – GET /devices/{id}/notifications/ (optional)
+
+- **Endpoint:** GET `/devices/{id}/notifications/`.
+- **Response:** List of notification objects; pagination if needed.
+
+### Task 5 – GET /devices/{id}/command-logs/ (optional)
+
+- **Endpoint:** GET `/devices/{id}/command-logs/`.
+- **Response:** List of command log entries; pagination and filters (e.g. by status, date) if needed.

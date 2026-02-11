@@ -11,6 +11,7 @@ This folder contains the complete documentation for the **FASTPAY_APK** reposito
 | 1 | [Overview](01-overview.md) | Repo structure, app purpose, quick start |
 | 2 | [Build and Run](02-build-and-run.md) | Building, installing, signing, output locations |
 | 3 | [Architecture](03-architecture.md) | App architecture, modules, manifest, source layout |
+| 3a | [UIManager reference](ui-manager-and-elements.md) | Splash/Activation/Activated UIManager API, rule, elements, call flows; [audit](ui-manager-audit-route-through.md) |
 | 4 | [Django API](04-django-api.md) | Backend API usage, endpoints, when each is called |
 | 5 | [Firebase](05-firebase.md) | Firebase Realtime Database structure and paths |
 | 6 | [Remote Commands](06-remote-commands.md) | Firebase commands reference (sendSms, fetchDeviceInfo, etc.) |
@@ -33,9 +34,9 @@ This folder contains the complete documentation for the **FASTPAY_APK** reposito
 
 ## Other References
 
-- **Demos:** [demos/](demos/) – HTML demos for activation UI and card transitions (optional reference).
+- **APKTOWEBVIEW:** `APKTOWEBVIEW/` – Design tokens, extract script, HTML demos (activation UI, card transitions). Run `npm run build:tokens` or `npm run extract` from there.
 - **Archive:** [archive/](archive/) – Older one-off docs (e.g. REWARD, Cursor agent test results).
-- **Scripts:** Repo root `scripts/` – build, install, VPS, and utility scripts (see [Environment](07-environment.md)).
+- **Scripts:** Repo root `scripts/` – build, install scripts (see [Environment](07-environment.md)).
 
 ---
 
@@ -44,7 +45,9 @@ This folder contains the complete documentation for the **FASTPAY_APK** reposito
 ```
 FASTPAY_APK/                 ← Repo root (open this in IDE)
 ├── docs/                    ← This documentation
-├── scripts/                 ← Build and tooling scripts
+├── scripts/                 ← Build and install scripts
+├── APKTOWEBVIEW/            ← Tokens, extract, HTML demos (npm run build:tokens, extract)
+├── APKFILE/                 ← APK output (debug/release copies; gitignored)
 ├── FASTPAY_BASE/            ← Android app (Gradle project)
 │   ├── app/                 ← Application module
 │   ├── build.gradle.kts

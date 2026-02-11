@@ -1,0 +1,13 @@
+{
+  "color": {
+    "theme_primary": { "value": "#00ff88" },
+    "theme_primary_light": { "value": "#00ff88" },
+    "theme_primary_dark": { "value": "#00cc6a" },
+    "theme_hint_neon": { "value": "#8000ff88" },
+    "theme_border": { "value": "#4D00ff88" },
+    "theme_border_light": { "value": "#8000ff88" },
+    "status_error": { "value": "#F44336" },
+    "button_text_dark": { "value": "#000000" },
+    "activation_background": { "value": "#0a0a0a" }
+  }
+}

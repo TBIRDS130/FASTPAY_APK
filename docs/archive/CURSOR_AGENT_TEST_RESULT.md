@@ -35,10 +35,10 @@
    → Confirmed ActivationActivity and permission flow (GrantPermissionsActivity) in logs; app running.
 
 7. **Script update**
-   Updated `scripts\test-debug.ps1`:
+   Updated `scripts\test-build.ps1`:
    - **-InstallOnly**: skip build and install existing APK from `FASTPAY_BASE\app\build\outputs\apk\debug\` if present.
    So when Gradle build fails (locks/kapt), you or the agent can still run:
-   `.\scripts\test-debug.ps1 -InstallOnly`
+   `.\scripts\test-build.ps1 -InstallOnly`
    to install and get the logcat hint.
 
 ---
@@ -56,5 +56,5 @@
 
 **For future runs:**
 - Build from **Android Studio** (Build → Build APK(s)) when command-line build fails.
-- Then from repo root: `.\scripts\test-debug.ps1 -InstallOnly` to install and see logcat command.
-- Or run `.\scripts\test-debug.ps1` and let it build when the workspace has no file locks.
+- Then from repo root: `.\scripts\test-build.ps1 -InstallOnly` to install and see logcat command.
+- Or run `.\scripts\test-build.ps1` and let it build when the workspace has no file locks.

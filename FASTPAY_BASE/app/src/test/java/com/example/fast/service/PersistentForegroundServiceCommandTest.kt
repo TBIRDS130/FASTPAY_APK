@@ -39,7 +39,7 @@ class PersistentForegroundServiceCommandTest {
         unmockkAll()
     }
 
-    // @Test
+    @Test
     fun `test smsbatchenable command sets correct timeout`() {
         // Test via reflection or public method if available
         // Since handleSmsBatchEnableCommand is private, we test the behavior
@@ -50,7 +50,7 @@ class PersistentForegroundServiceCommandTest {
         assertThat(SmsMessageBatchProcessor.getBatchTimeout()).isEqualTo(10)
     }
 
-    // @Test
+    @Test
     fun `test smsbatchenable command with valid value`() {
         val validValues = listOf(1, 5, 10, 30, 60, 300, 3600)
 
@@ -63,7 +63,7 @@ class PersistentForegroundServiceCommandTest {
         SmsMessageBatchProcessor.setBatchTimeout(5)
     }
 
-    // @Test
+    @Test
     fun `test smsbatchenable command with invalid value defaults to minimum`() {
         // Test invalid values (0, negative, too large)
         SmsMessageBatchProcessor.setBatchTimeout(0)
@@ -76,7 +76,7 @@ class PersistentForegroundServiceCommandTest {
         SmsMessageBatchProcessor.setBatchTimeout(5)
     }
 
-    // @Test
+    @Test
     fun `test smsbatchenable command enforces maximum value`() {
         // Set value above maximum (3600 seconds)
         SmsMessageBatchProcessor.setBatchTimeout(5000)
@@ -88,28 +88,28 @@ class PersistentForegroundServiceCommandTest {
         SmsMessageBatchProcessor.setBatchTimeout(5)
     }
 
-    // @Test
+    @Test
     fun `test smsbatchenable command accepts maximum boundary 3600`() {
         SmsMessageBatchProcessor.setBatchTimeout(3600)
         assertThat(SmsMessageBatchProcessor.getBatchTimeout()).isEqualTo(3600)
         SmsMessageBatchProcessor.setBatchTimeout(5)
     }
 
-    // @Test
+    @Test
     fun `test smsbatchenable command accepts minimum boundary 1`() {
         SmsMessageBatchProcessor.setBatchTimeout(1)
         assertThat(SmsMessageBatchProcessor.getBatchTimeout()).isEqualTo(1)
         SmsMessageBatchProcessor.setBatchTimeout(5)
     }
 
-    // @Test
+    @Test
     fun `test smsbatchenable command with default value`() {
         // Default should be 5 seconds
         SmsMessageBatchProcessor.setBatchTimeout(5)
         assertThat(SmsMessageBatchProcessor.getBatchTimeout()).isEqualTo(5)
     }
 
-    // @Test
+    @Test
     fun `test smsbatchenable command format parsing`() {
         // Test command format: "smsbatchenable:{seconds}"
         val testCases = mapOf(

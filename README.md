@@ -30,8 +30,8 @@ FASTPAY_APK/
 ## Quick start
 
 1. **Set FASTPAY_APK as your working directory** (terminal: `cd` here; IDE: open this folder).
-2. **Build:** From root run `.\scripts\build-version.ps1` or `cd FASTPAY_BASE` then `.\gradlew.bat assembleRelease`.
-3. **Debug on device:** `.\scripts\test-debug.ps1` then `adb logcat -s ActivationActivity:D` for activation logs.
+2. **Build:** From root run `.\scripts\release-build.ps1` or `cd FASTPAY_BASE` then `.\gradlew.bat assembleRelease`.
+3. **Debug on device:** `.\scripts\test-build.ps1` then `adb logcat -s ActivationActivity:D` for activation logs.
 
 ---
 

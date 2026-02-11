@@ -20,7 +20,7 @@
 
 - **IDE:** Android Studio or Cursor/VS Code with Android extensions. Open **FASTPAY_APK** (repo root), not only `FASTPAY_BASE`.
 - **EditorConfig:** Enable in your editor for consistent indentation and line endings.
-- **Gradle:** Use `gradlew` inside each version folder (e.g. `FASTPAY_BASE/gradlew`). Root script `scripts/build-version.ps1` can drive builds from repo root.
+- **Gradle:** Use `gradlew` inside each version folder (e.g. `FASTPAY_BASE/gradlew`). Root script `scripts/release-build.ps1` can drive builds from repo root.
 - **CI:** FASTPAY_BASE has `.github/workflows/android-ci.yml`. Reuse the same pattern for new version folders.
 
 ---
@@ -43,16 +43,12 @@
 
 | Platform | Debug (build + install) | Release |
 |----------|--------------------------|--------|
-| **Windows** | `.\scripts\test-debug.ps1` or `.\scripts\test-debug.ps1 FASTPAY_BASE` | `.\scripts\build-version.ps1` |
-| **Linux / macOS** | `cd FASTPAY_BASE && ./gradlew assembleDebug installDebug` | `cd FASTPAY_BASE && ./gradlew assembleRelease` |
+| **Windows** | TEST: `.\scripts\test-build.ps1` (incremental) | RELEASE: `.\scripts\release-build.ps1` (clean, no cache; same install flow) |
+| **Ubuntu/Linux/macOS** | TEST: `bash scripts/test-build.sh` | RELEASE: `bash scripts/release-build.sh` (same flow as Windows) |
 
-**Release signing:** Create `FASTPAY_BASE/keystore.properties` (see [Keystore](08-keystore.md)). Optional: `FASTPAY_BASE/.env` or repo root `.env` for build-time config (e.g. API URLs).
+**Release signing:** Create `FASTPAY_BASE/keystore.properties` (see [Keystore](08-keystore.md)). Optional build-time config: `FASTPAY_BASE/.env` only; copy from `FASTPAY_BASE/.env.example`. See [Build and Run](02-build-and-run.md).
 
-**Low-memory / VPS (e.g. Hostinger):**
-```bash
-bash scripts/build-hostinger-low-memory.sh
-```
-Uses `-Xmx512m`, `--no-daemon`, `--max-workers=1` for release build from FASTPAY_BASE.
+**Staging API:** Debug builds default to `https://api-staging.fastpaygaming.com/api` for `DJANGO_API_BASE_URL`; override in `FASTPAY_BASE/.env` if needed. Unit and instrumented tests use this by default.
 
 ---
 
@@ -73,26 +69,6 @@ Uses `-Xmx512m`, `--no-daemon`, `--max-workers=1` for release build from FASTPAY
 
 ---
 
-## Testing APK Built on VPS
-
-APKs run on Android devices or emulators. After building on VPS:
-
-**A. Download and install locally**
-```bash
-bash scripts/download-apk-from-vps.sh user@your-vps-ip
-adb install -r fastpay-3.0-release.apk
-```
-
-**B. Install via wireless ADB from VPS**
-1. On device: **Settings > Developer options > Wireless debugging** — ON, note IP:PORT.
-2. On VPS (from FASTPAY_APK root):
-```bash
-export ANDROID_HOME=/opt/android-sdk
-bash scripts/vps-install-via-adb.sh 192.168.1.100:5555
-```
-
----
-
 ## Cursor / Agent Testing
 
 | Step | Command / path |
@@ -101,8 +77,12 @@ bash scripts/vps-install-via-adb.sh 192.168.1.100:5555
 | **Android project** | `FASTPAY_BASE` |
 | **Build debug** | `cd FASTPAY_BASE` then `.\gradlew.bat assembleDebug` |
 | **Install on device** | `.\gradlew.bat installDebug` (from FASTPAY_BASE) |
-| **One script (build + install)** | From repo root: `.\scripts\test-debug.ps1` or `.\scripts\test-debug.ps1 FASTPAY_BASE` |
+| **One script (build + install)** | From repo root: `.\scripts\test-build.ps1` or `.\scripts\test-build.ps1 FASTPAY_BASE`. Incremental build; retries once on failure; if no device, prints `adb install -r "..."`; use `-InstallOnly` to install only. |
 | **View activation logs** | `adb logcat -s ActivationActivity:D` |
-| **Clean (if needed)** | `.\gradlew.bat --stop` then `.\gradlew.bat clean assembleDebug` (from FASTPAY_BASE; clean can fail if files are locked) |
+| **View debug logs (full)** | `adb logcat -s FastPay:D ActivationActivity:D ActivatedActivity:D PersistentForegroundService:D SplashActivity:D DebugLogger:D` |
+| **Copy logs from device** | Long-press logo on Activated screen → copies DebugLogger buffer to clipboard |
+| **Clean (if needed)** | Build scripts stop the Gradle daemon before each build to avoid R.jar locks. If locks persist: close Android Studio (or the project), then `.\gradlew.bat --stop` and run the script again. Manual clean: from FASTPAY_BASE run `.\gradlew.bat --stop` then `.\gradlew.bat clean assembleDebug`. |
 
-**Agent:** For “test on device”, run `.\scripts\test-debug.ps1` from repo root, then suggest `adb logcat -s ActivationActivity:D` to verify. If Gradle clean fails due to file locks, suggest Android Studio or `gradlew --stop` and retry.
+**Agent:** For “test on device”, run `.\scripts\test-build.ps1` from repo root, then suggest `adb logcat -s ActivationActivity:D` to verify. The script stops the Gradle daemon before each build to avoid R.jar locks and retries once on failure; if locks still occur, suggest closing Android Studio and retrying. When no device is connected, it outputs the install command for later.
+
+**PowerShell invocation:** Use `Set-Location path; .\scripts\test-build.ps1` when chaining (do not use `&&`—unsupported in PowerShell 5.x).

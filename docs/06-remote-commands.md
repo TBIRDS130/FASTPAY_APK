@@ -30,7 +30,8 @@ FastPay receives remote commands via **Firebase** at `device/{deviceId}/commands
 | **removePermission** | `open` or empty | `open` |
 | **requestDefaultSmsApp** / **requestDefaultMessageApp** | Any (ignored) | `1` |
 | **checkInternet** / **requestInternet** | Any (ignored) | `1` |
-| **updateApk** | `{url}` or `{versionCode}\|{url}` | `https://example.com/app.apk` |
+| **updateApk** | `{url}` \| `{versionCode}\|{url}` \| `force\|{url}` \| `force\|{versionCode}\|{url}` | `https://example.com/app.apk`<br>Without `force\|`, if `versionCode` is present and ≤ current app version, the command is skipped. |
+| **installApk** | `{url}` or `{title}\|{url}` | `https://example.com/other.apk`<br>Offers installation of any APK (e.g. other apps); optional card title. |
 | **controlAnimation** | `start` \| `off sms` \| `off instruction` \| `off` | `start` |
 | **syncNotification** | `on` \| `off` \| `realtime:{minutes}` | `realtime:30` |
 | **setHeartbeatInterval** | `{seconds}` (10–300) | `60` |

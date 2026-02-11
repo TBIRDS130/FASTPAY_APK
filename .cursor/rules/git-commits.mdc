@@ -1,0 +1,12 @@
+---
+description: Use conventional commit format when suggesting or generating commit messages.
+alwaysApply: false
+---
+
+# Git Commit Messages
+
+- **Format:** `type(scope): subject`
+- **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+- **Examples:** `feat(sms): Add bulk SMS`, `fix(firebase): Resolve timeout`, `docs(03): Update manifest components`
+
+See **docs/09-code-style.md** (Git Commit Messages).

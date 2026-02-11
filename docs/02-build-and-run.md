@@ -4,27 +4,49 @@
 
 | Build Type | Path | Filename |
 |------------|------|----------|
-| **Debug** | `FASTPAY_BASE/app/build/outputs/apk/debug/` | `fastpay-3.0-debug.apk` |
-| **Release** | `FASTPAY_BASE/app/build/outputs/apk/release/` | `fastpay-3.0-release.apk` |
-| **Release (convenience)** | `releases/` (repo root) | `fastpay-3.0-release.apk` |
+| **Debug** | `FASTPAY_BASE/app/build/outputs/apk/debug/` | `dfastpay-411-DDMM-HHMM.apk` |
+| **Release** | `FASTPAY_BASE/app/build/outputs/apk/release/` | `rfastpay-411-DDMM-HHMM.apk` |
+| **Both (copy)** | `APKFILE/` (repo root) | Same filenames; old APKs kept |
 
-The release APK is copied to `releases/` when you run the `copyReleaseApk` task or `build-version.ps1`.
+APKs are copied to `APKFILE/` when you run `test-build` or `release-build` (runs `copyDebugApk` / `copyReleaseApk`). Timestamp is IST (UTC+5:30).
 
 ## Build Commands
 
 ### From repo root
 
 ```powershell
-# Build release and copy to releases/
-.\scripts\build-version.ps1
-
-# Build and install debug on connected device
-.\scripts\test-debug.ps1
-# or: .\scripts\test-debug.ps1 FASTPAY_BASE
-
-# Clean + release (when builds fail or files are locked)
-.\scripts\clean-build.ps1
+# TEST BUILD (debug)
+.\scripts\test-build.ps1
+# RELEASE BUILD (release, clean + no cache)
+.\scripts\release-build.ps1
 ```
+
+**Ubuntu/Linux/macOS (from repo root):**
+```bash
+# TEST BUILD (debug)
+bash scripts/test-build.sh
+# RELEASE BUILD (release, clean + no cache)
+bash scripts/release-build.sh
+```
+Use `-InstallOnly` to skip build and only install. Optional: pass `FASTPAY_BASE` to target that version folder.
+
+### Design tokens and extract (optional – HTML demo in APKTOWEBVIEW)
+
+**Use:** Optional. All APK-to-web tooling lives in `APKTOWEBVIEW/`. Run from repo root or from `APKTOWEBVIEW/`:
+
+```bash
+# From repo root
+npm run build:tokens
+npm run extract
+
+# Or from APKTOWEBVIEW/
+cd APKTOWEBVIEW
+npm run build:tokens    # tokens/**/*.json → apk-config.js
+npm run extract         # APK resources → apk-config.js
+```
+
+- **Output:** `APKTOWEBVIEW/apk-config.js` (used by `APKTOWEBVIEW/demos/output.html`).
+- See `APKTOWEBVIEW/README.md` and `docs/10-sync-spec.md`.
 
 ### From FASTPAY_BASE
 
@@ -40,23 +62,9 @@ cd FASTPAY_BASE
 # Release (signed)
 .\gradlew.bat assembleRelease
 
-# Release + copy to repo releases/
+# Release + copy to APKFILE/
 .\gradlew.bat copyReleaseApk
 ```
-
-### build-apk.ps1 (inside FASTPAY_BASE)
-
-Smart builder with Java auto-detect, lock recovery, and clean:
-
-```powershell
-cd FASTPAY_BASE
-.\build-apk.ps1 -BuildType debug    # Debug APK
-.\build-apk.ps1 -Release            # Release (with clean)
-.\build-apk.ps1 -Clean              # Clean + build
-.\build-apk.ps1 -Quick              # Quick compile check
-```
-
-Use `-Clean` or `-Release` when Gradle locks or build fails.
 
 ### In Android Studio
 
@@ -65,10 +73,10 @@ Use `-Clean` or `-Release` when Gradle locks or build fails.
 
 ## Version and Naming
 
-APK filenames: `fastpay-{versionName}-{debug|release}.apk`
+APK filenames: `{d|r}fastpay-{versionCode}-{DDMM-HHMM}.apk` (e.g. `dfastpay-411-0802-1430.apk`, `rfastpay-411-0802-1430.apk`). Timestamp uses IST (Asia/Kolkata).
 
-- **Version name:** `FASTPAY_BASE/app/build.gradle.kts` → `defaultConfig.versionName` (e.g. `3.0`)
-- **Version code:** `defaultConfig.versionCode` (e.g. `30`)
+- **Version name:** `FASTPAY_BASE/app/build.gradle.kts` → `defaultConfig.versionName` (e.g. `4.1.1`)
+- **Version code:** `defaultConfig.versionCode` (e.g. `411`)
 
 ## Release Signing
 
@@ -89,4 +97,19 @@ If the file or keystore is missing, release may fall back to debug signing. Use 
 - **Gradle:** 8.13 (wrapper in FASTPAY_BASE)
 - **Android:** compileSdk/targetSdk 36, minSdk 27, buildTools 36.0.0
 
-Optional: `FASTPAY_BASE/.env` (or repo root `.env`) for build-time config (e.g. `DJANGO_API_BASE_URL`, `FIREBASE_STORAGE_BUCKET`). See [Environment](07-environment.md).
+Optional build-time config: `FASTPAY_BASE/.env` only (read by Gradle from project root). Copy from `FASTPAY_BASE/.env.example` and set `DJANGO_API_BASE_URL` and `FIREBASE_STORAGE_BUCKET` if needed. See [Environment](07-environment.md).
+
+## Testing
+
+**Unit tests** (no device):
+
+- From repo root: `.\scripts\test-unit.ps1` or `.\scripts\test-unit.ps1 FASTPAY_BASE` (Windows); `bash scripts/test-unit.sh` (Linux/macOS).
+- From FASTPAY_BASE: `.\gradlew.bat testDebugUnitTest` (Windows) or `./gradlew testDebugUnitTest` (Linux/macOS).
+- Key test classes: `ActivationCodeTest`, `ActivatedViewModelTest`, `PersistentForegroundServiceCommandTest`, `DjangoApiHelperTest` (see `app/src/test/`).
+
+**Instrumented tests** (device or emulator):
+
+- From FASTPAY_BASE: `.\gradlew.bat connectedDebugAndroidTest` (Windows) or `./gradlew connectedDebugAndroidTest` (Linux/macOS). Use `--info` to see test stdout.
+- Workflow tests: `ActivationToActivatedFlowTest` (Splash → Activation/Activated), `PermissionFlowTest` (context/permission checks); see `app/src/androidTest/java/com/example/fast/integration/`.
+
+**API for tests:** Debug builds use the staging API by default (`BuildConfig.DJANGO_API_BASE_URL` = `https://api-staging.fastpaygaming.com/api` unless overridden by `FASTPAY_BASE/.env`). Unit tests typically mock the API; instrumented tests may hit staging.

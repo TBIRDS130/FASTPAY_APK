@@ -26,6 +26,18 @@ object AnimationConstants {
     /** Fade out duration before navigation */
     const val SPLASH_FADE_OUT_DURATION = 300L
 
+    /** Logo and tagline animation duration */
+    const val SPLASH_LOGO_TAGLINE_DURATION_MS = 800L
+
+    /** Delay after tagline animation before navigating */
+    const val SPLASH_NAV_DELAY_AFTER_TAGLINE_MS = 1500L
+
+    /** Neon glow pulse cycle duration */
+    const val SPLASH_GLOW_PULSE_DURATION_MS = 2000L
+
+    /** Shared element transition duration (exit/enter) */
+    const val SPLASH_SHARED_ELEMENT_TRANSITION_MS = 500L
+
     // ========== Activation Screen Animations ==========
 
     /** Button exit animation duration (moves down and fades) */
@@ -54,6 +66,12 @@ object AnimationConstants {
 
     /** Instruction card animation duration */
     const val ACTIVATION_INSTRUCTION_DURATION = 500L
+
+    /** Entry animation: stagger delay between header and content */
+    const val ACTIVATION_ENTRY_STAGGER_MS = 150L
+
+    /** Entry animation: duration for each element (slide up + fade in) */
+    const val ACTIVATION_ENTRY_DURATION_MS = 600L
 
     // ========== Activation Flow (from activate-animation-demo.html) ==========
 
@@ -89,6 +107,38 @@ object AnimationConstants {
 
     /** Wipe line animation duration */
     const val ACTIVATION_WIPE_LINE_MS = 400L
+
+    // ========== Activated Screen Entry / Arrival ==========
+
+    /** From-Activation entry: fade duration for each card/button */
+    const val ACTIVATED_ENTRY_FADE_MS = 500L
+
+    /** From-Activation entry: start delay for phone card */
+    const val ACTIVATED_ENTRY_DELAY_PHONE_MS = 200L
+
+    /** From-Activation entry: start delay for status card */
+    const val ACTIVATED_ENTRY_DELAY_STATUS_MS = 300L
+
+    /** From-Activation entry: start delay for device info */
+    const val ACTIVATED_ENTRY_DELAY_DEVICE_MS = 350L
+
+    /** From-Activation entry: start delay for SMS card */
+    const val ACTIVATED_ENTRY_DELAY_SMS_MS = 400L
+
+    /** From-Activation entry: start delay for test/reset buttons */
+    const val ACTIVATED_ENTRY_DELAY_BUTTONS_MS = 500L
+
+    /** From-Activation entry: SMS content inner fade duration */
+    const val ACTIVATED_ENTRY_SMS_INNER_FADE_MS = 300L
+
+    /** Arrival animation: per-element fade duration */
+    const val ACTIVATED_ARRIVAL_FADE_MS = 300L
+
+    /** Arrival animation: stagger between elements */
+    const val ACTIVATED_ARRIVAL_STAGGER_MS = 120L
+
+    /** Arrival animation: initial delay before first element */
+    const val ACTIVATED_ARRIVAL_INITIAL_DELAY_MS = 50L
 
     // ========== Text Scroll Animations ==========
 

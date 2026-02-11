@@ -15,13 +15,13 @@
 | DI | Koin |
 | Backend | Django API (OkHttp, Gson), Firebase Realtime DB + Storage, FCM |
 | Async | Kotlin Coroutines |
-| Logging | Timber, app Logger |
+| Logging | Timber, app Logger; DebugLogger (copyable logs, init in FastPayApplication) |
 
 ## Source Layout (FASTPAY_BASE/app/src/main)
 
 ```
 java/com/example/fast/
-├── FastPayApplication.kt     # Koin, Firebase, Logger, Crashlytics
+├── FastPayApplication.kt     # Koin, Firebase, Logger, DebugLogger, Crashlytics
 ├── config/AppConfig.kt       # API URLs, Firebase paths
 ├── core/
 │   ├── base/                 # BaseActivity, BaseRepository, BaseViewModel
@@ -41,6 +41,24 @@ java/com/example/fast/
 ```
 
 **Single source of truth:** Exceptions live only in `core/error/`; the `Result<T>` type lives only in `core/result/Result.kt`. Do not add exception or Result types in `util` or `model`.
+
+## ActivatedActivity entry and visibility
+
+ActivatedActivity can be entered from **SplashActivity** (with shared-element transition), **ActivationActivity** (with shared-element transition, or with card-flip transition, or without transition). Visibility and animation are coordinated as follows:
+
+- **Single owner for “after branding” state:** `ActivatedUIManager.setupUIAfterBranding()` is the place that decides whether to show all elements immediately (`isTransitioningFromSplash == true`) or to hide then animate in (`hideElementsForAnimation()`). Do not overwrite that state from elsewhere (e.g. avoid calling `forceAllCardsVisible()` when `isTransitioningFromSplash` is false, or a posted runnable can set alpha=1 and break the fade-in).
+- **Card-flip entry:** When `useCardFlipEntry` is true, visibility is driven by `setupCardFlipTransition()` and its completion; `setupUI()` does not call `forceAllCardsVisible()`.
+- **Main-chain visibility:** The six main content elements (header, phone card, status card, device info, SMS card, test/reset buttons) are owned by `ActivatedUIManager.showMainContent()`; `ActivatedActivity` does not set their visibility/alpha/scale elsewhere.
+
+**UIManager (Splash, Activation, Activated):** Each of the three main screens has one UIManager in `ui/<screen>/` that owns main-content visibility, alpha, and scale. Activities and other code must not set these outside the manager (see [ui-manager-and-elements.md](ui-manager-and-elements.md) for the rule and exceptions).
+
+| Screen     | UIManager              | Key methods |
+|------------|------------------------|-------------|
+| Splash     | `SplashUIManager`       | `prepareForTransition()` |
+| Activation | `ActivationUIManager`   | `showDefaultContent()`, `showStatusHideKeypad()`, `setRetryVisible()`, `applyState()`, `showStatusTextOnly()`, `ensureHeaderVisible()`, `resetFormCardAppearance()`, `setPhoneInputState()`, `resetActivateButtons()`, `setTestButtonStates()`, `hideStatusStepRegisterBuffer()`, `prepareForEntry()` |
+| Activated  | `ActivatedUIManager`    | `setupUIAfterBranding()`, `ensureHeaderVisible()`, `ensurePhoneCardVisibleForTransition()`, `showMainContent()`, `hideMainContentForOverlay()`, `runWipeDownEntryAnimation()`, `runArrivalAnimation()`, `showSmsSide()`, `showInstructionSide()`, `setPermissionStatusVisible()` |
+
+Full API, elements, call flows, and audit: [ui-manager-and-elements.md](ui-manager-and-elements.md) and [ui-manager-audit-route-through.md](ui-manager-audit-route-through.md).
 
 ## Main Components (Manifest)
 

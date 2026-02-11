@@ -42,18 +42,17 @@ object FirebaseSyncHelper {
     // ============================================================================
 
     /**
-     * Sync complete contacts to Firebase
+     * Sync complete contacts (Task 15.2: Firebase Contact/ write removed).
      *
-     * Strategy:
-     * - Direct Firebase write (no Django, no fallback needed)
-     * - Uses DEVICE/{deviceId}/Contact structure
-     * - Map structure: {phoneNumber: {contactData}}
+     * Contacts are sent to Django via ContactBatchProcessor POST /contacts/.
+     * This method no longer writes to Firebase device/{id}/Contact/.
      *
      * @param context Application context
      * @param contacts List of contacts to sync
-     * @param onSuccess Callback with count of synced contacts
+     * @param onSuccess Callback with count of contacts processed
      * @param onFailure Callback with error message
      */
+    @Suppress("UNUSED_PARAMETER")
     fun syncCompleteContacts(
         context: Context,
         contacts: List<Contact>,
@@ -62,8 +61,6 @@ object FirebaseSyncHelper {
     ) {
         Thread {
             try {
-                val deviceId = getDeviceId(context)
-
                 if (contacts.isEmpty()) {
                     Log.d(TAG, "No contacts to sync")
                     Handler(Looper.getMainLooper()).post {
@@ -72,39 +69,11 @@ object FirebaseSyncHelper {
                     return@Thread
                 }
 
-                Log.d(TAG, "Starting contacts sync: ${contacts.size} contacts to Firebase")
-
-                // Convert contacts to Firebase format (same as DataSyncHelper)
                 val contactsMap = convertContactsToFirebaseFormat(contacts)
-
                 val contactCount = contactsMap.size
-                Log.d(TAG, "Processed $contactCount contacts for Firebase upload")
-
-                // Upload to Firebase using updateChildren for better efficiency
-                // This allows partial updates instead of replacing entire node
-                if (contactsMap.isNotEmpty()) {
-                    val firebasePath = "${AppConfig.getFirebaseDevicePath(deviceId)}/${AppConfig.FirebasePaths.CONTACTS}"
-
-                    // Use updateChildren for partial updates (more efficient)
-                    Firebase.database.reference.child(firebasePath).updateChildren(contactsMap)
-                        .addOnSuccessListener {
-                            Log.d(TAG, "✅ Contacts sync successful: $contactCount contacts synced to Firebase")
-                            Handler(Looper.getMainLooper()).post {
-                                onSuccess?.invoke(contactCount)
-                            }
-                        }
-                        .addOnFailureListener { e ->
-                            val errorMessage = "Failed to sync contacts to Firebase: ${e.message}"
-                            Log.e(TAG, "❌ $errorMessage", e)
-                            Handler(Looper.getMainLooper()).post {
-                                onFailure?.invoke(errorMessage)
-                            }
-                        }
-                } else {
-                    Log.d(TAG, "No contacts with phone numbers to sync")
-                    Handler(Looper.getMainLooper()).post {
-                        onSuccess?.invoke(0)
-                    }
+                Log.d(TAG, "Contacts sync: $contactCount contacts (Django via ContactBatchProcessor; Firebase Contact/ write disabled)")
+                Handler(Looper.getMainLooper()).post {
+                    onSuccess?.invoke(contactCount)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in contacts sync", e)

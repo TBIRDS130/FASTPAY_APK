@@ -2,6 +2,7 @@ package com.example.fast.util
 
 import android.util.Log
 import com.example.fast.config.AppConfig
+import com.example.fast.core.result.Result
 import com.google.common.truth.Truth.assertThat
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken

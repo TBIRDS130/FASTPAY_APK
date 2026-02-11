@@ -14,7 +14,7 @@ class ActivationCodeTest {
     // Test data: sequence used for activation code generation
     private val testSequence = listOf(10, 52, 63, 89, 12, 36, 63, 78, 63, 75)
 
-    // @Test
+    @Test
     fun `test activation code format`() {
         // Activation code should be 10 characters: 5 letters + 5 numbers
         // Format: XXXXX11111 (no dashes internally)
@@ -26,7 +26,7 @@ class ActivationCodeTest {
         assertThat(phoneNumber.length).isEqualTo(expectedLength)
     }
 
-    // @Test
+    @Test
     fun `test code display format`() {
         // Display format should have dash: XXXXX-11111
         val codeWithoutDash = "ABCDE12345"
@@ -36,7 +36,7 @@ class ActivationCodeTest {
         assertThat(codeWithDash.length).isEqualTo(11) // 10 chars + 1 dash
     }
 
-    // @Test
+    @Test
     fun `test code normalization`() {
         // Code should be normalized (uppercase, no dashes)
         val codeWithDash = "abcde-12345"
@@ -46,7 +46,7 @@ class ActivationCodeTest {
         assertThat(normalized.length).isEqualTo(10)
     }
 
-    // @Test
+    @Test
     fun `test phone number validation`() {
         // Valid phone number should be 10 digits
         val validPhone = "1234567890"
