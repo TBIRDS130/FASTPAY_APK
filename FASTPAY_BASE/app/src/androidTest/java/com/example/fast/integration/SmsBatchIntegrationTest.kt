@@ -1,6 +1,7 @@
 package com.example.fast.integration
 
 import android.content.Context
+import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.fast.util.SmsMessageBatchProcessor
@@ -25,6 +26,10 @@ import java.util.concurrent.TimeUnit
 @RunWith(AndroidJUnit4::class)
 class SmsBatchIntegrationTest {
 
+    companion object {
+        private const val TAG = "SmsBatchTest"
+    }
+
     private lateinit var context: Context
 
     @Before
@@ -41,7 +46,8 @@ class SmsBatchIntegrationTest {
     }
 
     @Test
-    fun `test batch timeout configuration persists`() {
+    fun testBatchTimeoutConfigurationPersists() {
+        Log.d(TAG, "testBatchTimeoutConfigurationPersists: Starting")
         // Set custom timeout
         SmsMessageBatchProcessor.setBatchTimeout(10)
 
@@ -51,10 +57,12 @@ class SmsBatchIntegrationTest {
         // Reset
         SmsMessageBatchProcessor.setBatchTimeout(5)
         assertThat(SmsMessageBatchProcessor.getBatchTimeout()).isEqualTo(5)
+        Log.d(TAG, "testBatchTimeoutConfigurationPersists: PASSED")
     }
 
     @Test
-    fun `test queueMessage queues for batch processing`() {
+    fun testQueueMessageQueuesForBatchProcessing() {
+        Log.d(TAG, "testQueueMessageQueuesForBatchProcessing: Starting")
         // Queue message with batching (non-default SMS app)
         SmsMessageBatchProcessor.queueMessage(
             context = context,
@@ -64,12 +72,12 @@ class SmsBatchIntegrationTest {
         )
 
         // Message should be queued
-        // Actual batch processing happens asynchronously
-        // This test verifies the method doesn't throw
+        Log.d(TAG, "testQueueMessageQueuesForBatchProcessing: PASSED")
     }
 
     @Test
-    fun `test immediate upload for default SMS app`() {
+    fun testImmediateUploadForDefaultSmsApp() {
+        Log.d(TAG, "testImmediateUploadForDefaultSmsApp: Starting")
         // Queue message with immediate upload (default SMS app)
         SmsMessageBatchProcessor.queueMessage(
             context = context,
@@ -83,7 +91,7 @@ class SmsBatchIntegrationTest {
     }
 
     @Test
-    fun `test batch timeout affects processing interval`() {
+    fun testBatchTimeoutAffectsProcessingInterval() {
         val originalTimeout = SmsMessageBatchProcessor.getBatchTimeout()
 
         // Set different timeouts

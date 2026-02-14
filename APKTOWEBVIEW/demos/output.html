@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<!--
+  Demo uses apk-config.js in APKTOWEBVIEW. Run: npm run build:tokens or npm run extract (from APKTOWEBVIEW)
+  <script src="../apk-config.js"></script>
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FASTPAY — Demo (Splash → Activation → Activated)</title>
+  <style>
+    /* APK: colors.xml theme_primary #00ff88, theme_border #4D00ff88, activation_background #0a0a0a */
+    :root {
+      --neon: #00ff88;
+      --neon-dim: rgba(0, 255, 136, 0.5);
+      --neon-border: rgba(0, 255, 136, 0.3);
+      --neon-shimmer: rgba(0, 255, 136, 0.08);
+      --neon-glow: 0 0 10px var(--neon-dim), 0 0 20px var(--neon-dim);
+      --bg: #0a0a0a;
+      --card-bg: rgba(5, 26, 26, 0.9);
+      --splash-logo-size: 4rem;
+      --splash-tagline-size: 0.75rem;
+      --splash-tagline-margin: 8px;
+      --header-logo-size: 3rem;
+      --header-tagline-size: 0.75rem;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: monospace, system-ui, -apple-system, sans-serif;
+      background: #0d0d0d;
+      color: var(--neon);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+      background-size: 24px 24px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    /* Mobile phone frame */
+    .phone-frame {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 400px;
+      aspect-ratio: 9 / 19.5;
+      max-height: min(90vh, 844px);
+      background: #1c1c1e;
+      border-radius: 44px;
+      padding: 12px;
+      box-shadow:
+        0 0 0 3px #2c2c2e,
+        0 0 0 6px #1c1c1e,
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+    .phone-screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      border-radius: 34px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .screen {
+      position: relative;
+      flex: 1;
+      max-width: 100%;
+      margin: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      perspective: 1200px;
+    }
+    /* View containers - only one visible at a time */
+    .view { display: none; flex-direction: column; flex: 1; min-height: 0; }
+    .view.active { display: flex; }
+    /* Splash view */
+    .view-splash {
+      position: relative;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      transition: opacity 300ms ease-out;
+    }
+    /* APK: logo fade 0->1, scale 0.8->1.05->1 over 800ms OvershootInterpolator */
+    .view-splash .splash-logo {
+      font-size: var(--splash-logo-size, 4rem); font-weight: 800; letter-spacing: 0.04em; color: var(--neon);
+      text-shadow: 0 0 var(--neon-pulse-radius, 30px) var(--neon-dim);
+      position: relative; z-index: 1;
+      opacity: 0; transform: scale(0.8); transform-origin: center center;
+    }
+    .view-splash .splash-logo.animate-in {
+      animation: splashLogoIn 800ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    @keyframes splashLogoIn {
+      0% { opacity: 0; transform: scale(0.8); }
+      85% { opacity: 1; transform: scale(1.05); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .view-splash .splash-logo.neon-pulse {
+      animation: neonPulse 2000ms ease-in-out infinite alternate;
+    }
+    @keyframes neonPulse {
+      0% { text-shadow: 0 0 20px var(--neon-dim); }
+      100% { text-shadow: 0 0 40px var(--neon-dim); }
+    }
+    /* APK: tagline fade 0->0.7, translateY 20px->0 over 800ms */
+    .view-splash .splash-tagline {
+      font-size: var(--splash-tagline-size, 0.75rem); color: var(--neon-dim); letter-spacing: 0.03em;
+      margin-top: var(--splash-tagline-margin, 8px); position: relative; z-index: 1;
+      opacity: 0; transform: translateY(20px);
+    }
+    .view-splash .splash-tagline.animate-in {
+      animation: splashTaglineIn 800ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    @keyframes splashTaglineIn {
+      0% { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 0.7; transform: translateY(0); }
+    }
+    .view-splash .splash-tagline.neon-pulse {
+      animation: neonPulse 2000ms ease-in-out infinite alternate;
+    }
+    /* APK: GridBackgroundView RADIAL - 50px cells, 10% opacity, 10s loop, center expansion */
+    .splash-grid {
+      position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+      --grid-size: 50; --grid-opacity: 0.1; --grid-duration: 10000;
+      background-image:
+        linear-gradient(rgba(0,255,136,var(--grid-opacity)) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,var(--grid-opacity)) 1px, transparent 1px);
+      background-size: var(--grid-size) var(--grid-size);
+      background-position: center center;
+      transform-origin: center center;
+      animation: gridRadialExpand calc(var(--grid-duration) * 1ms) ease-in-out infinite;
+    }
+    @keyframes gridRadialExpand {
+      0%, 100% { transform: scale(0.6); opacity: 0.7; }
+      50% { transform: scale(1.1); opacity: 1; }
+    }
+    /* APK: ScanlineView - top->bottom sweep, 2s, infinite, 3px height */
+    .splash-scanline {
+      position: absolute; left: 0; right: 0; top: 0; height: var(--scanline-height, 3px);
+      background: linear-gradient(180deg, transparent, rgba(0,255,136,0.3), transparent);
+      pointer-events: none; z-index: 2;
+      animation: scanlineSweep calc(var(--scanline-duration, 2000) * 1ms) linear infinite;
+    }
+    @keyframes scanlineSweep {
+      0% { top: 0; }
+      100% { top: 100%; }
+    }
+    /* Activation view: same grid + scanline as splash */
+    .view-activation { position: relative; }
+    .activation-grid {
+      position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+      --grid-size: 50; --grid-opacity: 0.1; --grid-duration: 10000;
+      background-image: linear-gradient(rgba(0,255,136,var(--grid-opacity)) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,136,var(--grid-opacity)) 1px, transparent 1px);
+      background-size: var(--grid-size) var(--grid-size); background-position: center center;
+      transform-origin: center center;
+      animation: gridRadialExpand calc(var(--grid-duration) * 1ms) ease-in-out infinite;
+    }
+    .activation-scanline {
+      position: absolute; left: 0; right: 0; top: 0; height: var(--scanline-height, 3px);
+      background: linear-gradient(180deg, transparent, rgba(0,255,136,0.3), transparent);
+      pointer-events: none; z-index: 2;
+      animation: scanlineSweep calc(var(--scanline-duration, 2000) * 1ms) linear infinite;
+    }
+    .splash-grid.wave-active { --grid-opacity: 0.3; }
+    /* APK: WaveView - centre spread colour wave at end of splash */
+    .wave-spread {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      display: flex;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .wave-spread::before,
+    .wave-spread::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 50%;
+      background: linear-gradient(to right,
+        transparent 0%,
+        rgba(0, 255, 136, 0.08) 40%,
+        rgba(0, 255, 136, 0.25) 100%);
+      transform-origin: center center;
+      animation-duration: calc(var(--wave-duration-ms, 2000) * 1ms);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+      animation-fill-mode: forwards;
+      opacity: 0;
+    }
+    .wave-spread::before {
+      left: 50%;
+      background: linear-gradient(to left,
+        transparent 0%,
+        rgba(0, 255, 136, 0.08) 40%,
+        rgba(0, 255, 136, 0.25) 100%);
+      transform-origin: right center;
+      animation-name: waveSpreadLeft;
+    }
+    .wave-spread::after {
+      right: 50%;
+      transform-origin: left center;
+      animation-name: waveSpreadRight;
+    }
+    .wave-spread.animating::before,
+    .wave-spread.animating::after { opacity: 1; }
+    @keyframes waveSpreadLeft {
+      0% { transform: scaleX(0); opacity: 0; }
+      25% { opacity: 0.5; }
+      50% { opacity: 0.3; }
+      100% { transform: scaleX(1); opacity: 0; }
+    }
+    @keyframes waveSpreadRight {
+      0% { transform: scaleX(0); opacity: 0; }
+      25% { opacity: 0.5; }
+      50% { opacity: 0.3; }
+      100% { transform: scaleX(1); opacity: 0; }
+    }
+    /* Activated view */
+    .view-activated { padding: 24px; }
+    .activated-status-box { padding: 20px; background: var(--card-bg); border: 1px solid var(--neon-border); border-radius: 12px; margin: 16px 0; text-align: center; }
+    .activated-status-box .status-label { font-size: 0.75rem; color: var(--neon-dim); margin-bottom: 8px; }
+    .activated-status-box .status-value { font-size: 1rem; font-weight: 600; color: var(--neon); }
+    .reset-btn { margin-top: 24px; padding: 12px 24px; font-size: 0.875rem; font-weight: 600; letter-spacing: 0.05em; color: var(--neon); background: transparent; border: 2px solid var(--neon); border-radius: 8px; cursor: pointer; font-family: inherit; }
+    .reset-btn:hover { background: rgba(0,255,136,0.1); }
+    /* Status bar */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px 8px;
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+    .status-bar .time { font-weight: 500; }
+    .status-bar .icons { display: flex; gap: 8px; }
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 24px 20px 16px;
+    }
+    .logo {
+      font-size: var(--header-logo-size, 3rem);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: var(--neon);
+      text-shadow: 0 0 30px var(--neon-dim);
+    }
+    .tagline {
+      font-size: var(--header-tagline-size, 0.75rem);
+      color: var(--neon-dim);
+      letter-spacing: 0.03em;
+      margin-top: 8px;
+      opacity: 0.7;
+    }
+    /* Main card wrapper (outer dashed border) */
+    .main-card-wrapper {
+      margin: 0 20px 0;
+      padding: 3px;
+      border: 2px dashed var(--neon);
+      border-radius: 16px;
+      background: transparent;
+      transform-origin: center top;
+      transition: transform 350ms ease-out;
+    }
+    .main-card-wrapper.recede {
+      transform: scale(var(--recede-scale, 0.85));
+      opacity: var(--recede-alpha, 0.4);
+      transition: transform var(--recede-duration, 350ms) ease-out, opacity var(--recede-duration, 350ms) ease-out;
+    }
+    /* APK: activation entry - opacity 0->1, translateY 50px->0, 600ms, stagger 150ms */
+    .activation-entry {
+      opacity: 0; transform: translateY(50px);
+    }
+    .activation-entry.animate-in {
+      animation: activationEntryIn var(--entry-duration, 600ms) cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    @keyframes activationEntryIn {
+      0% { opacity: 0; transform: translateY(50px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    /* Main card (inner with shimmer) */
+    .main-card {
+      padding: 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--neon-border);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .main-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 0%, var(--neon-shimmer) 50%, transparent 100%);
+      pointer-events: none;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .secure-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--neon);
+    }
+    .sha-chip {
+      padding: 4px 10px;
+      font-size: 0.69rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: var(--neon);
+      border: 1px solid var(--neon);
+      border-radius: 4px;
+      background: transparent;
+    }
+    /* Mode row with divider */
+    .mode-row {
+      display: flex;
+      align-items: stretch;
+      margin-bottom: 12px;
+      background: transparent;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 10px;
+      font-size: 0.81rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      text-align: center;
+      border: none;
+      background: transparent;
+      color: var(--neon);
+      font-family: inherit;
+    }
+    .mode-btn.active {
+      background: var(--neon);
+      color: #000000;
+    }
+    .mode-btn:not(.active) {
+      opacity: 0.6;
+    }
+    .mode-btn:not(.active):hover {
+      background: rgba(0, 255, 136, 0.1);
+      opacity: 0.8;
+    }
+    .mode-divider {
+      width: 1px;
+      background: var(--neon-border);
+      margin: 8px 0;
+    }
+    .input-row {
+      margin-bottom: 12px;
+    }
+    .input-container {
+      position: relative;
+      transform-origin: center center;
+      transition: transform 200ms ease-out;
+    }
+    /* APK: setupInputFieldAnimation cardView6 scale 1.02 on focus, 200ms */
+    .input-container.focused {
+      transform: scale(1.02);
+    }
+    .input-field {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 1.125rem;
+      color: var(--neon);
+      background: transparent;
+      border: 1px solid var(--neon-border);
+      border-radius: 0;
+      outline: none;
+      letter-spacing: 0.02em;
+      font-family: inherit;
+    }
+    .input-field::placeholder {
+      color: var(--neon-dim);
+    }
+    .input-field:focus {
+      border-color: var(--neon);
+      box-shadow: 0 0 0 1px var(--neon-dim);
+    }
+    /* APK: status_error #F44336, shakeView 400ms DecelerateInterpolator */
+    .input-field.error {
+      color: var(--status-error, #F44336);
+    }
+    .input-container.shake {
+      animation: inputShake 400ms ease-out;
+    }
+    .input-container.shake.focused {
+      animation: inputShakeFocused 400ms ease-out;
+    }
+    @keyframes inputShake {
+      0%, 100% { transform: translateX(0); }
+      12% { transform: translateX(20px); }
+      24% { transform: translateX(-20px); }
+      36% { transform: translateX(20px); }
+      48% { transform: translateX(-20px); }
+      60% { transform: translateX(10px); }
+      72% { transform: translateX(-10px); }
+    }
+    @keyframes inputShakeFocused {
+      0%, 100% { transform: translateX(0) scale(1.02); }
+      12% { transform: translateX(20px) scale(1.02); }
+      24% { transform: translateX(-20px) scale(1.02); }
+      36% { transform: translateX(20px) scale(1.02); }
+      48% { transform: translateX(-20px) scale(1.02); }
+      60% { transform: translateX(10px) scale(1.02); }
+      72% { transform: translateX(-10px) scale(1.02); }
+    }
+    .button-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .activate-btn,
+    .clear-btn {
+      flex: 1;
+      padding: 14px 20px;
+      font-size: 0.875rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      border-radius: 0;
+      cursor: pointer;
+      user-select: none;
+      transform-origin: center center;
+      transition: none;
+      text-align: center;
+      font-family: inherit;
+    }
+    .activate-btn {
+      background: var(--neon);
+      color: #000000;
+      border: none;
+      box-shadow: var(--neon-glow);
+    }
+    .activate-btn:hover { filter: brightness(1.1); }
+    .activate-btn:disabled { cursor: default; opacity: 0.95; }
+    .clear-btn {
+      background: transparent;
+      color: var(--neon);
+      border: 2px solid var(--neon);
+    }
+    .clear-btn:hover { background: rgba(0, 255, 136, 0.1); }
+    .activate-btn:active, .clear-btn:active { outline: none; }
+    /* Status card (activation progress) */
+    .status-card {
+      margin: 20px 20px 24px;
+      padding: 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--neon-border);
+      border-radius: 12px;
+      min-height: 120px;
+      visibility: hidden;
+      position: relative;
+      overflow: hidden;
+      transform-origin: center top;
+      transition: transform 350ms ease-out, opacity 600ms ease-out;
+    }
+    .status-card.recede {
+      transform: scale(var(--recede-scale, 0.85));
+      opacity: var(--recede-alpha, 0.4);
+      transition: transform var(--recede-duration, 350ms) ease-out, opacity var(--recede-duration, 350ms) ease-out;
+    }
+    .status-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 0%, var(--neon-shimmer) 50%, transparent 100%);
+      pointer-events: none;
+    }
+    .status-card.visible {
+      visibility: visible;
+    }
+    .status-title {
+      font-size: 0.875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--neon);
+      margin-bottom: 8px;
+    }
+    .status-main {
+      font-size: 0.75rem;
+      color: var(--neon);
+      line-height: 1.5;
+      letter-spacing: 0.04em;
+      opacity: 0.8;
+      margin-bottom: 16px;
+    }
+    .status-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .status-step {
+      font-size: 0.75rem;
+      color: var(--neon);
+      letter-spacing: 0.04em;
+      opacity: 0.6;
+      transition: opacity 0.2s ease;
+    }
+    .status-step.active {
+      opacity: 1;
+    }
+    .status-step-with-buffer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-step-with-buffer .status-step-buffer {
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--neon-border);
+      border-top-color: var(--neon);
+      border-radius: 50%;
+      animation: bufferSpin 0.8s linear infinite;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .status-step-with-buffer .status-step-buffer.visible {
+      opacity: 1;
+    }
+    .status-step-with-buffer.buffering {
+      opacity: 0.9;
+    }
+    @keyframes bufferSpin {
+      to { transform: rotate(360deg); }
+    }
+    .status-result {
+      font-size: 0.75rem;
+      color: var(--neon);
+      letter-spacing: 0.04em;
+      opacity: 0.6;
+      margin-top: 6px;
+    }
+    .retry-container {
+      display: none;
+      margin-top: 16px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .retry-container.visible {
+      display: flex;
+    }
+    .retry-status {
+      flex: 1;
+      font-size: 0.69rem;
+      color: var(--neon);
+      opacity: 0.8;
+    }
+    .retry-btn {
+      padding: 4px 10px;
+      font-size: 0.625rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--neon);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .retry-btn:hover { text-decoration: underline; }
+    /* Permission/Update Prompt Overlay - APK: activationPermissionPromptOverlay + activation_prompt_card */
+    .prompt-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 150ms ease-out;
+      border-radius: 34px;
+    }
+    .prompt-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    .prompt-card {
+      width: 100%;
+      max-width: 320px;
+      padding: 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--neon-border);
+      border-radius: 12px;
+      box-shadow: var(--neon-glow);
+      transform-origin: center center;
+    }
+    .prompt-card-title {
+      font-size: 0.875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--neon);
+      margin-bottom: 12px;
+    }
+    .prompt-card-text {
+      font-size: 0.75rem;
+      color: var(--neon);
+      opacity: 0.8;
+      letter-spacing: 0.04em;
+      line-height: 1.6;
+      min-height: 4em;
+    }
+    .prompt-card.born-from {
+      animation: promptCardBorn 350ms ease-out forwards;
+    }
+    .prompt-card.reverse {
+      animation: promptCardReverse 350ms ease-out forwards;
+    }
+    @keyframes promptCardBorn {
+      from {
+        transform: scale(0.3);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+    @keyframes promptCardReverse {
+      from {
+        transform: scale(1);
+        opacity: 1;
+      }
+      to {
+        transform: scale(0.3);
+        opacity: 0;
+      }
+    }
+    /* Footer */
+    .footer {
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 24px;
+    }
+    .nav-hint {
+      width: 120px;
+      height: 4px;
+      background: #4a4d52;
+      border-radius: 2px;
+    }
+    /* APK: animateButtonPress 3D - scale 0.95, rotationX 12°, 100ms down, 150ms up Overshoot */
+    .activate-btn.press-scale-down {
+      animation: btnPressDown 100ms ease-out forwards;
+    }
+    .activate-btn.press-scale-up {
+      animation: btnPressUp 150ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    @keyframes btnPressDown {
+      to { transform: scale(0.95) perspective(200px) rotateX(12deg); }
+    }
+    @keyframes btnPressUp {
+      from { transform: scale(0.95) perspective(200px) rotateX(12deg); }
+      to { transform: scale(1) perspective(200px) rotateX(0deg); }
+    }
+    .activate-btn.loading-scale {
+      animation: activateLoading 4000ms ease-out forwards;
+    }
+    .clear-btn.loading-scale {
+      animation: clearLoading 4000ms ease-out forwards;
+    }
+    @keyframes activateLoading {
+      from { transform: scale(1); }
+      to { transform: scale(1.08, 1.04); }
+    }
+    @keyframes clearLoading {
+      from { transform: scale(1); }
+      to { transform: scale(0.92); }
+    }
+  </style>
+  <script src="../apk-config.js"></script>
+</head>
+<body>
+  <div class="phone-frame">
+    <div class="phone-screen">
+      <div class="screen">
+    <!-- Splash view -->
+    <div id="viewSplash" class="view view-splash active">
+      <div class="splash-grid" id="splashGrid"></div>
+      <div class="splash-scanline" id="splashScanline"></div>
+      <div class="wave-spread" id="waveSpread"></div>
+      <div class="splash-logo" id="splashLogo">FASTPAY</div>
+      <div class="splash-tagline" id="splashTagline">The Real Gaming Platform</div>
+    </div>
+
+    <!-- Activation view -->
+    <div id="viewActivation" class="view view-activation">
+    <div class="activation-grid" id="activationGrid"></div>
+    <div class="activation-scanline" id="activationScanline"></div>
+    <div class="status-bar activation-entry">
+      <span class="time">1:52 AM</span>
+      <span class="icons">📶 📡 🔋 ID</span>
+    </div>
+    <header class="header activation-entry">
+      <h1 class="logo">FASTPAY</h1>
+      <p class="tagline">The Real Gaming Platform</p>
+    </header>
+
+    <div class="main-card-wrapper activation-entry">
+      <div class="main-card">
+        <div class="info-row">
+          <span class="secure-label">#123 ALWAYS SECURE</span>
+          <span class="sha-chip">SHA256</span>
+        </div>
+        <div class="mode-row">
+          <button class="mode-btn active">TESTING</button>
+          <div class="mode-divider"></div>
+          <button class="mode-btn">RUNNING</button>
+        </div>
+        <div class="input-row">
+          <div class="input-container" id="inputContainer">
+            <input type="text" class="input-field" placeholder="" id="phoneInput">
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="activate-btn" id="activateBtn">ACTIVATE</button>
+          <button class="clear-btn" id="clearBtn">CLEAR</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-card activation-entry" id="statusCard">
+      <div class="status-title">ACTIVATION</div>
+      <div class="status-main" id="statusMain"></div>
+      <div class="status-steps">
+        <div class="status-step" id="stepValidate">• IP Connection Established</div>
+        <div class="status-step status-step-with-buffer" id="stepRegisterWrap">
+          <span id="stepRegister">• Request Sent / Compatibility test</span>
+          <span class="status-step-buffer" id="stepRegisterBuffer" aria-hidden="true"></span>
+        </div>
+        <div class="status-step" id="stepSync">• Response Decrypted</div>
+        <div class="status-step" id="stepAuth">• Authorization Check (Approved / Denied)</div>
+        <div class="status-step" id="stepResult"></div>
+      </div>
+      <div class="retry-container" id="retryContainer">
+        <span class="retry-status" id="retryStatus">Retrying in 5s...</span>
+        <button class="retry-btn" id="retryBtn">RETRY NOW</button>
+      </div>
+    </div>
+
+    <div class="footer activation-entry">
+      <div class="nav-hint"></div>
+    </div>
+    </div>
+
+    <!-- Activated view -->
+    <div id="viewActivated" class="view view-activated">
+      <div class="status-bar">
+        <span class="time">1:52 AM</span>
+        <span class="icons">📶 📡 🔋 ID</span>
+      </div>
+      <header class="header">
+        <h1 class="logo" id="activatedLogo">FASTPAY</h1>
+        <p class="tagline" id="activatedTagline">The Real Gaming Platform</p>
+      </header>
+      <div class="activated-status-box">
+        <div class="status-label" id="activatedStatusLabel">STATUS</div>
+        <div class="status-value" id="activatedStatusValue">ACTIVATED</div>
+      </div>
+      <button class="reset-btn" id="resetBtn">Reset</button>
+    </div>
+
+    <!-- Permission/Update Prompt Overlay - APK: showActivationPromptCard -->
+    <div class="prompt-overlay" id="promptOverlay">
+      <div class="prompt-card" id="promptCard">
+        <div class="prompt-card-title">PERMISSIONS</div>
+        <div class="prompt-card-text" id="promptCardText"></div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <script>
+    /* APK: ActivationActivity.kt - See APK_SYNC_SPEC.md, apk-config.js */
+    (function applyApkConfig() {
+      if (typeof APK_CONFIG === 'undefined') return;
+      const r = document.documentElement.style;
+      const c = APK_CONFIG.colors;
+      const s = APK_CONFIG.strings;
+      const d = APK_CONFIG.dimens;
+      if (c) {
+        const primary = c.theme_primary || '#00ff88';
+        r.setProperty('--neon', primary);
+        const hex = primary.replace('#', '');
+        if (hex.length >= 6) {
+          const rr = parseInt(hex.slice(0,2), 16), gg = parseInt(hex.slice(2,4), 16), bb = parseInt(hex.slice(4,6), 16);
+          r.setProperty('--neon-dim', 'rgba(' + rr + ',' + gg + ',' + bb + ',0.5)');
+        }
+        if (c.theme_border) {
+          const tb = c.theme_border.replace('#', '');
+          if (tb.length === 8) {
+            const a = parseInt(tb.slice(0,2), 16) / 255;
+            const rr = parseInt(tb.slice(2,4), 16), gg = parseInt(tb.slice(4,6), 16), bb = parseInt(tb.slice(6,8), 16);
+            r.setProperty('--neon-border', 'rgba(' + rr + ',' + gg + ',' + bb + ',' + a.toFixed(2) + ')');
+          }
+        } else r.setProperty('--neon-border', 'rgba(0,255,136,0.3)');
+        if (c.activation_background) r.setProperty('--bg', c.activation_background);
+        if (c.status_error) r.setProperty('--status-error', c.status_error);
+      }
+      function parseSp(s) { const m = String(s).match(/(\d+)/); return m ? (parseInt(m[1],10) / 16).toFixed(2) : '3'; }
+      function parseDp(s) { const m = String(s).match(/(\d+)/); return m ? m[1] : '8'; }
+      if (d) {
+        if (d.splash_letter_size) r.setProperty('--splash-logo-size', parseSp(d.splash_letter_size) + 'rem');
+        if (d.tagline_text_size) r.setProperty('--splash-tagline-size', parseSp(d.tagline_text_size) + 'rem');
+        if (d.tagline_margin_top) r.setProperty('--splash-tagline-margin', parseDp(d.tagline_margin_top) + 'px');
+        if (d.logo_text_size) r.setProperty('--header-logo-size', parseSp(d.logo_text_size) + 'rem');
+        if (d.tagline_text_size) r.setProperty('--header-tagline-size', parseSp(d.tagline_text_size) + 'rem');
+      }
+      const g = APK_CONFIG.grid;
+      if (g) {
+        document.querySelectorAll('.splash-grid, .activation-grid').forEach(el => {
+          if (el) {
+            if (g.size != null) el.style.setProperty('--grid-size', String(g.size));
+            if (g.opacity != null) el.style.setProperty('--grid-opacity', String(g.opacity));
+            if (g.duration_ms != null) el.style.setProperty('--grid-duration', String(g.duration_ms));
+          }
+        });
+      }
+      const sc = APK_CONFIG.scanline;
+      if (sc) {
+        document.querySelectorAll('.splash-scanline, .activation-scanline').forEach(el => {
+          if (el) {
+            if (sc.duration_ms != null) el.style.setProperty('--scanline-duration', String(sc.duration_ms));
+            if (sc.height != null) el.style.setProperty('--scanline-height', sc.height + 'px');
+          }
+        });
+      }
+      const anim = APK_CONFIG.animation;
+      if (anim) {
+        if (anim.recede_scale != null) r.setProperty('--recede-scale', String(anim.recede_scale));
+        if (anim.recede_alpha != null) r.setProperty('--recede-alpha', String(anim.recede_alpha));
+        if (anim.recede_duration_ms != null) r.setProperty('--recede-duration', anim.recede_duration_ms + 'ms');
+      }
+      if (s) {
+        document.title = (s.app_name_title || 'FASTPAY') + ' — Demo (Splash → Activation → Activated)';
+        const logo = document.querySelectorAll('.logo'); logo.forEach(el => { el.textContent = s.app_name_title || 'FASTPAY'; });
+        const tagline = document.querySelectorAll('.tagline'); tagline.forEach(el => { el.textContent = s.app_tagline || 'The Real Gaming Platform'; });
+        const splashLogo = document.getElementById('splashLogo'); if (splashLogo) splashLogo.textContent = s.app_name_title || 'FASTPAY';
+        const splashTagline = document.getElementById('splashTagline'); if (splashTagline) splashTagline.textContent = s.app_tagline || 'The Real Gaming Platform';
+        const secureLabel = document.querySelector('.secure-label'); if (secureLabel) secureLabel.textContent = s.crypto_hash_label || '#123 ALWAYS SECURE';
+        const shaChip = document.querySelector('.sha-chip'); if (shaChip) shaChip.textContent = s.sha256_badge || 'SHA256';
+        const modeBtns = document.querySelectorAll('.mode-btn'); if (modeBtns.length >= 2) { modeBtns[0].textContent = s.testing || 'TESTING'; modeBtns[1].textContent = s.running || 'RUNNING'; }
+        const actBtn = document.getElementById('activateBtn'); if (actBtn) actBtn.textContent = s.activate || 'ACTIVATE';
+        const clrBtn = document.getElementById('clearBtn'); if (clrBtn) clrBtn.textContent = s.clear || 'CLEAR';
+        const statusTitle = document.querySelector('.status-title'); if (statusTitle) statusTitle.textContent = s.activation_title || 'ACTIVATION';
+        const stepValidateEl = document.getElementById('stepValidate'); if (stepValidateEl) stepValidateEl.textContent = s.step_validate || '• IP Connection Established';
+        const stepRegisterEl = document.getElementById('stepRegister'); if (stepRegisterEl) stepRegisterEl.textContent = s.step_register || '• Request Sent / Compatibility test';
+        const stepSyncEl = document.getElementById('stepSync'); if (stepSyncEl) stepSyncEl.textContent = s.step_sync || '• Response Decrypted';
+        const stepAuthEl = document.getElementById('stepAuth'); if (stepAuthEl) stepAuthEl.textContent = s.step_auth || '• Authorization Check (Approved / Denied)';
+        const retryStatusEl = document.getElementById('retryStatus'); if (retryStatusEl) retryStatusEl.textContent = s.retry_status || 'Retrying in 5s...';
+        const retryBtnEl = document.getElementById('retryBtn'); if (retryBtnEl) retryBtnEl.textContent = s.retry_now || 'RETRY NOW';
+        const activatedStatusLabel = document.getElementById('activatedStatusLabel'); if (activatedStatusLabel) activatedStatusLabel.textContent = s.status_label || 'STATUS';
+        const resetBtn = document.getElementById('resetBtn'); if (resetBtn) resetBtn.textContent = s.reset || 'Reset';
+      }
+    })();
+
+    /* APK: activation entry - opacity 0->1, translateY 50px->0, 600ms, stagger 150ms */
+    function startActivationEntryAnimation() {
+      const anim = (typeof APK_CONFIG !== 'undefined' && APK_CONFIG.animation) ? APK_CONFIG.animation : {};
+      const entryDurationMs = anim.entry_duration_ms || 600;
+      const entryStaggerMs = anim.entry_stagger_ms || 150;
+      const statusBar = document.querySelector('#viewActivation .status-bar');
+      const header = document.querySelector('#viewActivation .header');
+      const mainCard = document.querySelector('#viewActivation .main-card-wrapper');
+      const statusCard = document.getElementById('statusCard');
+      const footer = document.querySelector('#viewActivation .footer');
+      const els = [statusBar, header, mainCard, statusCard, footer].filter(Boolean);
+      els.forEach(el => {
+        el.classList.remove('activation-entry', 'animate-in');
+        void el.offsetWidth;
+        el.classList.add('activation-entry');
+      });
+      els.forEach((el, i) => {
+        setTimeout(() => {
+          el.classList.add('animate-in');
+        }, i * entryStaggerMs);
+      });
+      const r = document.documentElement.style;
+      if (anim.entry_duration_ms) r.setProperty('--entry-duration', anim.entry_duration_ms + 'ms');
+    }
+
+    /* View management: splash | activation | activated */
+    function showView(name) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      const el = document.getElementById('view' + name.charAt(0).toUpperCase() + name.slice(1));
+      if (el) el.classList.add('active');
+    }
+
+    /* Splash: logo/tagline entrance + neon pulse, then wave at wave_start_remaining_ms */
+    (function startSplashAnimations() {
+      const splashLogo = document.getElementById('splashLogo');
+      const splashTagline = document.getElementById('splashTagline');
+      const anim = (typeof APK_CONFIG !== 'undefined' && APK_CONFIG.animation) ? APK_CONFIG.animation : {};
+      const splashLogoDurationMs = 800; /* APK: splash logo 800ms */
+      const entryStaggerMs = anim.entry_stagger_ms || 150;
+      if (splashLogo) {
+        splashLogo.classList.add('animate-in');
+        setTimeout(() => splashLogo.classList.add('neon-pulse'), splashLogoDurationMs);
+      }
+      if (splashTagline) {
+        setTimeout(() => {
+          splashTagline.classList.add('animate-in');
+          setTimeout(() => splashTagline.classList.add('neon-pulse'), splashLogoDurationMs);
+        }, entryStaggerMs);
+      }
+    })();
+
+    /* Splash: wave animation (APK WaveView) when remainingTime <= wave_start_remaining_ms, then transition */
+    (function startSplashTimer() {
+      const anim = (typeof APK_CONFIG !== 'undefined' && APK_CONFIG.animation) ? APK_CONFIG.animation : {};
+      const splashTotalMs = anim.splash_total_duration_ms || 6000;
+      const fadeMs = anim.splash_fade_out_ms || 300;
+      const waveDurationMs = anim.wave_duration_ms || 2000;
+      const waveStartRemainingMs = anim.wave_start_remaining_ms || 2000;
+      const waveStartAtMs = Math.max(0, splashTotalMs - waveStartRemainingMs);
+
+      const splashEl = document.getElementById('viewSplash');
+      const waveSpread = document.getElementById('waveSpread');
+      if (waveSpread) {
+        waveSpread.style.setProperty('--wave-duration-ms', String(waveDurationMs));
+      }
+
+      /* Start wave animation when remainingTime <= wave_start_remaining_ms; boost grid brightness */
+      setTimeout(() => {
+        if (waveSpread) waveSpread.classList.add('animating');
+        const splashGrid = document.getElementById('splashGrid');
+        if (splashGrid) splashGrid.classList.add('wave-active');
+      }, waveStartAtMs);
+
+      setTimeout(() => {
+        if (splashEl) splashEl.style.opacity = '0';
+        setTimeout(() => {
+          showView('activation');
+          if (splashEl) splashEl.style.opacity = '1';
+          startActivationEntryAnimation();
+          if (typeof animateHintText === 'function') animateHintText();
+        }, fadeMs);
+      }, splashTotalMs);
+    })();
+
+    const activateBtn = document.getElementById('activateBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusCard = document.getElementById('statusCard');
+    const statusMain = document.getElementById('statusMain');
+    const promptOverlay = document.getElementById('promptOverlay');
+    const promptCard = document.getElementById('promptCard');
+    const promptCardText = document.getElementById('promptCardText');
+    const stepValidate = document.getElementById('stepValidate');
+    const stepRegisterWrap = document.getElementById('stepRegisterWrap');
+    const stepRegister = document.getElementById('stepRegister');
+    const stepRegisterBuffer = document.getElementById('stepRegisterBuffer');
+    const stepSync = document.getElementById('stepSync');
+    const stepAuth = document.getElementById('stepAuth');
+    const stepResult = document.getElementById('stepResult');
+    const retryContainer = document.getElementById('retryContainer');
+    const retryStatus = document.getElementById('retryStatus');
+    const retryBtn = document.getElementById('retryBtn');
+    const phoneInput = document.getElementById('phoneInput');
+    const inputContainer = document.getElementById('inputContainer');
+
+    const STATUS_TEXT = (typeof APK_CONFIG !== 'undefined' && APK_CONFIG.strings && APK_CONFIG.strings.activation_status) ? APK_CONFIG.strings.activation_status : 'Creating secure tunnel with company database'; /* APK: activationProgressStatus */
+    const steps = [stepValidate, stepRegisterWrap, stepSync, stepAuth];
+
+    /* APK: activation_prompt_card - "• Receive SMS", "• Read SMS", "• Read Contacts", "• Read Phone State" */
+    const PROMPT_PERMISSION_LINES = ['• Receive SMS', '• Read SMS', '• Read Contacts', '• Read Phone State'];
+    const PROMPT_CHAR_DELAY_MS = 45;  /* APK: PROMPT_CARD_PER_CHAR_DELAY_MS */
+    const PROMPT_ANIM_MS = 350;       /* APK: PROMPT_CARD_ANIM_DURATION_MS */
+
+    let hintAnimationId = null;
+
+    function showPromptCard(onComplete) {
+      promptOverlay.classList.add('visible');
+      document.querySelector('.main-card-wrapper')?.classList.add('recede');
+      document.getElementById('statusCard')?.classList.add('recede');
+      promptCardText.textContent = '';
+      promptCard.classList.remove('born-from', 'reverse');
+      void promptCard.offsetWidth;
+
+      promptCard.classList.add('born-from');
+      let lineIndex = 0, charIndex = 0;
+      function typeTick() {
+        if (lineIndex >= PROMPT_PERMISSION_LINES.length) {
+          setTimeout(() => {
+            promptCard.classList.remove('born-from');
+            promptCard.classList.add('reverse');
+            setTimeout(() => {
+              promptOverlay.classList.remove('visible');
+              promptCard.classList.remove('reverse');
+              document.querySelector('.main-card-wrapper')?.classList.remove('recede');
+              document.getElementById('statusCard')?.classList.remove('recede');
+              onComplete();
+            }, PROMPT_ANIM_MS);
+          }, 200);
+          return;
+        }
+        const line = PROMPT_PERMISSION_LINES[lineIndex];
+        const next = charIndex + 1;
+        if (next <= line.length) {
+          const soFar = PROMPT_PERMISSION_LINES.slice(0, lineIndex).join('\n') +
+            (lineIndex > 0 ? '\n' : '') + line.substring(0, next);
+          promptCardText.textContent = soFar;
+          charIndex = next;
+        }
+        if (charIndex >= line.length) {
+          lineIndex++;
+          charIndex = 0;
+        }
+        setTimeout(typeTick, PROMPT_CHAR_DELAY_MS);
+      }
+      setTimeout(typeTick, PROMPT_ANIM_MS + 100);
+    }
+
+    function getHintTextForCurrentMode() {
+      const s = (typeof APK_CONFIG !== 'undefined' && APK_CONFIG.strings) ? APK_CONFIG.strings : {};
+      const isTesting = document.querySelector('.mode-btn.active').textContent === (s.testing || 'TESTING');
+      return isTesting ? (s.hint_phone_testing || 'Enter Your Phone Number') : (s.hint_code_running || 'Enter Your Bank Code');
+    }
+
+    function animateHintText() {
+      if (hintAnimationId) clearTimeout(hintAnimationId);
+      phoneInput.placeholder = '';
+      const hintText = getHintTextForCurrentMode();
+      let i = 0;
+      function tick() {
+        if (phoneInput.value.length > 0) return;
+        if (i < hintText.length) {
+          phoneInput.placeholder = hintText.substring(0, i + 1);
+          i++;
+          hintAnimationId = setTimeout(tick, 80); /* APK: animateHintText perChar 80ms */
+        }
+      }
+      hintAnimationId = setTimeout(tick, 200); /* APK: animateHintText 80ms/char, 200ms start */
+    }
+
+    function shakeView(el) {
+      el.classList.remove('shake');
+      void el.offsetWidth;
+      el.classList.add('shake');
+      setTimeout(() => el.classList.remove('shake'), 400);
+    }
+
+    function validateInput() {
+      const raw = phoneInput.value.replace(/\s/g, '').replace(/-/g, '');
+      const s = (typeof APK_CONFIG !== 'undefined' && APK_CONFIG.strings) ? APK_CONFIG.strings : {};
+      const isTesting = document.querySelector('.mode-btn.active').textContent === (s.testing || 'TESTING');
+      if (isTesting) {
+        const digits = raw.replace(/\D/g, '');
+        return digits.length === 10;
+      }
+      return /^[A-Za-z]{4}\d{4}$/.test(raw.toUpperCase());
+    }
+
+    function showInputError() {
+      phoneInput.classList.add('error');
+      shakeView(inputContainer);
+      setTimeout(() => phoneInput.classList.remove('error'), 200);
+    }
+
+    function resetStatusCard() {
+      statusMain.textContent = '';
+      stepResult.textContent = '';
+      retryContainer.classList.remove('visible');
+      steps.forEach(s => s.classList.remove('active'));
+      stepRegisterWrap?.classList.remove('buffering');
+      stepRegisterBuffer?.classList.remove('visible');
+    }
+
+    function typeStatus(text, onComplete) {
+      let i = 0;
+      statusMain.textContent = '';
+      const perChar = Math.max(20, 4000 / text.length);
+      const id = setInterval(() => {
+        if (i < text.length) {
+          statusMain.textContent += text[i++];
+        } else {
+          clearInterval(id);
+          onComplete?.();
+        }
+      }, perChar);
+      return () => clearInterval(id);
+    }
+
+    function highlightStep(index) {
+      steps.forEach((s, i) => {
+        s.classList.toggle('active', i <= index);
+      });
+    }
+
+    phoneInput.addEventListener('focus', () => inputContainer.classList.add('focused'));
+    phoneInput.addEventListener('blur', () => inputContainer.classList.remove('focused'));
+    phoneInput.addEventListener('input', () => { if (hintAnimationId) clearTimeout(hintAnimationId); });
+
+    clearBtn.addEventListener('click', () => {
+      phoneInput.value = '';
+      phoneInput.focus();
+      animateHintText();
+    });
+
+    retryBtn.addEventListener('click', () => {
+      retryContainer.classList.remove('visible');
+      resetStatusCard();
+      activateBtn.click();
+    });
+
+    document.getElementById('resetBtn')?.addEventListener('click', () => {
+      showView('activation');
+      phoneInput.value = '';
+      resetStatusCard();
+      statusCard.classList.remove('visible');
+      activateBtn.disabled = false;
+      activateBtn.classList.remove('loading-scale');
+      clearBtn.classList.remove('loading-scale');
+      animateHintText();
+    });
+
+    /* Mode toggle */
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (phoneInput.value.length === 0) animateHintText();
+      });
+    });
+
+    animateHintText();
+
+    activateBtn.addEventListener('click', function handlePress() {
+      if (activateBtn.disabled) return;
+      if (!validateInput()) {
+        showInputError();
+        return;
+      }
+      activateBtn.disabled = true;
+      resetStatusCard();
+
+      activateBtn.classList.remove('press-scale-down', 'press-scale-up', 'loading-scale');
+      clearBtn.classList.remove('loading-scale');
+      void activateBtn.offsetWidth;
+
+      activateBtn.classList.add('press-scale-down');
+
+      setTimeout(() => {
+        activateBtn.classList.remove('press-scale-down');
+        activateBtn.classList.add('press-scale-up');
+
+        setTimeout(() => {
+          activateBtn.classList.remove('press-scale-up');
+
+          statusCard.classList.add('visible');
+          statusMain.textContent = '';
+
+          activateBtn.classList.add('loading-scale');
+          clearBtn.classList.add('loading-scale');
+          typeStatus(STATUS_TEXT);
+
+          highlightStep(0);
+          setTimeout(() => {
+            /* Step 2: Request Sent / Compatibility test - show buffer, no "right" yet */
+            stepRegisterWrap?.classList.add('buffering');
+            stepRegisterBuffer?.classList.add('visible');
+            /* Permission/Update prompt card - APK: showActivationPromptCard(1) + checkForAppUpdate */
+            /* Further animation stops until update+permission done */
+            showPromptCard(() => {
+              /* Buffer converts to same "right" as others, continue flow */
+              stepRegisterWrap?.classList.remove('buffering');
+              stepRegisterBuffer?.classList.remove('visible');
+              highlightStep(1);
+              setTimeout(() => {
+                highlightStep(2);
+                setTimeout(() => {
+                  highlightStep(3);
+                  setTimeout(() => {
+                    const authorized = Math.random() < 0.5; /* Demo: 50/50 AUTHORIZED vs DENIED */
+                    stepResult.textContent = authorized ? '• AUTHORIZED' : '• DENIED';
+                    stepResult.classList.add('active');
+                    setTimeout(() => {
+                      if (authorized) {
+                        statusCard.classList.remove('visible');
+                        activateBtn.classList.remove('loading-scale');
+                        clearBtn.classList.remove('loading-scale');
+                        resetStatusCard();
+                        showView('activated');
+                        activateBtn.disabled = false;
+                      } else {
+                        retryContainer.classList.add('visible');
+                        activateBtn.classList.remove('loading-scale');
+                        clearBtn.classList.remove('loading-scale');
+                        activateBtn.disabled = false;
+                      }
+                    }, 400);
+                  }, 400);
+                }, 400);
+              }, 400);
+            });
+          }, 1600);
+        }, 150);
+      }, 100);
+    });
+  </script>
+</body>
+</html>

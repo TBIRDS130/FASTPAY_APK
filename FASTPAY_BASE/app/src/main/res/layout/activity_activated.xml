@@ -8,15 +8,17 @@
     android:layout_height="match_parent"
     android:clipChildren="false"
     android:clipToPadding="false"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
     tools:context=".ui.ActivatedActivity">
 
-    <!-- Guideline for top margin (5% from top) -->
+    <!-- Guideline for top margin (2% from top) -->
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/topMarginGuide"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        app:layout_constraintGuide_percent="0.05" />
+        app:layout_constraintGuide_percent="0.02" />
 
     <!-- Header Section - Logo (Part of Chain) -->
     <LinearLayout
@@ -26,7 +28,8 @@
         android:orientation="vertical"
         android:gravity="center"
         android:paddingHorizontal="16dp"
-        android:paddingVertical="16dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="16dp"
         android:visibility="visible"
         android:alpha="1.0"
         app:layout_constraintStart_toStartOf="parent"
@@ -120,7 +123,7 @@
                 android:id="@+id/animationChangeButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="ANIM"
+                android:text=""
                 android:textColor="@color/theme_primary"
                 android:textSize="10sp"
                 android:textStyle="bold"
@@ -225,6 +228,16 @@
             android:gravity="center">
 
                 <TextView
+                    android:id="@+id/statusLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/status_label"
+                    android:textColor="#80FFFFFF"
+                    android:textSize="12sp"
+                    android:gravity="center"
+                    android:layout_marginBottom="4dp"
+                    android:visibility="gone" />
+                <TextView
                 android:id="@+id/statusValue"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -234,6 +247,16 @@
                     android:textStyle="bold"
                     android:gravity="center"
                     android:fontFamily="@font/inter_semibold" />
+                <TextView
+                    android:id="@+id/permissionStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Permissions: --"
+                    android:textColor="#80FFFFFF"
+                    android:textSize="12sp"
+                    android:gravity="center"
+                    android:visibility="gone" />
             </LinearLayout>
         </FrameLayout>
 
@@ -480,7 +503,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintVertical_bias="1.0">
 
-            <!-- Test Button - Enhanced Cyberpunk Style -->
+            <!-- Test Button - Hidden (animations 1-5 cycle on TESTING CODE label instead) -->
             <FrameLayout
                 android:id="@+id/testButtonCard"
                 android:layout_width="0dp"
@@ -491,7 +514,8 @@
                 android:background="@drawable/button_test_background_enhanced"
                 android:clickable="true"
                 android:focusable="true"
-                android:elevation="4dp">
+                android:elevation="4dp"
+                android:visibility="gone">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -550,7 +574,7 @@
                         android:id="@+id/resetButtonText"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:text="Reset"
+                        android:text="@string/reset"
                 android:textColor="#99FFFFFF"
                         android:textSize="14sp"
                         android:textStyle="bold"

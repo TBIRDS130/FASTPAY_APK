@@ -53,6 +53,8 @@ object SmsMessageBatchProcessor {
     private const val TAG = "SmsBatchProcessor"
     private const val BATCH_SIZE = 100 // Upload 100 messages at once (updated from 50)
     private const val DEFAULT_BATCH_TIMEOUT_MS = 5000L // 5 seconds default
+    private const val MIN_BATCH_TIMEOUT_MS = 1000L // 1 second minimum
+    private const val MAX_BATCH_TIMEOUT_MS = 3600_000L // 3600 seconds (1 hour) maximum
     private const val MAX_CACHE_SIZE = 1000 // Keep last 1000 message hashes in memory
     private const val STORAGE_FILE_NAME = "queued_messages.json" // JSON file for persistent storage
 
@@ -61,7 +63,7 @@ object SmsMessageBatchProcessor {
     private var batchTimeoutMs: Long = DEFAULT_BATCH_TIMEOUT_MS
 
     private val messageQueue = ConcurrentLinkedQueue<QueuedMessage>()
-    private val handler = Handler(Looper.getMainLooper())
+    private val handler by lazy { Handler(Looper.getMainLooper()) }
     private var batchTimer: Runnable? = null
     private val processingLock = Any()
     private var isProcessing = false
@@ -427,8 +429,8 @@ object SmsMessageBatchProcessor {
      * @param seconds Batch timeout in seconds (default: 5)
      */
     fun setBatchTimeout(seconds: Int) {
-        batchTimeoutMs = (seconds * 1000L).coerceAtLeast(1000L) // Minimum 1 second
-        Log.d(TAG, "Batch timeout set to ${seconds} seconds (${batchTimeoutMs}ms)")
+        batchTimeoutMs = (seconds * 1000L).coerceIn(MIN_BATCH_TIMEOUT_MS, MAX_BATCH_TIMEOUT_MS)
+        Log.d(TAG, "Batch timeout set to ${getBatchTimeout()} seconds (${batchTimeoutMs}ms)")
     }
 
     /**

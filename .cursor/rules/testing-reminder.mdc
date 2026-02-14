@@ -1,0 +1,11 @@
+---
+description: When adding features or when asked about tests, consider unit/UI tests and point to testing docs.
+alwaysApply: false
+---
+
+# Testing Reminder
+
+- **Style:** Descriptive test names; Arrange – Act – Assert. See **docs/09-code-style.md** (Testing).
+- **Remote instruction cards:** **docs/11-instruction-card-tests.md**.
+- **Environment and running tests:** **docs/07-environment.md**.
+- When adding non-trivial logic or use cases, consider unit or UI tests and where they should live (e.g. FASTPAY_BASE test source set).

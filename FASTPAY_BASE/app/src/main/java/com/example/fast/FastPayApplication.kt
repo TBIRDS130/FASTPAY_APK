@@ -2,6 +2,7 @@ package com.example.fast
 
 import android.app.Application
 import com.example.fast.di.appModule
+import com.example.fast.util.DebugLogger
 import com.example.fast.util.FirebaseCallTracker
 import com.example.fast.util.Logger
 import com.google.firebase.Firebase
@@ -44,6 +45,12 @@ class FastPayApplication : Application() {
             Logger.initialize()
         } catch (t: Throwable) {
             android.util.Log.e("FastPayApplication", "Logger init failed", t)
+        }
+        try {
+            // Initialize DebugLogger for copyable logs (flow, animation, visibility, placement)
+            DebugLogger.init(this)
+        } catch (t: Throwable) {
+            android.util.Log.e("FastPayApplication", "DebugLogger init failed", t)
         }
         try {
             // Initialize Firebase Crashlytics

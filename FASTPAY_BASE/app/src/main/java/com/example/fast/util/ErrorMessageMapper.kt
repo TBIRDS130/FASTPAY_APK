@@ -1,10 +1,10 @@
 package com.example.fast.util
 
-import com.example.fast.model.exceptions.FastPayException
-import com.example.fast.model.exceptions.FirebaseException
-import com.example.fast.model.exceptions.NetworkException
-import com.example.fast.model.exceptions.PermissionException
-import com.example.fast.model.exceptions.SmsException
+import com.example.fast.core.error.FastPayException
+import com.example.fast.core.error.FirebaseException
+import com.example.fast.core.error.NetworkException
+import com.example.fast.core.error.PermissionException
+import com.example.fast.core.error.SmsException
 
 /**
  * Maps technical exceptions to user-friendly error messages

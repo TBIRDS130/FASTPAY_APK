@@ -1,0 +1,26 @@
+---
+description: Where to put new code; update manifest and docs when adding activities, services, or API usage.
+alwaysApply: false
+---
+
+# Architecture & Layout
+
+Follow **docs/03-architecture.md** for source layout and tech stack.
+
+## Package placement
+
+- **Use cases:** `domain/usecase/`
+- **Repositories:** `repository/` (interfaces) and `repository/impl/`
+- **UI:** `ui/` (Activities, ViewModels, card UI). Card entry: **CardCoordinator**; spec: **MultipurposeCardSpec** (birth / fillUp / death).
+- **Services:** `service/`
+- **Errors / Result:** `core/error/`, `core/result/Result.kt` only.
+
+## When adding components
+
+- **New Activity, Service, or Receiver:** Add to **AndroidManifest.xml** and update **docs/03-architecture.md** "Main Components".
+- **New API endpoint usage:** Update **docs/04-django-api.md**.
+- **New Firebase path or remote command:** Update **docs/05-firebase.md** and **docs/06-remote-commands.md**.
+
+## ActivatedActivity and cards
+
+- Visibility and "after branding" state are owned by **ActivatedUIManager**. Avoid scattering visibility/alpha logic elsewhere (e.g. do not call `forceAllCardsVisible()` in ways that break the intended fade-in).

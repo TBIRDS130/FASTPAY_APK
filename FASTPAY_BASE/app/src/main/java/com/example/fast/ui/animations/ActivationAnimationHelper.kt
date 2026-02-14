@@ -47,11 +47,13 @@ object ActivationAnimationHelper {
             onAllComplete()
             return
         }
+        headerSection.animate().cancel()
+        contentContainer.animate().cancel()
         val views = listOf(headerSection, contentContainer)
         var completed = 0
         val total = views.size
-        val staggerMs = 150L
-        val durationMs = 600L
+        val staggerMs = AnimationConstants.ACTIVATION_ENTRY_STAGGER_MS
+        val durationMs = AnimationConstants.ACTIVATION_ENTRY_DURATION_MS
 
         views.forEachIndexed { index, view ->
             view.alpha = 0f
@@ -76,6 +78,7 @@ object ActivationAnimationHelper {
      */
     @JvmStatic
     fun showKeypadWithAnimation(keyboardView: View, slidePx: Float = 24f, durationMs: Long = AnimationConstants.KEYPAD_SHOW_DURATION_MS) {
+        keyboardView.animate().cancel()
         keyboardView.visibility = View.VISIBLE
         keyboardView.translationY = slidePx
         keyboardView.alpha = 0f

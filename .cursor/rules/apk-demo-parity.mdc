@@ -1,0 +1,21 @@
+---
+description: Before marking any HTML demo complete, verify APK parity per checklist.
+globs: APKTOWEBVIEW/**/*.html, APKTOWEBVIEW/**/*.ps1, APKTOWEBVIEW/apk-config.js
+---
+
+# APK Demo Parity
+
+**HTML demos must match the APK visually and behaviorally**, not just by flow.
+
+## Before marking a demo "complete"
+
+1. **List** all views/effects from the corresponding APK layout(s). See `APKTOWEBVIEW/docs/parity-audit.md`.
+2. **For each view:** Confirm it is represented in the demo, or explicitly deferred with reason.
+3. **Confirm** extract script pulls all required values from those layouts/code.
+4. **Rebuild** `apk-config.js` and re-test the demo.
+
+## Reference
+
+- `APKTOWEBVIEW/docs/parity-audit.md` – layout inventory, per-view checklist, APK → HTML mapping
+- `APKTOWEBVIEW/scripts/audit-layout.ps1` – layout view inventory
+- `APKTOWEBVIEW/scripts/audit-resources.ps1` – resource inventory

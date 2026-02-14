@@ -1,0 +1,11 @@
+{
+  "animation": {
+    "button_press_scale_down_ms": { "value": 100 },
+    "button_press_scale_up_ms": { "value": 150 },
+    "input_focus_scale_duration_ms": { "value": 200 },
+    "input_focus_scale": { "value": 1.02 },
+    "shake_duration_ms": { "value": 400 },
+    "hint_char_delay_ms": { "value": 80 },
+    "loading_button_duration_ms": { "value": 4000 }
+  }
+}

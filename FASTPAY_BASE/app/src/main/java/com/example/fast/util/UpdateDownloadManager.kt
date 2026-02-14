@@ -48,94 +48,83 @@ class UpdateDownloadManager(private val context: Context) {
     }
 
     /**
-     * Start download with progress tracking
+     * Start download with progress tracking (FastPay update: file name FastPay_Update_v{versionCode}.apk).
      */
     fun startDownload(
         downloadUrl: String,
         versionCode: Int,
         callback: DownloadProgressCallback
     ): Long {
+        return startDownloadWithFileName(
+            downloadUrl,
+            "FastPay_Update_v${versionCode}.apk",
+            callback,
+            title = "FastPay Update",
+            description = "Downloading new version..."
+        )
+    }
+
+    /**
+     * Start download with a custom file name (e.g. for generic/other APK install).
+     * File name is sanitized (path separators and unsafe chars removed).
+     */
+    fun startDownload(
+        downloadUrl: String,
+        customFileName: String,
+        callback: DownloadProgressCallback
+    ): Long {
+        val sanitized = customFileName.replace(Regex("[^a-zA-Z0-9_.-]"), "").trim()
+        val fileName = if (sanitized.endsWith(".apk")) sanitized else "${sanitized.ifBlank { "install" }.take(80)}.apk"
+        return startDownloadWithFileName(downloadUrl, fileName.ifBlank { "install.apk" }, callback)
+    }
+
+    private fun startDownloadWithFileName(
+        downloadUrl: String,
+        fileName: String,
+        callback: DownloadProgressCallback,
+        title: String = "Download",
+        description: String = "Downloading..."
+    ): Long {
         if (isDownloading) {
             callback.onError("Download already in progress")
             return -1
         }
-
         try {
-            // Validate and normalize URL
             val normalizedUrl = normalizeDownloadUrl(downloadUrl.trim())
             if (normalizedUrl == null) {
                 Log.e(TAG, "Invalid download URL: $downloadUrl")
                 callback.onError("Invalid download URL format: $downloadUrl")
                 return -1
             }
-
-            // Store URL for error reporting
             currentDownloadUrl = normalizedUrl
-
-            Log.d(TAG, "Starting download from URL: $normalizedUrl")
-
-            // Get storage directory
+            Log.d(TAG, "Starting download from URL: $normalizedUrl (file: $fileName)")
             val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                 ?: context.filesDir
             downloadsDir.mkdirs()
-
-            // Create file with version code
-            val fileName = "FastPay_Update_v${versionCode}.apk"
             val file = File(downloadsDir, fileName)
-
-            // Store expected file path for fallback
             expectedFilePath = file
-
-            // Delete old file if exists
-            if (file.exists()) {
-                file.delete()
-            }
-
-            // Create download request with modern approach
+            if (file.exists()) file.delete()
             val request = DownloadManager.Request(Uri.parse(normalizedUrl))
-                .setTitle("FastPay Update")
-                .setDescription("Downloading new version...")
+                .setTitle(title)
+                .setDescription(description)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(true)
-
-            // Set destination - use modern method for Android 10+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 10+ requires using MediaStore or app-specific directory
-                request.setDestinationInExternalFilesDir(
-                    context,
-                    Environment.DIRECTORY_DOWNLOADS,
-                    fileName
-                )
+                request.setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
             } else {
-                // For older versions, use setDestinationUri (still works)
                 try {
                     request.setDestinationUri(Uri.fromFile(file))
                 } catch (e: Exception) {
-                    // Fallback: use setDestinationInExternalFilesDir
                     Log.w(TAG, "setDestinationUri failed, using fallback: ${e.message}")
-                    request.setDestinationInExternalFilesDir(
-                        context,
-                        Environment.DIRECTORY_DOWNLOADS,
-                        fileName
-                    )
+                    request.setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
                 }
             }
-
-            // Enqueue download
             downloadId = downloadManager.enqueue(request)
             isDownloading = true
-
             Log.d(TAG, "Download started - ID: $downloadId, File: ${file.absolutePath}")
-
-            // Register completion receiver
             registerCompletionReceiver(callback)
-
-            // Start progress tracking with a small delay to ensure download is queued
-            handler.postDelayed({
-                startProgressTracking(callback)
-            }, 200)
-
+            handler.postDelayed({ startProgressTracking(callback) }, 200)
             return downloadId
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start download", e)

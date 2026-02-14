@@ -1,0 +1,233 @@
+---
+description: How to navigate FastPay codebase efficiently, find code for common tasks, and use search strategies. Use when exploring or locating specific functionality
+alwaysApply: false
+---
+
+# Codebase Navigation Guide
+
+Strategies for finding code and navigating the FastPay codebase efficiently.
+
+## Quick File Location Reference
+
+### By Component Type
+
+| Component Type | Location Pattern | Example |
+|---------------|------------------|---------|
+| **Activity** | `ui/{ActivityName}.kt` | `ui/SplashActivity.kt` |
+| **ViewModel** | `ui/{screen}/{Screen}ViewModel.kt` | `ui/activated/ActivatedViewModel.kt` |
+| **UIManager** | `ui/{screen}/{Screen}UIManager.kt` | `ui/activated/ActivatedUIManager.kt` |
+| **Repository Interface** | `repository/{Name}Repository.kt` | `repository/ContactRepository.kt` |
+| **Repository Impl** | `repository/impl/{Name}RepositoryImpl.kt` | `repository/impl/ContactRepositoryImpl.kt` |
+| **Use Case** | `domain/usecase/{Name}UseCase.kt` | `domain/usecase/ActivateDeviceUseCase.kt` |
+| **Model** | `model/{Name}.kt` | `model/Contact.kt` |
+| **Service** | `service/{Name}Service.kt` | `service/PersistentForegroundService.kt` |
+| **Receiver** | `receiver/{Name}Receiver.kt` | `receiver/SmsReceiver.kt` |
+| **Utility** | `util/{Name}.kt` or `util/{category}/{Name}.kt` | `util/Logger.kt`, `util/firebase/FirebaseListenerManager.kt` |
+| **Exception** | `core/error/{Name}Exception.kt` | `core/error/FastPayException.kt` |
+| **Base Classes** | `core/base/{Name}.kt` | `core/base/BaseViewModel.kt` |
+
+## Finding Code for Common Tasks
+
+### "Where is the activation logic?"
+1. **Entry point:** `ui/ActivationActivity.kt`
+2. **Business logic:** `domain/usecase/ActivateDeviceUseCase.kt`
+3. **API call:** `util/DjangoApiHelper.kt` (POST `/devices/`)
+4. **Firebase write:** `util/FirebaseWriteHelper.kt` or `repository/impl/FirebaseRepositoryImpl.kt`
+
+### "Where is SMS sending handled?"
+1. **Use case:** `domain/usecase/SendSmsUseCase.kt`
+2. **Repository:** `repository/SmsRepository.kt`, `repository/impl/SmsRepositoryImpl.kt`
+3. **Service:** `service/SmsService.kt` (default SMS app)
+4. **Batch processing:** `util/SmsMessageBatchProcessor.kt`
+
+### "Where is Firebase data synced?"
+1. **Service:** `service/PersistentForegroundService.kt` (main sync service)
+2. **Helpers:** `util/FirebaseSyncHelper.kt`, `util/FirebaseWriteHelper.kt`
+3. **Batch processors:** `util/SmsMessageBatchProcessor.kt`, `util/ContactBatchProcessor.kt`, `util/NotificationBatchProcessor.kt`
+
+### "Where are Firebase commands executed?"
+1. **Service:** `service/PersistentForegroundService.kt` (listens for commands)
+2. **Command handlers:** Search for `executeCommand` or command names (`sendSms`, `fetchDeviceInfo`, etc.)
+3. **Command logging:** POST `/command-logs/` in `DjangoApiHelper.kt`
+
+### "Where is UI visibility managed?"
+1. **UIManagers:** `ui/splash/SplashUIManager.kt`, `ui/activation/ActivationUIManager.kt`, `ui/activated/ActivatedUIManager.kt`
+2. **Rule:** UIManagers own visibility; Activities should not set visibility directly
+
+### "Where is the card system?"
+1. **Entry point:** `ui/card/CardCoordinator.kt`
+2. **Spec:** `ui/card/MultipurposeCardSpec.kt`
+3. **Controller:** `ui/card/MultipurposeCardController.kt`
+4. **Activity:** `ui/MultipurposeCardActivity.kt`
+
+### "Where are API endpoints called?"
+1. **Helper:** `util/DjangoApiHelper.kt` (all Django API calls)
+2. **Endpoints list:** `docs/04-django-api.md`
+3. **Call sites:** Search for `DjangoApiHelper.post`, `DjangoApiHelper.get`, etc.
+
+### "Where are Firebase paths defined?"
+1. **Config:** `config/AppConfig.kt` (all Firebase path constants and helper methods)
+2. **Documentation:** `docs/05-firebase.md`
+
+## Search Strategies
+
+### Strategy 1: Search by Class/Function Name
+```bash
+# Find all usages of a class
+grep -r "ClassName" FASTPAY_BASE/app/src/main/
+
+# Find function calls
+grep -r "functionName(" FASTPAY_BASE/app/src/main/
+```
+
+### Strategy 2: Search by Package
+```bash
+# Find all files in a package
+find FASTPAY_BASE/app/src/main/java/com/example/fast/util -name "*.kt"
+
+# Find imports from a package
+grep -r "import com.example.fast.util" FASTPAY_BASE/app/src/main/
+```
+
+### Strategy 3: Search by Keyword/Concept
+```bash
+# Find activation-related code
+grep -r "activation" FASTPAY_BASE/app/src/main/ --include="*.kt"
+
+# Find Firebase operations
+grep -r "FirebaseWriteHelper\|FirebaseReadHelper" FASTPAY_BASE/app/src/main/
+
+# Find API calls
+grep -r "DjangoApiHelper" FASTPAY_BASE/app/src/main/
+```
+
+### Strategy 4: Search by File Pattern
+```bash
+# Find all ViewModels
+find FASTPAY_BASE/app/src/main -name "*ViewModel.kt"
+
+# Find all UIManagers
+find FASTPAY_BASE/app/src/main -name "*UIManager.kt"
+
+# Find all repositories
+find FASTPAY_BASE/app/src/main -name "*Repository*.kt"
+```
+
+## Codebase Exploration Workflow
+
+### Step 1: Identify the Feature/Component
+- What are you trying to find? (e.g., "SMS sending", "activation", "Firebase sync")
+- What type of component? (Activity, Service, UseCase, Repository, Utility)
+
+### Step 2: Check Documentation
+- **Architecture:** `docs/03-architecture.md` - Component locations
+- **API:** `docs/04-django-api.md` - API endpoints and call sites
+- **Firebase:** `docs/05-firebase.md` - Firebase paths and structure
+- **Codebase Map:** `.cursor/rules/codebase-map.mdc` - Quick reference
+
+### Step 3: Search by Pattern
+- Use file location patterns (see table above)
+- Search for class names, function names, or keywords
+- Check imports to find dependencies
+
+### Step 4: Trace the Flow
+- Start from entry point (Activity, Service, Receiver)
+- Follow to ViewModel/UseCase
+- Follow to Repository
+- Follow to API/Firebase helpers
+
+## Common Navigation Scenarios
+
+### Scenario 1: "I need to add a new API endpoint"
+1. **Check existing:** `docs/04-django-api.md` for endpoint list
+2. **Add call:** `util/DjangoApiHelper.kt` (add method if needed)
+3. **Use in code:** Call `DjangoApiHelper.post/get/etc.`
+4. **Update docs:** Add to `docs/04-django-api.md`
+
+### Scenario 2: "I need to add a new Firebase path"
+1. **Check existing:** `config/AppConfig.kt` for path constants
+2. **Add constant:** `AppConfig.FirebasePaths.NEW_PATH = "newPath"`
+3. **Add helper:** `AppConfig.getFirebaseNewPath(deviceId)` if needed
+4. **Update docs:** Add to `docs/05-firebase.md`
+
+### Scenario 3: "I need to add a new Activity"
+1. **Create file:** `ui/NewActivity.kt`
+2. **Add to manifest:** `FASTPAY_BASE/app/src/main/AndroidManifest.xml`
+3. **Add navigation:** `FASTPAY_BASE/app/src/main/res/navigation/nav_graph.xml` (if needed)
+4. **Update docs:** `docs/03-architecture.md` Main Components section
+
+### Scenario 4: "I need to add a new UseCase"
+1. **Create file:** `domain/usecase/NewUseCase.kt`
+2. **Register in Koin:** `di/KoinModules.kt` → `single { NewUseCase(get()) }`
+3. **Use in ViewModel/Repository:** Inject via Koin
+
+### Scenario 5: "I need to add a new Utility"
+1. **Create file:** `util/NewHelper.kt` (or `util/category/NewHelper.kt`)
+2. **If injectable:** Add to `KoinModules.kt` if needed
+3. **Document:** Add to `.cursor/rules/utilities-catalog.mdc`
+
+## Key Files for Quick Reference
+
+### Configuration Files
+- **`config/AppConfig.kt`** - Firebase paths, API URLs, helper methods
+- **`di/KoinModules.kt`** - Dependency injection setup
+- **`FASTPAY_BASE/app/build.gradle.kts`** - Build config, dependencies, version
+
+### Entry Points
+- **`FastPayApplication.kt`** - App initialization
+- **`ui/SplashActivity.kt`** - App launcher
+- **`service/PersistentForegroundService.kt`** - Background sync service
+
+### Core Types
+- **`core/result/Result.kt`** - Result<T> type
+- **`core/error/`** - Exception types
+- **`core/base/`** - Base classes
+
+### Documentation Files
+- **`docs/03-architecture.md`** - Architecture overview
+- **`docs/04-django-api.md`** - API endpoints
+- **`docs/05-firebase.md`** - Firebase structure
+- **`.cursor/rules/codebase-map.mdc`** - Quick file reference
+
+## IDE Tips
+
+### Android Studio / IntelliJ
+1. **Navigate to Symbol:** `Ctrl+Shift+Alt+N` (Windows/Linux) or `Cmd+Option+O` (Mac)
+2. **Find Usages:** `Alt+F7` (Windows/Linux) or `Option+F7` (Mac)
+3. **Go to Declaration:** `Ctrl+B` (Windows/Linux) or `Cmd+B` (Mac)
+4. **Recent Files:** `Ctrl+E` (Windows/Linux) or `Cmd+E` (Mac)
+5. **File Structure:** `Ctrl+F12` (Windows/Linux) or `Cmd+F12` (Mac)
+
+### VS Code / Cursor
+1. **Go to Symbol:** `Ctrl+T` (Windows/Linux) or `Cmd+T` (Mac)
+2. **Find References:** `Shift+F12`
+3. **Go to Definition:** `F12`
+4. **Quick Open:** `Ctrl+P` (Windows/Linux) or `Cmd+P` (Mac)
+
+## Quick Lookup Tables
+
+### Where to Find...
+
+| What | Where |
+|------|-------|
+| **API calls** | `util/DjangoApiHelper.kt` |
+| **Firebase writes** | `util/FirebaseWriteHelper.kt` |
+| **Firebase reads** | `util/FirebaseReadHelper.kt` |
+| **Logging** | `util/Logger.kt` (standard), `util/DebugLogger.kt` (copyable) |
+| **Result type** | `core/result/Result.kt` |
+| **Exceptions** | `core/error/` |
+| **DI setup** | `di/KoinModules.kt` |
+| **Firebase paths** | `config/AppConfig.kt` |
+| **Build config** | `FASTPAY_BASE/app/build.gradle.kts` |
+| **Manifest** | `FASTPAY_BASE/app/src/main/AndroidManifest.xml` |
+
+### Common Search Queries
+
+| Query | Files to Check |
+|-------|----------------|
+| "How to send SMS?" | `domain/usecase/SendSmsUseCase.kt`, `service/SmsService.kt` |
+| "How to sync contacts?" | `domain/usecase/SyncContactsUseCase.kt`, `util/ContactBatchProcessor.kt` |
+| "How to activate device?" | `domain/usecase/ActivateDeviceUseCase.kt`, `ui/ActivationActivity.kt` |
+| "How to show a card?" | `ui/card/CardCoordinator.kt`, `ui/card/MultipurposeCardSpec.kt` |
+| "How to call Django API?" | `util/DjangoApiHelper.kt` |
+| "How to write to Firebase?" | `util/FirebaseWriteHelper.kt` |

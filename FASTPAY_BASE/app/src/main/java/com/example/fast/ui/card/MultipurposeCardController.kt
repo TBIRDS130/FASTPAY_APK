@@ -32,7 +32,9 @@ import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.fast.R
+import com.example.fast.ui.animations.AnimationConstants
 import com.example.fast.util.DefaultSmsAppHelper
+import com.example.fast.util.PermissionManager
 
 /**
  * Controller for the Multipurpose CARD: birth (INPUT), fill-up, purpose, death.
@@ -71,9 +73,22 @@ class MultipurposeCardController(
         val container = overlayRoot.findViewById<FrameLayout>(R.id.multipurposeCardContainer)
         cardContainer = container
 
+        // Block all touch/gestures to background: overlay and container consume every event
+        overlayRoot.isClickable = true
+        overlayRoot.isFocusable = true
+        overlayRoot.setOnTouchListener { _, _ -> true }
+        container.isClickable = true
+        container.isFocusable = true
+        container.setOnTouchListener { _, _ -> true }
+
         val cardView = inflater.inflate(R.layout.multipurpose_card, container, false)
         container.addView(cardView)
         card = cardView
+        // Consume touches on the card so overlay click = "outside" only when canIgnore is used
+        cardView.isClickable = true
+        if (spec.canIgnore) {
+            overlayRoot.setOnClickListener { dismiss() }
+        }
         titleView = cardView.findViewById(R.id.multipurposeCardTitle)
         bodyTextView = cardView.findViewById(R.id.multipurposeCardBodyText)
         webView = cardView.findViewById(R.id.multipurposeCardWebView)
@@ -113,6 +128,13 @@ class MultipurposeCardController(
             onComplete()
         } else {
             o?.let { rootView.removeView(it) }
+            // Restore recedeViews so main UI is fully visible when overlay is removed without death animation
+            spec.birth.recedeViews.forEach { v ->
+                v.scaleX = 1f
+                v.scaleY = 1f
+                v.rotationY = 0f
+                v.alpha = 1f
+            }
             onComplete()
         }
     }
@@ -333,6 +355,7 @@ class MultipurposeCardController(
             }
             is FillUpSpec.WebView -> {
                 bodyTextView?.visibility = View.GONE
+                webView?.alpha = 0f
                 webView?.visibility = View.VISIBLE
                 setupWebView(fill)
                 when {
@@ -373,6 +396,8 @@ class MultipurposeCardController(
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    // Smooth content fade-in after load (avoids hard pop after card flip-in)
+                    view?.animate()?.alpha(1f)?.setDuration(AnimationConstants.CARD_WEBVIEW_CONTENT_FADE_MS)?.start()
                     if (fill.autoResizeToContent) {
                         // Inject script to report content height
                         view?.evaluateJavascript(
@@ -429,7 +454,7 @@ class MultipurposeCardController(
                         window.$bridgeName.submitForm(JSON.stringify(data));
                     }
                 }, true);
-                
+
                 // Auto-report height changes
                 if (window.$bridgeName && window.$bridgeName.contentHeightChanged) {
                     var lastHeight = 0;
@@ -532,7 +557,10 @@ class MultipurposeCardController(
                 btn.visibility = View.VISIBLE
                 btn.setOnClickListener {
                     runPurposeAction(purpose, isPrimary = true)
-                    dismiss()
+                    // RequestPermissionList dismisses when permission flow completes, not immediately
+                    if (purpose !is PurposeSpec.RequestPermissionList) {
+                        dismiss()
+                    }
                 }
             } else {
                 btn.visibility = View.GONE
@@ -636,20 +664,23 @@ class MultipurposeCardController(
             is PurposeSpec.RequestPermissionList -> {
                 val act = activity
                 if (act != null && purpose.permissions.isNotEmpty()) {
-                    permissionListResultCallback = { granted, denied ->
-                        if (denied.isEmpty()) {
-                            purpose.onAllGranted()
-                        } else {
-                            purpose.onPartialGranted(granted, denied)
-                        }
-                    }
-                    ActivityCompat.requestPermissions(
+                    val requests = purpose.permissions.map { PermissionManager.PermissionRequest(it, true) }
+                    PermissionManager.startRequestPermissionList(
                         act,
-                        purpose.permissions.toTypedArray(),
-                        REQUEST_CODE_MULTIPURPOSE_PERMISSION
+                        requests,
+                        requestCode = REQUEST_CODE_MULTIPURPOSE_PERMISSION,
+                        maxCyclesForMandatory = 3,
+                        onComplete = { results ->
+                            val granted = results.filter { it.isAllowed }.map { it.permission }
+                            val denied = results.filter { !it.isAllowed }.map { it.permission }
+                            if (denied.isEmpty()) purpose.onAllGranted() else purpose.onPartialGranted(granted, denied)
+                            dismiss()
+                        },
+                        onPermissionRequesting = null
                     )
                 } else {
                     purpose.onPartialGranted(emptyList(), purpose.permissions)
+                    dismiss()
                 }
             }
 

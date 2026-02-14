@@ -1,0 +1,5 @@
+{
+  "apk_root": "../FASTPAY_BASE",
+  "extraction": { "anim": true, "drawable": true, "fonts": true, "themes": true },
+  "api_base": "http://localhost:3999/api"
+}

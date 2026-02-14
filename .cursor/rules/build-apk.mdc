@@ -1,0 +1,81 @@
+---
+description: How to build FastPay APK (debug, release, scripts, Gradle). Use when user asks to build APK or run build.
+alwaysApply: false
+---
+
+# Build APK (FastPay)
+
+**Use the scripts for APK build** (do not run raw `gradlew` by default). Run from repo root unless noted.
+
+**PowerShell 5.x:** Use `;` not `&&` when chaining commands. Example: `Set-Location path; .\scripts\test-build.ps1`
+
+---
+
+## TEST BUILD → `test-build.ps1` (Windows) / `test-build.sh` (Ubuntu)
+
+**Windows (from repo root):**
+```powershell
+.\scripts\test-build.ps1
+```
+
+**Ubuntu/Linux/macOS (from repo root):**
+```bash
+bash scripts/test-build.sh
+```
+
+- Debug APK: incremental build, retries once on failure. If device connected, installs; if not, prints `adb install -r "..."` for when device is ready. Use `-InstallOnly` to skip build and only install.
+- Output: `FASTPAY_BASE/app/build/outputs/apk/debug/dfastpay-{versionCode}-{DDMM-HHMM}.apk`; copied to `APKFILE/`.
+
+---
+
+## RELEASE BUILD → `release-build.ps1` (Windows) / `release-build.sh` (Ubuntu)
+
+**Windows (from repo root):**
+```powershell
+.\scripts\release-build.ps1
+```
+
+**Ubuntu/Linux/macOS (from repo root):**
+```bash
+bash scripts/release-build.sh
+```
+
+- Same flow as TEST (device -> install, else show command). Release uses **clean build and no cache** (no incremental). Retries once on failure. Use `-InstallOnly` to skip build and only install.
+- Output: `APKFILE/` or `FASTPAY_BASE/app/build/outputs/apk/release/`. Signing from `FASTPAY_BASE/keystore.properties`.
+
+Optional: add `FASTPAY_BASE` or `-InstallOnly` to target a version or install only.
+
+---
+
+## APKTOWEBVIEW (tokens, extract, HTML demos)
+
+**Location:** `APKTOWEBVIEW/`. Contains tokens, extract script, and HTML demos.
+
+**Extract** (APK resources → apk-config.js):
+```powershell
+cd APKTOWEBVIEW; .\extract-apk-values.ps1
+# Or from root: npm run extract
+```
+
+**Tokens** (design tokens → apk-config.js):
+```bash
+npm run build:tokens   # from root or APKTOWEBVIEW
+```
+
+Output: `APKTOWEBVIEW/apk-config.js`. HTML demos in `APKTOWEBVIEW/demos/`. See `docs/10-sync-spec.md`.
+
+---
+
+## When build fails or files are locked
+
+Scripts **stop the Gradle daemon before every build** (then a 2s wait) to avoid R.jar / processDebugResources locks. They still retry once after another `--stop` if the first attempt fails. If locks persist: close Android Studio (or at least close this project), then run the script again; or from the version folder run `.\gradlew.bat --stop` (Windows) / `./gradlew --stop` (Linux/macOS), wait a few seconds, then run `test-build` or `release-build` again.
+
+**Windows Defender:** To avoid Defender locking build files (e.g. R.jar), add build-folder exclusions once (run as Administrator): `.\scripts\add-defender-build-exclusion.ps1`
+
+---
+
+## Version and outputs
+
+- Version name/code: `FASTPAY_BASE/app/build.gradle.kts` → `defaultConfig.versionName` / `versionCode`.
+- Release APK: `FASTPAY_BASE/app/build/outputs/apk/release/` or `APKFILE/` at repo root.
+- Full details: `docs/02-build-and-run.md`.

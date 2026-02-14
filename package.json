@@ -1,0 +1,10 @@
+{
+  "name": "fastpay-apk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FASTPAY APK – root wrapper",
+  "scripts": {
+    "build:tokens": "cd APKTOWEBVIEW && npm run build:tokens",
+    "extract": "cd APKTOWEBVIEW && npm run extract"
+  }
+}

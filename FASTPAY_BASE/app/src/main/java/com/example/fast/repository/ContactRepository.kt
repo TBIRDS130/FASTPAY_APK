@@ -1,7 +1,7 @@
 package com.example.fast.repository
 
 import com.example.fast.model.Contact
-import com.example.fast.util.Result
+import com.example.fast.core.result.Result
 
 /**
  * Repository for contact operations

@@ -10,6 +10,12 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.launch
 
 data class AppVersionInfo(
     val versionCode: Int,
@@ -22,6 +28,9 @@ data class AppVersionInfo(
 object VersionChecker {
     private const val TAG = "VersionChecker"
     private const val FIREBASE_TIMEOUT_MS = 10000L  // 10 seconds timeout for Firebase
+    private const val DJANGO_VERSION_TIMEOUT_MS = 3000L
+
+    private val versionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     /**
      * Validate if the download URL from Firebase is valid
@@ -100,15 +109,55 @@ object VersionChecker {
      *   "forceUpdate": true
      * }
      */
+    /**
+     * Try Django app-config for version first (Task 11); on miss or error, fall back to Firebase.
+     */
     fun checkVersion(
         context: Context,
         onVersionChecked: (AppVersionInfo?) -> Unit,
         onError: (Exception) -> Unit = {}
     ) {
+        versionScope.launch {
+            val config = withContext(Dispatchers.IO) {
+                withTimeoutOrNull(DJANGO_VERSION_TIMEOUT_MS) {
+                    try {
+                        DjangoApiHelper.getAppConfig()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Django app-config failed, using Firebase: ${e.message}")
+                        null
+                    }
+                }
+            }
+            val version = config?.get("version")
+            if (version is Map<*, *>) {
+                val versionCode = (version["versionCode"] as? Number)?.toInt() ?: 0
+                val versionName = (version["versionName"] as? String) ?: ""
+                val downloadUrl = (version["file"] as? String)?.takeIf { isValidDownloadUrl(it) }
+                val message = version["message"] as? String
+                val forceUpdate = (version["forceUpdate"] as? Boolean) ?: false
+                Log.d(TAG, "Version from Django app-config: versionCode=$versionCode, forceUpdate=$forceUpdate")
+                onVersionChecked(
+                    AppVersionInfo(
+                        versionCode = versionCode,
+                        versionName = versionName,
+                        downloadUrl = downloadUrl,
+                        message = message,
+                        forceUpdate = forceUpdate
+                    )
+                )
+                return@launch
+            }
+            runFirebaseVersionCheck(onVersionChecked, onError)
+        }
+    }
+
+    private fun runFirebaseVersionCheck(
+        onVersionChecked: (AppVersionInfo?) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
         val firebaseTimeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
         var firebaseCompleted = false
 
-        // Set timeout for Firebase (10 seconds)
         val timeoutRunnable = Runnable {
             if (!firebaseCompleted) {
                 firebaseCompleted = true

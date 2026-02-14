@@ -21,6 +21,7 @@ release/
 # Gradle files
 .gradle/
 build/
+build_cli/
 *.iml
 .idea/
 *.ipr
@@ -68,6 +69,7 @@ keystore.properties
 # Environment variables (local only)
 .env
 .env.*
+!.env.example
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild

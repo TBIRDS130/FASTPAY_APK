@@ -9,9 +9,11 @@
     android:focusable="true"
     android:visibility="gone">
 
-    <!-- Card container: controller will add multipurpose_card here with desired size/gravity -->
+    <!-- Card container: controller will add multipurpose_card here with desired size/gravity; clickable/focusable so dim area consumes touch -->
     <FrameLayout
         android:id="@+id/multipurposeCardContainer"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:clickable="true"
+        android:focusable="true" />
 </FrameLayout>

@@ -1,5 +1,8 @@
 # Build outputs (repo-level)
 releases/
+APKFILE/
+build/
+node_modules/
 
 # OS
 .DS_Store

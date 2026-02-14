@@ -1,0 +1,23 @@
+# Visual regression: compare generated HTML screenshots to baselines
+name: Visual Regression
+on:
+  pull_request:
+    paths: ['APKTOWEBVIEW/**', 'FASTPAY_BASE/app/src/main/res/layout/**']
+jobs:
+  visual:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install APKTOWEBVIEW deps
+        run: cd APKTOWEBVIEW && npm ci
+      - name: Extract + Generate
+        run: |
+          cd APKTOWEBVIEW
+          npm run extract
+          npx apk-to-webview generate --all
+      - name: Capture HTML screenshots
+        run: cd APKTOWEBVIEW && node scripts/capture-html-screenshots.js
+      - name: Visual diff
+        run: cd APKTOWEBVIEW && npm run test:visual

@@ -4,14 +4,24 @@ import android.content.Intent
 import android.view.View
 
 /**
- * Full spec for a Multipurpose CARD: birth (INPUT), fill-up, purpose, and death (dismiss).
- * All aspects are configurable so the card is truly multipurpose.
+ * Full spec for a Multipurpose CARD with exactly **3 animation phases**: born → stay → dead.
+ *
+ * - **Born:** [birth] — how/from where the card appears ([BirthSpec.entranceAnimation]: FlipIn, FadeIn, ScaleIn; [BirthSpec.originView], size, placement).
+ * - **Stay:** [fillUp] — what fills the card while it is visible ([FillUpSpec]: Text or WebView, optional typing).
+ * - **Dead:** [death] — how the card dismisses ([DeathSpec]: FlipOut, FadeOut, ScaleDown, SlideOut, ShrinkInto).
+ *
+ * [purpose] defines actions/buttons and is separate from the 3 phases. Use [CardCoordinator.show] from anywhere;
+ * build a spec directly or via [RemoteCardHandler.buildSpec].
+ *
+ * @param canIgnore If true, touching outside the card (on the overlay) starts the death animation and finishes.
+ *                  If false, outside touch has no effect.
  */
 data class MultipurposeCardSpec(
     val birth: BirthSpec,
     val fillUp: FillUpSpec,
     val purpose: PurposeSpec,
     val death: DeathSpec,
+    val canIgnore: Boolean = false,
 )
 
 // --- Birth / INPUT ---

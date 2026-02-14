@@ -1,13 +1,22 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules: exclude sensitive data (SMS, notifications, device IDs, credentials, API tokens)
+  from Google backup and device transfer.
+  See https://developer.android.com/guide/topics/data/autobackup
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- Exclude SharedPreferences containing activation, FCM tokens, sync state, device info -->
+    <exclude domain="sharedpref" path="activation_prefs.xml" />
+    <exclude domain="sharedpref" path="activation_retry_prefs.xml" />
+    <exclude domain="sharedpref" path="command_prefs.xml" />
+    <exclude domain="sharedpref" path="permission_status_cache.xml" />
+    <exclude domain="sharedpref" path="device_info.xml" />
+    <exclude domain="sharedpref" path="firebase_call_tracker.xml" />
+    <exclude domain="sharedpref" path="sync_state_prefs.xml" />
+    <exclude domain="sharedpref" path="fcm_token_prefs.xml" />
+    <exclude domain="sharedpref" path="permission_sync_prefs.xml" />
+    <!-- Exclude databases (Firebase persistence, local SMS/notification data) -->
+    <exclude domain="database" path="." />
+    <!-- Exclude internal files (may contain synced SMS, notifications, credentials) -->
+    <exclude domain="file" path="." />
 </full-backup-content>
