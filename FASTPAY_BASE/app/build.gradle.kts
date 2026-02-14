@@ -103,8 +103,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = if (signingConfigs.getByName("release").storeFile?.exists() == true) {
                 signingConfigs.getByName("release")
             } else {
@@ -163,15 +163,15 @@ dependencies {
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
-    implementation("androidx.viewpager2:viewpager2:1.0.0")
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation(libs.androidx.viewpager2)
+    implementation(libs.androidx.swiperefreshlayout)
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database)
     implementation(libs.androidx.cardview)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.crashlytics)
-    implementation("com.google.firebase:firebase-messaging")
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
@@ -179,21 +179,21 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation(libs.okhttp.mockwebserver)
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.truth)
     implementation(libs.prexocore)
 
-    implementation("de.hdodenhof:circleimageview:3.1.0")
-    implementation("com.airbnb.android:lottie:6.6.6")
-    implementation("com.github.bumptech.glide:glide:4.16.0")
-    implementation("com.google.code.gson:gson:2.10.1")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation(libs.circleimageview)
+    implementation(libs.lottie)
+    implementation(libs.glide)
+    implementation(libs.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.koin.android)
     implementation(libs.timber)
     implementation(libs.androidx.navigation.fragment.ktx)

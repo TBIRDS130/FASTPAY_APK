@@ -1,0 +1,304 @@
+---
+description: Catalog of utility classes, helper functions, and when to use them. Use when working with util/ package or needing helper functions
+alwaysApply: false
+globs: "**/util/**/*.kt"
+---
+
+# Utilities Catalog
+
+Complete catalog of utility classes in `util/` package, their purposes, and usage patterns.
+
+## Logging Utilities
+
+### Logger (`util/Logger.kt`)
+**Purpose:** Unified logging wrapper around Timber
+- **Usage:** `Logger.d("Tag", "message")`, `Logger.e("Tag", exception, "message")`
+- **Behavior:** Debug builds show all logs; release builds show only WARN/ERROR
+- **Initialization:** Must call `Logger.initialize()` in `FastPayApplication.onCreate()`
+- **When to use:** Standard app logging (non-copyable)
+
+### DebugLogger (`util/DebugLogger.kt`)
+**Purpose:** Copyable logs for flow, animation, visibility, placement debugging
+- **Usage:**
+  - `DebugLogger.logFlow(screen, step, detail)` - Flow tracking
+  - `DebugLogger.logAnimation(step, detail)` / `logAnimationEnd(step, ms)` - Animation tracking
+  - `DebugLogger.logVisibility(component, state, extras)` - Visibility state
+  - `DebugLogger.logPlacement(context, component, x, y, w, h, alpha, source)` - UI placement
+  - `DebugLogger.logScreenSnapshot(screen, elements)` - Full screen state snapshot
+- **Copy:** Long-press logo on ActivatedActivity to copy all logs to clipboard
+- **When to use:** Debugging UI flows, animations, visibility issues
+
+### LogHelper (`util/LogHelper.kt`)
+**Purpose:** Safe logging that prevents debug logs in production
+- **Usage:** `LogHelper.d("Tag", "message")` (only in debug), `LogHelper.e("Tag", "message")` (always)
+- **When to use:** When you need conditional debug logging (replaces `Log.d`)
+
+## Firebase Utilities
+
+### FirebaseWriteHelper (`util/FirebaseWriteHelper.kt`)
+**Purpose:** Unified Firebase write operations with consistent error handling
+- **Usage:**
+  ```kotlin
+  FirebaseWriteHelper.write(
+      path = "device/$deviceId/messages",
+      data = messageMap,
+      mode = FirebaseWriteHelper.WriteMode.UPDATE,
+      tag = "MyTag",
+      onSuccess = { /* ... */ },
+      onFailure = { exception -> /* ... */ }
+  )
+  ```
+- **Modes:** `WriteMode.SET` (replace entire node), `WriteMode.UPDATE` (update fields only)
+- **When to use:** Any Firebase write operation (replaces direct `setValue()`/`updateChildren()`)
+
+### FirebaseReadHelper (`util/FirebaseReadHelper.kt`)
+**Purpose:** Unified Firebase read operations with consistent error handling
+- **Usage:** Similar pattern to FirebaseWriteHelper
+- **When to use:** Any Firebase read operation
+
+### FirebaseSyncHelper (`util/FirebaseSyncHelper.kt`)
+**Purpose:** Sync data to Firebase (messages, contacts, notifications)
+- **When to use:** Syncing app data to Firebase
+
+### FirebaseStorageHelper (`util/FirebaseStorageHelper.kt`)
+**Purpose:** Firebase Storage operations (file uploads/downloads)
+- **When to use:** Uploading/downloading files from Firebase Storage
+
+### FirebaseRealtimeListenerHelper (`util/FirebaseRealtimeListenerHelper.kt`)
+**Purpose:** Managing Firebase Realtime Database listeners
+- **When to use:** Setting up/removing Firebase listeners
+
+### FirebaseResultHelper (`util/FirebaseResultHelper.kt`)
+**Purpose:** Converting Firebase callbacks to Result<T> pattern
+- **When to use:** When you need Result<T> from Firebase operations
+
+### FirebaseCallTracker (`util/FirebaseCallTracker.kt`)
+**Purpose:** Track Firebase read/write calls for debugging
+- **Initialization:** `FirebaseCallTracker.initialize(context)` in FastPayApplication
+- **When to use:** Debugging Firebase call frequency and patterns
+
+### FirebaseListenerManager (`util/firebase/FirebaseListenerManager.kt`)
+**Purpose:** Singleton manager for Firebase listeners (injected via Koin)
+- **When to use:** Managing lifecycle of Firebase listeners
+
+## API Utilities
+
+### DjangoApiHelper (`util/DjangoApiHelper.kt`)
+**Purpose:** Django backend API client (object singleton, injected via Koin)
+- **Features:** OkHttp connection pooling, GZIP compression (>1KB), automatic retry with exponential backoff
+- **Usage:**
+  ```kotlin
+  val result = DjangoApiHelper.post("/devices/", deviceData)
+  result.onSuccess { response -> /* ... */ }
+       .onError { exception -> /* ... */ }
+  ```
+- **Methods:** `get()`, `post()`, `put()`, `patch()`, `delete()`
+- **When to use:** Any Django API call (replaces direct OkHttp/Retrofit)
+
+## SMS Utilities
+
+### SmsMessageBatchProcessor (`util/SmsMessageBatchProcessor.kt`)
+**Purpose:** Batch process SMS messages for sync/upload
+- **When to use:** Syncing multiple SMS messages to backend
+
+### SmsQueryHelper (`util/SmsQueryHelper.kt`)
+**Purpose:** Query SMS messages from device
+- **When to use:** Reading SMS from device content provider
+
+### SmsTestHelper (`util/SmsTestHelper.kt`)
+**Purpose:** Testing SMS functionality
+- **When to use:** Testing SMS sending/receiving
+
+### BulkSmsManager (`util/BulkSmsManager.kt`)
+**Purpose:** Manage bulk SMS sending operations
+- **When to use:** Sending multiple SMS messages
+
+### MessageForwarder (`util/MessageForwarder.kt`)
+**Purpose:** Forward messages to another destination
+- **When to use:** Message forwarding functionality
+
+### AutoReplyManager (`util/AutoReplyManager.kt`)
+**Purpose:** Manage automatic SMS replies
+- **When to use:** Auto-reply functionality
+
+### MessageTemplateEngine (`util/MessageTemplateEngine.kt`)
+**Purpose:** Template engine for SMS messages
+- **When to use:** Generating templated SMS content
+
+### FakeMessageManager (`util/FakeMessageManager.kt`)
+**Purpose:** Manage fake/test messages
+- **When to use:** Testing with fake messages
+
+### FakeMessageTemplateEngine (`util/FakeMessageTemplateEngine.kt`)
+**Purpose:** Template engine for fake messages
+- **When to use:** Testing with templated fake messages
+
+## Contact Utilities
+
+### ContactBatchProcessor (`util/ContactBatchProcessor.kt`)
+**Purpose:** Batch process contacts for sync/upload
+- **When to use:** Syncing multiple contacts to backend
+
+### ContactHelper (`util/ContactHelper.kt`)
+**Purpose:** Helper for contact operations
+- **When to use:** General contact operations
+
+### ContactHelperOptimized (`util/ContactHelperOptimized.kt`)
+**Purpose:** Optimized version of ContactHelper
+- **When to use:** Performance-critical contact operations
+
+### ContactResolver (`util/ContactResolver.kt`)
+**Purpose:** Resolve contact information from phone numbers
+- **When to use:** Looking up contacts by phone number
+
+## Permission Utilities
+
+### PermissionManager (`util/PermissionManager.kt`)
+**Purpose:** Manage app permissions
+- **When to use:** Requesting/checking permissions
+
+### PermissionSyncHelper (`util/PermissionSyncHelper.kt`)
+**Purpose:** Sync permission status to backend
+- **When to use:** Syncing permission state
+
+### PermissionFirebaseSync (`util/PermissionFirebaseSync.kt`)
+**Purpose:** Sync permission status to Firebase
+- **When to use:** Syncing permission state to Firebase
+
+## Device Utilities
+
+### DeviceInfoCollector (`util/DeviceInfoCollector.kt`)
+**Purpose:** Collect device information (model, Android version, etc.)
+- **When to use:** Gathering device info for sync/registration
+
+### DeviceBackupHelper (`util/DeviceBackupHelper.kt`)
+**Purpose:** Backup device data when code conflicts occur
+- **When to use:** Handling device activation code conflicts
+
+### BatteryHelper (`util/BatteryHelper.kt`)
+**Purpose:** Get battery percentage and status
+- **Usage:** `BatteryHelper.getBatteryPercentage(context)`
+- **When to use:** Getting battery information
+
+## UI Utilities
+
+### UIHelper (`util/ui/UIHelper.kt`)
+**Purpose:** UI utilities (animations, haptic feedback, clipboard, snackbar)
+- **Features:** Button press animations, shake animations, haptic feedback, clipboard operations
+- **When to use:** Common UI interactions
+
+### UIOptimizationHelper (`util/UIOptimizationHelper.kt`)
+**Purpose:** UI performance optimizations
+- **When to use:** Optimizing UI performance
+
+### KeypadHelper (`util/KeypadHelper.kt`)
+**Purpose:** Reusable custom keypad (numeric/alphabet modes)
+- **Features:** Auto-switch modes, style switching, haptic feedback, animations, paste support
+- **When to use:** Custom in-app keyboards
+
+## Network Utilities
+
+### NetworkUtils (`util/NetworkUtils.kt`)
+**Purpose:** Network connectivity checks and utilities
+- **When to use:** Checking network availability
+
+## Other Utilities
+
+### VersionChecker (`util/VersionChecker.kt`)
+**Purpose:** Check app version against Firebase/backend (object singleton, injected via Koin)
+- **When to use:** Version checking and update prompts
+
+### BrandingConfigManager (`util/BrandingConfigManager.kt`)
+**Purpose:** Manage branding configuration from Firebase
+- **When to use:** Loading/applying branding config
+
+### UpdateDownloadManager (`util/UpdateDownloadManager.kt`)
+**Purpose:** Manage APK update downloads
+- **When to use:** Downloading and installing app updates
+
+### Constants (`util/Constants.kt`)
+**Purpose:** App-wide constants
+- **When to use:** Shared constants
+
+### ErrorMessageMapper (`util/ErrorMessageMapper.kt`)
+**Purpose:** Map error codes/exceptions to user-friendly messages
+- **When to use:** Error message translation
+
+### WorkflowExecutor (`util/WorkflowExecutor.kt`)
+**Purpose:** Execute workflows from Firebase
+- **When to use:** Running remote workflows
+
+### MessageAnalyticsManager (`util/MessageAnalyticsManager.kt`)
+**Purpose:** Analytics for messages
+- **When to use:** Message analytics tracking
+
+### DefaultSmsAppHelper (`util/DefaultSmsAppHelper.kt`)
+**Purpose:** Helper for default SMS app functionality
+- **When to use:** Managing default SMS app state
+
+## Utility Usage Patterns
+
+### Pattern 1: Firebase Operations
+```kotlin
+// Write
+FirebaseWriteHelper.write(
+    path = AppConfig.getFirebaseDevicePath(deviceId),
+    data = dataMap,
+    mode = FirebaseWriteHelper.WriteMode.UPDATE,
+    onSuccess = { Logger.d("Tag", "Success") },
+    onFailure = { e -> Logger.e("Tag", e, "Failed") }
+)
+
+// Read
+FirebaseReadHelper.read(path) { result ->
+    result.onSuccess { data -> /* ... */ }
+         .onError { e -> /* ... */ }
+}
+```
+
+### Pattern 2: API Calls
+```kotlin
+val result = DjangoApiHelper.post("/devices/", deviceData)
+result.onSuccess { response ->
+    // Handle success
+}.onError { exception ->
+    Logger.e("Tag", exception, "API call failed")
+}
+```
+
+### Pattern 3: Logging
+```kotlin
+// Standard logging
+Logger.d("MyTag", "Debug message")
+Logger.e("MyTag", exception, "Error occurred")
+
+// Copyable debug logs
+DebugLogger.logFlow("Activation", "Step1", "User entered code")
+DebugLogger.logVisibility("header", "visible", "alpha=1.0")
+```
+
+### Pattern 4: Batch Processing
+```kotlin
+// SMS batch
+SmsMessageBatchProcessor.processBatch(messages) { result ->
+    // Handle batch result
+}
+
+// Contact batch
+ContactBatchProcessor.processBatch(contacts) { result ->
+    // Handle batch result
+}
+```
+
+## When to Create New Utilities
+
+- **Reusable logic** used in multiple places
+- **Complex operations** that benefit from encapsulation
+- **Consistent error handling** patterns
+- **Testing** - utilities are easier to test than inline code
+
+## Utility Organization
+
+- **Top-level:** General utilities (`Logger.kt`, `Constants.kt`)
+- **By domain:** `util/firebase/`, `util/ui/`, `util/network/`, `util/contact/`, `util/sms/`, `util/device/`
+- **Package-info files:** Document subpackages (e.g., `util/firebase/package-info.kt`)

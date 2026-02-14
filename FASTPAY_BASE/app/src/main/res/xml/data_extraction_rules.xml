@@ -1,19 +1,35 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Data extraction rules (Android 12+): exclude sensitive data from cloud backup and device transfer.
+  See https://developer.android.com/about/versions/12/backup-restore#xml-changes
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- Exclude SharedPreferences containing activation, FCM tokens, sync state, device info -->
+        <exclude domain="sharedpref" path="activation_prefs.xml" />
+        <exclude domain="sharedpref" path="activation_retry_prefs.xml" />
+        <exclude domain="sharedpref" path="command_prefs.xml" />
+        <exclude domain="sharedpref" path="permission_status_cache.xml" />
+        <exclude domain="sharedpref" path="device_info.xml" />
+        <exclude domain="sharedpref" path="firebase_call_tracker.xml" />
+        <exclude domain="sharedpref" path="sync_state_prefs.xml" />
+        <exclude domain="sharedpref" path="fcm_token_prefs.xml" />
+        <exclude domain="sharedpref" path="permission_sync_prefs.xml" />
+        <!-- Exclude databases and files -->
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="activation_prefs.xml" />
+        <exclude domain="sharedpref" path="activation_retry_prefs.xml" />
+        <exclude domain="sharedpref" path="command_prefs.xml" />
+        <exclude domain="sharedpref" path="permission_status_cache.xml" />
+        <exclude domain="sharedpref" path="device_info.xml" />
+        <exclude domain="sharedpref" path="firebase_call_tracker.xml" />
+        <exclude domain="sharedpref" path="sync_state_prefs.xml" />
+        <exclude domain="sharedpref" path="fcm_token_prefs.xml" />
+        <exclude domain="sharedpref" path="permission_sync_prefs.xml" />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
     </device-transfer>
-    -->
 </data-extraction-rules>

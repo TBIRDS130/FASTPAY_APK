@@ -1,0 +1,437 @@
+---
+description: Common code patterns, workflows, and conventions in FastPay. Use when implementing features or refactoring code
+alwaysApply: false
+globs: "**/*.kt"
+---
+
+# Common Patterns & Workflows
+
+Common code patterns, workflows, and conventions used throughout the FastPay codebase.
+
+## Result Pattern
+
+### Basic Usage
+```kotlin
+// Pattern 1: Chained callbacks (preferred)
+val result = someOperation()
+result.onSuccess { data ->
+    // Handle success
+    Logger.d("Tag", "Success: $data")
+}.onError { exception ->
+    // Handle error
+    Logger.e("Tag", exception, "Operation failed")
+}
+
+// Pattern 2: When expression
+when (val result = someOperation()) {
+    is Result.Success -> {
+        val data = result.data
+        // Handle success
+    }
+    is Result.Error -> {
+        val exception = result.exception
+        // Handle error
+    }
+}
+
+// Pattern 3: In ViewModel (BaseViewModel.handleResult)
+val data = handleResult(result) // Returns T? (null on error, error set in _error)
+```
+
+### Creating Results
+```kotlin
+// Success
+Result.success(data)
+
+// Error
+Result.error(FastPayException("Error message"))
+
+// From nullable
+Result.fromNullable(value, "Value is null")
+
+// From try-catch
+Result.runCatching {
+    riskyOperation()
+}
+```
+
+### Transforming Results
+```kotlin
+// Map (transform success value)
+val mapped = result.map { it * 2 }
+
+// FlatMap (chain Result operations)
+val chained = result.flatMap { firstValue ->
+    anotherOperation(firstValue)
+}
+```
+
+## Firebase Operations Pattern
+
+### Writing to Firebase
+```kotlin
+// Pattern: Use FirebaseWriteHelper (not direct setValue/updateChildren)
+FirebaseWriteHelper.write(
+    path = AppConfig.getFirebaseDevicePath(deviceId),
+    data = mapOf(
+        "field1" to value1,
+        "field2" to value2
+    ),
+    mode = FirebaseWriteHelper.WriteMode.UPDATE, // or WriteMode.SET
+    tag = "MyTag",
+    onSuccess = {
+        Logger.d("Tag", "Firebase write succeeded")
+    },
+    onFailure = { exception ->
+        Logger.e("Tag", exception, "Firebase write failed")
+    }
+)
+```
+
+### Reading from Firebase
+```kotlin
+// Pattern: Use FirebaseReadHelper
+FirebaseReadHelper.read(path) { result ->
+    result.onSuccess { data ->
+        // Handle data
+    }.onError { exception ->
+        Logger.e("Tag", exception, "Firebase read failed")
+    }
+}
+```
+
+### Firebase Listeners
+```kotlin
+// Pattern: Use FirebaseRealtimeListenerHelper or FirebaseListenerManager
+val listener = FirebaseRealtimeListenerHelper.addValueEventListener(
+    path = path,
+    onDataChange = { snapshot ->
+        val data = snapshot.getValue(Map::class.java)
+        // Handle data
+    },
+    onCancelled = { error ->
+        Logger.e("Tag", error.toException(), "Listener cancelled")
+    }
+)
+
+// Remove listener when done
+FirebaseRealtimeListenerHelper.removeListener(listener)
+```
+
+## API Call Pattern
+
+### Django API Calls
+```kotlin
+// Pattern: Use DjangoApiHelper (object singleton, injected via Koin)
+val result = DjangoApiHelper.post(
+    endpoint = "/devices/",
+    body = deviceData,
+    retryPolicy = RetryPolicy.default() // Optional
+)
+
+result.onSuccess { response ->
+    val deviceId = response["device_id"] as? String
+    Logger.d("Tag", "Device registered: $deviceId")
+}.onError { exception ->
+    Logger.e("Tag", exception, "API call failed")
+    // Handle error (show UI, retry, etc.)
+}
+```
+
+### API Call with Retry
+```kotlin
+// Pattern: Custom retry policy
+val retryPolicy = RetryPolicy(
+    maxRetries = 3,
+    initialDelayMs = 1000,
+    maxDelayMs = 10000,
+    retryOnHttpStatus = { status -> status >= 500 }
+)
+
+val result = DjangoApiHelper.post(
+    endpoint = "/messages/",
+    body = messagesData,
+    retryPolicy = retryPolicy
+)
+```
+
+## ViewModel Pattern
+
+### BaseViewModel Usage
+```kotlin
+class MyViewModel : BaseViewModel() {
+    
+    // Use launchWithLoading for operations that show loading state
+    fun loadData() {
+        launchWithLoading {
+            val result = repository.getData()
+            handleResult(result)?.let { data ->
+                // Update UI state with data
+                _data.value = data
+            }
+        }
+    }
+    
+    // Use launchSilent for background operations
+    fun syncInBackground() {
+        launchSilent {
+            repository.sync()
+        }
+    }
+    
+    // Manual state management
+    fun customOperation() {
+        setLoading(true)
+        viewModelScope.launch {
+            try {
+                val result = repository.operation()
+                if (result.isSuccess) {
+                    setMessage("Success!")
+                } else {
+                    setError(result.exceptionOrNull())
+                }
+            } finally {
+                setLoading(false)
+            }
+        }
+    }
+}
+```
+
+### ViewModel Injection (Koin)
+```kotlin
+// In Activity/Fragment
+class MyActivity : AppCompatActivity() {
+    private val viewModel: MyViewModel by viewModel() // Koin injection
+}
+```
+
+## Repository Pattern
+
+### Repository Interface
+```kotlin
+interface MyRepository {
+    suspend fun getData(): Result<Data>
+    suspend fun saveData(data: Data): Result<Unit>
+}
+```
+
+### Repository Implementation
+```kotlin
+class MyRepositoryImpl(
+    private val apiHelper: DjangoApiHelper,
+    private val firebaseRepository: FirebaseRepository
+) : BaseRepository(), MyRepository {
+    
+    override suspend fun getData(): Result<Data> {
+        return try {
+            val result = apiHelper.get("/data/")
+            result.map { response ->
+                // Parse response to Data
+                parseData(response)
+            }
+        } catch (e: Exception) {
+            Result.error(FastPayException("Failed to get data", e))
+        }
+    }
+}
+```
+
+### Repository Registration (Koin)
+```kotlin
+// In KoinModules.kt
+single<MyRepository> { MyRepositoryImpl(get(), get()) }
+```
+
+## Use Case Pattern
+
+### Use Case Implementation
+```kotlin
+class MyUseCase(
+    private val repository: MyRepository
+) : UseCase<Input, Output> {
+    
+    override suspend fun execute(input: Input): Result<Output> {
+        return repository.getData(input)
+            .flatMap { data ->
+                // Transform or validate
+                processData(data)
+            }
+    }
+    
+    private suspend fun processData(data: Data): Result<Output> {
+        // Business logic
+        return Result.success(output)
+    }
+}
+```
+
+### Use Case Registration (Koin)
+```kotlin
+// In KoinModules.kt
+single { MyUseCase(get()) }
+```
+
+## UI Patterns
+
+### UIManager Pattern
+```kotlin
+// Pattern: UIManager owns visibility/animation, Activity does not set directly
+class MyUIManager(private val binding: ActivityMyBinding) {
+    
+    fun showContent() {
+        binding.header.alpha = 1f
+        binding.content.visibility = View.VISIBLE
+    }
+    
+    fun hideContent() {
+        binding.header.alpha = 0f
+        binding.content.visibility = View.GONE
+    }
+}
+
+// In Activity
+class MyActivity : AppCompatActivity() {
+    private lateinit var uiManager: MyUIManager
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val binding = ActivityMyBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        
+        uiManager = MyUIManager(binding)
+        uiManager.showContent() // Use UIManager, not direct binding access
+    }
+}
+```
+
+### Card System Pattern
+```kotlin
+// Pattern: Use CardCoordinator to show cards
+CardCoordinator.showCard(
+    activity = this,
+    spec = MultipurposeCardSpec(
+        birth = BirthSpec(
+            entranceAnimation = EntranceAnimation.FlipIn,
+            originView = buttonView,
+            width = CardSize.MATCH_PARENT,
+            height = CardSize.WRAP_CONTENT
+        ),
+        fillUp = FillUpSpec.Text(
+            title = "Title",
+            body = "Body text"
+        ),
+        death = DeathSpec.FlipOut,
+        canIgnore = true
+    )
+)
+```
+
+## Logging Patterns
+
+### Standard Logging
+```kotlin
+// Pattern: Use Logger (not Log.d or println)
+Logger.d("Tag", "Debug message")
+Logger.i("Tag", "Info message")
+Logger.w("Tag", "Warning message")
+Logger.e("Tag", exception, "Error message")
+```
+
+### Debug Logging (Copyable)
+```kotlin
+// Pattern: Use DebugLogger for copyable logs
+DebugLogger.logFlow("Screen", "Step", "Detail")
+DebugLogger.logAnimation("AnimationName", "Started")
+DebugLogger.logAnimationEnd("AnimationName", durationMs)
+DebugLogger.logVisibility("Component", "visible", "alpha=1.0")
+DebugLogger.logPlacement(context, "Component", x, y, w, h, alpha, "source")
+DebugLogger.logScreenSnapshot("Screen", mapOf("element1" to "value1"))
+```
+
+## Error Handling Patterns
+
+### Exception Types
+```kotlin
+// Pattern: Use core/error exceptions ONLY
+throw FastPayException("Error message")
+throw FirebaseException("Firebase error", cause)
+// NOT: throw Exception() or custom exceptions in util/model
+```
+
+### Error Handling in Coroutines
+```kotlin
+// Pattern: Use exceptionHandler in BaseViewModel
+viewModelScope.launch(exceptionHandler) {
+    // Code that may throw
+}
+
+// Pattern: Wrap in Result.runCatching
+val result = Result.runCatching {
+    riskyOperation()
+}
+```
+
+## Workflow Patterns
+
+### Activation Flow
+1. User enters code → `ActivationActivity`
+2. Validate code → `ActivateDeviceUseCase`
+3. Register device → POST `/devices/` (Django)
+4. Write to Firebase → `device/{deviceId}/`
+5. Navigate to `ActivatedActivity`
+
+### Sync Flow
+1. `PersistentForegroundService` runs periodically
+2. Collect data (SMS, contacts, notifications)
+3. Batch process → `SmsMessageBatchProcessor`, `ContactBatchProcessor`, etc.
+4. Upload to Django → POST `/messages/`, `/contacts/`, `/notifications/`
+5. Update Firebase → `FirebaseWriteHelper.write()`
+
+### Command Execution Flow
+1. Firebase command added → `device/{deviceId}/commands/{commandId}`
+2. `PersistentForegroundService` detects command
+3. Execute command → Command handler (e.g., `sendSms`, `fetchDeviceInfo`)
+4. Send result → POST `/command-logs/` (Django)
+5. Remove command from Firebase
+
+## Testing Patterns
+
+### Unit Test Structure
+```kotlin
+class MyClassTest {
+    @Test
+    fun `test success case`() {
+        // Arrange
+        val input = "test"
+        
+        // Act
+        val result = myClass.operation(input)
+        
+        // Assert
+        assertThat(result.isSuccess).isTrue()
+    }
+    
+    @Test
+    fun `test error case`() {
+        // Arrange
+        val input = null
+        
+        // Act
+        val result = myClass.operation(input)
+        
+        // Assert
+        assertThat(result.isError).isTrue()
+    }
+}
+```
+
+## Common Anti-Patterns to Avoid
+
+1. **Don't use `Log.d`** → Use `Logger.d` instead
+2. **Don't create exceptions in `util/` or `model/`** → Use `core/error/` only
+3. **Don't set UI visibility directly in Activity** → Use UIManager
+4. **Don't use direct Firebase SDK calls** → Use FirebaseWriteHelper/FirebaseReadHelper
+5. **Don't use direct OkHttp calls** → Use DjangoApiHelper
+6. **Don't create new Result types** → Use `core/result/Result.kt` only
+7. **Don't scatter visibility logic** → Centralize in UIManager

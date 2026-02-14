@@ -102,12 +102,6 @@
 -keep class de.hdodenhof.circleimageview.** { *; }
 
 # ============================================
-# Google Sign-In
-# ============================================
--keep class com.google.android.gms.auth.** { *; }
--keep class com.google.android.gms.common.** { *; }
-
-# ============================================
 # Kotlin Coroutines
 # ============================================
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
@@ -162,31 +156,17 @@
 -keepattributes Exceptions
 
 # ============================================
-# Hilt / Dagger (required for DI at runtime)
+# Koin (DI)
 # ============================================
--keep class dagger.hilt.** { *; }
--keep class javax.inject.** { *; }
--keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
+-keep class org.koin.** { *; }
+-keepnames class com.example.fast.di.** { *; }
 
--dontwarn dagger.hilt.**
--dontwarn javax.inject.**
-
-# Keep Hilt generated classes (prevents "crash on launch" in release)
--keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
--keep class dagger.hilt.internal.GeneratedComponentManagerHolder { *; }
--keep class dagger.hilt.internal.GeneratedComponentManager { *; }
--keep class *_HiltComponents { *; }
--keep class *_Factory { *; }
--keep class *_MembersInjector { *; }
--keep class *_ApplicationC { *; }
--keep class *_SingletonC { *; }
-
-# Keep Application and Hilt entry point (required - crash on launch if stripped)
+# ============================================
+# Application
+# ============================================
 -keep class com.example.fast.FastPayApplication { *; }
--keep class com.example.fast.Hilt_FastPayApplication { *; }
 -keep class * extends android.app.Application { *; }
 -keepnames class com.example.fast.FastPayApplication
--keepnames class com.example.fast.Hilt_FastPayApplication
 
 # ============================================
 # FastPay Specific Rules
@@ -205,14 +185,13 @@
 -keep class com.example.fast.** extends java.lang.Exception { *; }
 
 # ============================================
-# Remove Logging in Release Builds (Optional)
+# Remove Logging in Release Builds
 # ============================================
-# Uncomment to remove Log statements in release builds
-# -assumenosideeffects class android.util.Log {
-#     public static boolean isLoggable(java.lang.String, int);
-#     public static int v(...);
-#     public static int i(...);
-#     public static int w(...);
-#     public static int d(...);
-#     public static int e(...);
-# }
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int);
+    public static int v(...);
+    public static int i(...);
+    public static int w(...);
+    public static int d(...);
+    public static int e(...);
+}
