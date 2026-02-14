@@ -160,7 +160,7 @@ val result = DjangoApiHelper.post(
 ### BaseViewModel Usage
 ```kotlin
 class MyViewModel : BaseViewModel() {
-    
+
     // Use launchWithLoading for operations that show loading state
     fun loadData() {
         launchWithLoading {
@@ -171,14 +171,14 @@ class MyViewModel : BaseViewModel() {
             }
         }
     }
-    
+
     // Use launchSilent for background operations
     fun syncInBackground() {
         launchSilent {
             repository.sync()
         }
     }
-    
+
     // Manual state management
     fun customOperation() {
         setLoading(true)
@@ -222,7 +222,7 @@ class MyRepositoryImpl(
     private val apiHelper: DjangoApiHelper,
     private val firebaseRepository: FirebaseRepository
 ) : BaseRepository(), MyRepository {
-    
+
     override suspend fun getData(): Result<Data> {
         return try {
             val result = apiHelper.get("/data/")
@@ -250,7 +250,7 @@ single<MyRepository> { MyRepositoryImpl(get(), get()) }
 class MyUseCase(
     private val repository: MyRepository
 ) : UseCase<Input, Output> {
-    
+
     override suspend fun execute(input: Input): Result<Output> {
         return repository.getData(input)
             .flatMap { data ->
@@ -258,7 +258,7 @@ class MyUseCase(
                 processData(data)
             }
     }
-    
+
     private suspend fun processData(data: Data): Result<Output> {
         // Business logic
         return Result.success(output)
@@ -278,12 +278,12 @@ single { MyUseCase(get()) }
 ```kotlin
 // Pattern: UIManager owns visibility/animation, Activity does not set directly
 class MyUIManager(private val binding: ActivityMyBinding) {
-    
+
     fun showContent() {
         binding.header.alpha = 1f
         binding.content.visibility = View.VISIBLE
     }
-    
+
     fun hideContent() {
         binding.header.alpha = 0f
         binding.content.visibility = View.GONE
@@ -293,12 +293,12 @@ class MyUIManager(private val binding: ActivityMyBinding) {
 // In Activity
 class MyActivity : AppCompatActivity() {
     private lateinit var uiManager: MyUIManager
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val binding = ActivityMyBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
+
         uiManager = MyUIManager(binding)
         uiManager.showContent() // Use UIManager, not direct binding access
     }
@@ -404,22 +404,22 @@ class MyClassTest {
     fun `test success case`() {
         // Arrange
         val input = "test"
-        
+
         // Act
         val result = myClass.operation(input)
-        
+
         // Assert
         assertThat(result.isSuccess).isTrue()
     }
-    
+
     @Test
     fun `test error case`() {
         // Arrange
         val input = null
-        
+
         // Act
         val result = myClass.operation(input)
-        
+
         // Assert
         assertThat(result.isError).isTrue()
     }
