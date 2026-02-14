@@ -16,8 +16,17 @@ firebaseDatabase = "22.0.0"
 prexocore = "2.0.0"
 cardview = "1.0.0"
 firebaseStorage = "22.0.1"
-googleSignIn = "21.2.0"
 lifecycle = "2.8.7"
+viewpager2 = "1.0.0"
+swiperefreshlayout = "1.1.0"
+circleimageview = "3.1.0"
+lottie = "6.6.6"
+glide = "4.16.0"
+gson = "2.10.1"
+okhttp = "4.12.0"
+coroutines = "1.7.3"
+mockwebserver = "4.12.0"
+androidTestCore = "1.5.0"
 firebaseCrashlytics = "3.0.2"
 mockk = "1.13.8"
 turbine = "1.0.0"
@@ -27,6 +36,7 @@ coroutinesTest = "1.7.3"
 timber = "5.0.1"
 navigation = "2.8.2"
 work = "2.11.0"
+koin = "3.5.6"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -42,7 +52,16 @@ firebase-database = { group = "com.google.firebase", name = "firebase-database" 
 prexocore = { module = "com.github.binarybeam:Prexocore", version.ref = "prexocore" }
 androidx-cardview = { group = "androidx.cardview", name = "cardview", version.ref = "cardview" }
 firebase-storage = { group = "com.google.firebase", name = "firebase-storage" }
-google-sign-in = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "googleSignIn" }
+androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }
+androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefreshlayout", version.ref = "swiperefreshlayout" }
+circleimageview = { group = "de.hdodenhof", name = "circleimageview", version.ref = "circleimageview" }
+lottie = { group = "com.airbnb.android", name = "lottie", version.ref = "lottie" }
+glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-livedata-ktx = { group = "androidx.lifecycle", name = "lifecycle-livedata-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
@@ -57,6 +76,9 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 androidx-navigation-fragment-ktx = { group = "androidx.navigation", name = "navigation-fragment-ktx", version.ref = "navigation" }
 androidx-navigation-ui-ktx = { group = "androidx.navigation", name = "navigation-ui-ktx", version.ref = "navigation" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "mockwebserver" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidTestCore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

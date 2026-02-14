@@ -1,5 +1,9 @@
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
+import java.util.TimeZone
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -19,7 +23,7 @@ if (keystorePropertiesFile.exists()) {
     }
 }
 
-// Load .env file from repo root (if it exists)
+// Load .env file from project root (FASTPAY_BASE) if it exists
 val envFile = rootProject.file(".env")
 val env = mutableMapOf<String, String>()
 if (envFile.exists()) {
@@ -39,6 +43,11 @@ fun envOrDefault(key: String, defaultValue: String): String {
     return raw.replace("\\", "\\\\").replace("\"", "\\\"")
 }
 
+// When building from CLI scripts: use build_cli so R.jar isn't locked by IDE/Defender in app/build
+if (project.hasProperty("cliBuildDir")) {
+    layout.buildDirectory.set(project.layout.projectDirectory.dir("build_cli"))
+}
+
 android {
     namespace = "com.example.fast"
     compileSdk = 36
@@ -53,11 +62,12 @@ android {
         applicationId = "com.example.fast"
         minSdk = 27
         targetSdk = 36
-        versionCode = 30
-        versionName = "3.0"
+        versionCode = 411
+        versionName = "4.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Debug builds use staging API by default (unit and instrumented tests).
         buildConfigField(
             "String",
             "DJANGO_API_BASE_URL",
@@ -93,8 +103,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = if (signingConfigs.getByName("release").storeFile?.exists() == true) {
                 signingConfigs.getByName("release")
             } else {
@@ -113,10 +123,21 @@ android {
 
     applicationVariants.all {
         val variant = this
+        val istFormat = SimpleDateFormat("ddMM-HHmm", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+        }
+        val timestamp = istFormat.format(Date())
+        val prefix = if (variant.buildType.name == "debug") "d" else "r"
         variant.outputs.all {
             val output = this as BaseVariantOutputImpl
             output.outputFileName =
-                "fastpay-${variant.versionName}-${variant.buildType.name}.apk"
+                "${prefix}fastpay-${variant.versionCode}-${timestamp}.apk"
+        }
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
         }
     }
 
@@ -142,15 +163,15 @@ dependencies {
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
-    implementation("androidx.viewpager2:viewpager2:1.0.0")
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation(libs.androidx.viewpager2)
+    implementation(libs.androidx.swiperefreshlayout)
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database)
     implementation(libs.androidx.cardview)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.crashlytics)
-    implementation("com.google.firebase:firebase-messaging")
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
@@ -158,36 +179,54 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation(libs.okhttp.mockwebserver)
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.truth)
     implementation(libs.prexocore)
 
-    implementation("de.hdodenhof:circleimageview:3.1.0")
-    implementation("com.airbnb.android:lottie:6.6.6")
-    implementation("com.github.bumptech.glide:glide:4.16.0")
-    implementation("com.google.code.gson:gson:2.10.1")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("io.insert-koin:koin-android:3.5.6")
+    implementation(libs.circleimageview)
+    implementation(libs.lottie)
+    implementation(libs.glide)
+    implementation(libs.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.koin.android)
     implementation(libs.timber)
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.androidx.work.runtime.ktx)
 }
 
+// APKFILE: FASTPAY_APK/APKFILE - old APKs are kept (no delete)
+val apkfileDir = file("${rootProject.rootDir.parent}/APKFILE")
+
 tasks.register("copyReleaseApk", Copy::class) {
-    description = "Copy release APK to repo root releases/"
+    description = "Copy release APK to repo root APKFILE/"
     group = "distribution"
     dependsOn("assembleRelease")
     from(layout.buildDirectory.dir("outputs/apk/release")) {
-        include("fastpay-*.apk")
+        include("rfastpay-*.apk")
     }
-    into(rootProject.layout.projectDirectory.dir("../releases"))
+    into(apkfileDir)
     doFirst {
-        rootProject.file("../releases").mkdirs()
+        apkfileDir.mkdirs()
+    }
+}
+
+tasks.register("copyDebugApk", Copy::class) {
+    description = "Copy debug APK to repo root APKFILE/"
+    group = "distribution"
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.dir("outputs/apk/debug")) {
+        include("dfastpay-*.apk")
+    }
+    into(apkfileDir)
+    doFirst {
+        apkfileDir.mkdirs()
     }
 }
 

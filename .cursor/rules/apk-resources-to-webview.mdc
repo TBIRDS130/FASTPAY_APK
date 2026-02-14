@@ -1,0 +1,15 @@
+---
+description: When changing APK colors/strings/dimens or activation layouts, run extract and refresh apk-config.js for HTML demos.
+globs: "FASTPAY_BASE/app/src/main/res/values/**/*.xml", "FASTPAY_BASE/app/src/main/res/layout/*splash*.xml", "FASTPAY_BASE/app/src/main/res/layout/*activation*.xml", "FASTPAY_BASE/app/src/main/res/layout/*activated*.xml", "FASTPAY_BASE/app/src/main/res/layout/*card*.xml"
+alwaysApply: false
+---
+
+# APK Resources → APKTOWEBVIEW
+
+When changing **colors.xml**, **strings.xml**, **dimens.xml**, or activation/card layouts in FASTPAY_BASE:
+
+1. Run **extract** from APKTOWEBVIEW: `cd APKTOWEBVIEW; .\extract-apk-values.ps1` or from repo root `npm run extract`.
+2. Rebuild **apk-config.js** if needed (e.g. `npm run build:tokens` for design tokens).
+3. Re-test HTML demos in `APKTOWEBVIEW/demos/`.
+
+See **docs/10-sync-spec.md** and **.cursor/rules/apk-demo-parity.mdc**.

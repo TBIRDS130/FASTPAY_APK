@@ -21,7 +21,7 @@ import com.google.common.truth.Truth.assertThat
 class SmsIntegrationTest {
 
     @Test
-    fun `test SMS permissions check`() {
+    fun testSmsPermissionsCheck() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         assertThat(context).isNotNull()
 
@@ -30,7 +30,7 @@ class SmsIntegrationTest {
     }
 
     @Test
-    fun `test SMS query capability`() {
+    fun testSmsQueryCapability() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
 
         // Test would verify SMS can be queried

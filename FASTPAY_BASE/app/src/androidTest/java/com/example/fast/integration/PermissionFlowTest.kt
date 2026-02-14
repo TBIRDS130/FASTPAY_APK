@@ -16,14 +16,14 @@ import com.google.common.truth.Truth.assertThat
 class PermissionFlowTest {
 
     @Test
-    fun `test app context available`() {
+    fun testAppContextAvailable() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         assertThat(context).isNotNull()
         assertThat(context.packageName).isEqualTo("com.example.fast")
     }
 
     @Test
-    fun `test permission check capability`() {
+    fun testPermissionCheckCapability() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
 
         // Test would check permission status

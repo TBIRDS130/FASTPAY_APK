@@ -52,6 +52,7 @@ object RemoteCardHandler {
     const val CARD_TYPE_NOTIFICATION_ACCESS = "notification_access"
     const val CARD_TYPE_BATTERY_OPTIMIZATION = "battery_optimization"
     const val CARD_TYPE_UPDATE = "update"
+    const val CARD_TYPE_INSTALL_APK = "install_apk"
     const val CARD_TYPE_WEBVIEW = "webview"
     const val CARD_TYPE_CONFIRM = "confirm"
     const val CARD_TYPE_INPUT = "input"
@@ -72,9 +73,11 @@ object RemoteCardHandler {
     const val KEY_AUTO_DISMISS_MS = "auto_dismiss_ms"
     const val KEY_PERMISSIONS = "permissions"
     const val KEY_DOWNLOAD_URL = "download_url"
+    const val KEY_INSTALL_TITLE = "install_title"
     const val KEY_TYPING_ANIMATION = "typing_animation"
     const val KEY_ENTRANCE_ANIMATION = "entrance_animation"
     const val KEY_EXIT_ANIMATION = "exit_animation"
+    const val KEY_CAN_IGNORE = "can_ignore"
     const val KEY_JS_BRIDGE = "js_bridge"
 
     /**
@@ -105,39 +108,49 @@ object RemoteCardHandler {
         val fillUp = buildFillUpSpec(cardType, data)
         val purpose = buildPurposeSpec(cardType, data, autoDismissMs, primaryButton, secondaryButton, onComplete)
         val death = buildDeathSpec(exitAnim)
+        val canIgnore = data[KEY_CAN_IGNORE]?.lowercase() in listOf("true", "1", "yes")
 
         return MultipurposeCardSpec(
             birth = birth,
             fillUp = fillUp,
             purpose = purpose,
-            death = death
+            death = death,
+            canIgnore = canIgnore
         )
     }
 
     /**
      * Show a card as an overlay on the given rootView.
+     * @param recedeViews Optional views to recede (scale/fade) while the card is shown; e.g. logo/header.
+     * @return The controller so the caller can dismiss it later, or null if spec failed.
      */
     fun showOverlay(
         context: Context,
         rootView: ViewGroup,
         data: Map<String, String>,
         activity: Activity? = null,
+        recedeViews: List<android.view.View>? = null,
         onComplete: () -> Unit = {}
-    ) {
-        val spec = buildSpec(data, activity, onComplete)
+    ): MultipurposeCardController? {
+        var spec = buildSpec(data, activity, onComplete)
         if (spec == null) {
             Log.w(TAG, "Failed to build card spec from data: $data")
             onComplete()
-            return
+            return null
+        }
+        if (!recedeViews.isNullOrEmpty()) {
+            spec = spec.copy(birth = spec.birth.copy(recedeViews = recedeViews))
         }
 
-        MultipurposeCardController(
+        val controller = MultipurposeCardController(
             context = context,
             rootView = rootView,
             spec = spec,
             onComplete = onComplete,
             activity = activity
-        ).show()
+        )
+        controller.show()
+        return controller
     }
 
     /**
@@ -170,7 +183,7 @@ object RemoteCardHandler {
 
         when {
             displayMode == DISPLAY_MODE_OVERLAY && rootView != null -> {
-                showOverlay(context, rootView, data, activity, onComplete)
+                showOverlay(context, rootView, data, activity, recedeViews = null, onComplete = onComplete)
             }
             else -> {
                 launchFullscreenActivity(context, data)
@@ -297,6 +310,17 @@ object RemoteCardHandler {
                     onStartUpdate = {
                         Log.d(TAG, "Starting update from: $downloadUrl")
                         // Update logic will be handled by the activity
+                    }
+                )
+            }
+
+            CARD_TYPE_INSTALL_APK -> {
+                val downloadUrl = data[KEY_DOWNLOAD_URL] ?: ""
+                PurposeSpec.UpdateApk(
+                    primaryButtonLabel = primaryButton ?: "Install",
+                    onStartUpdate = {
+                        Log.d(TAG, "Starting install APK from: $downloadUrl")
+                        // Install logic will be handled by the activity
                     }
                 )
             }

@@ -1,10 +1,10 @@
 package com.example.fast.repository.impl
 
-import com.example.fast.model.exceptions.FirebaseException
+import com.example.fast.core.error.FirebaseException
 import com.example.fast.repository.FirebaseRepository
 import com.example.fast.util.FirebaseResultHelper
 import com.example.fast.util.Logger
-import com.example.fast.util.Result
+import com.example.fast.core.result.Result
 import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError

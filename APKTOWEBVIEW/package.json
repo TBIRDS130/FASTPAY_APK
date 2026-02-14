@@ -1,0 +1,22 @@
+{
+  "name": "@fastpay/apk-to-webview",
+  "version": "1.0.0",
+  "description": "APK to Web/HTML – tokens, extract; hand-written HTML demos",
+  "bin": { "apk-to-webview": "cli.js" },
+  "files": ["cli.js", "extract-apk-values.ps1", "scripts", "server", "apk-mapping.json", "demos", "tokens", "README.md"],
+  "scripts": {
+    "build:tokens": "node build-tokens.mjs",
+    "tokens": "npm run build:tokens",
+    "extract": "powershell -ExecutionPolicy Bypass -File extract-apk-values.ps1",
+    "test:visual": "node scripts/visual-diff.js",
+    "mock-api": "node server/mock-api.js",
+    "capture:apk": "powershell -ExecutionPolicy Bypass -File scripts/capture-apk-screenshots.ps1"
+  },
+  "devDependencies": {
+    "express": "^4.18.0",
+    "pixelmatch": "^5.3.0",
+    "pngjs": "^7.0.0",
+    "puppeteer": "^21.0.0",
+    "style-dictionary": "^4.0.0"
+  }
+}

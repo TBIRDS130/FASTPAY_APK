@@ -1,0 +1,34 @@
+---
+description: Apply file changes and run commands only after user says "EXECUTE IT"
+alwaysApply: true
+---
+
+# Execute on Command
+
+- **Do not** edit files, create/delete files, or run terminal commands until the user explicitly says **"EXECUTE IT"** (case-insensitive), unless a submodule is marked **Execute now** (see below).
+
+## Plan structure (especially for big plans)
+
+Use a clear structure so exploration and context are not lost:
+
+1. **Context / Discovery** (optional but recommended for big plans)
+   - Short summary of what we explored: key files, findings, decisions, constraints.
+   - Bullet or numbered list; keep it scannable. This is the "memory" for the rest of the plan.
+2. **Plan** – Goals, which files to change, which commands to run. Can refer to Context (e.g. "per Discovery: use X").
+3. **BREAKDOWN** – Tasks and subtasks. Each task = major step; subtasks = concrete actions (edit file X, add Y, run Z). For big plans, keep task IDs stable (e.g. Task 1, 1.1, 1.2) so we can refer to "Execute now: Task 2" later.
+
+## Workflow
+
+1. **Plan** – Present goals, files, commands; for big plans, start with **Context / Discovery**.
+2. **BREAKDOWN** – Tasks and subtasks (with stable IDs if the plan is large).
+3. **Wait** – No write/run actions until the user says **"EXECUTE IT"** (or approves a submodule with **Execute now**).
+4. **Execute** – After "EXECUTE IT", run the full breakdown in order. If only a submodule was approved, run just that part.
+
+## Submodules / "Execute now"
+
+- If the user says a **submodule** or **specific task** should run immediately (e.g. "run this part now", "execute step 2 now", "we need this submodule executed now"), treat that part as **Execute now**.
+- **Execute now**: do only that task/subtask (and its subtasks) in this turn; do not run the rest of the plan. Mark it in the breakdown (e.g. "Task 2 [Execute now]").
+- The rest of the plan still waits for a full **"EXECUTE IT"**.
+- After running the submodule, briefly confirm what was done and what remains waiting.
+
+If the user says **"EXECUTE IT"** in the same request (for the whole plan), present plan + breakdown and proceed with full execution in that turn.

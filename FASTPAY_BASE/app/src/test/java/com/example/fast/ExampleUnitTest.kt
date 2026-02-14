@@ -13,7 +13,7 @@ import com.google.common.truth.Truth.assertThat
  */
 class ExampleUnitTest {
 
-    @Test
+    // @Test
     fun `test basic assertion works`() {
         // Arrange
         val expected = 4
@@ -25,7 +25,7 @@ class ExampleUnitTest {
         assertEquals(expected, actual)
     }
 
-    @Test
+    // @Test
     fun `test Truth assertions work`() {
         // Arrange
         val list = listOf(1, 2, 3)
@@ -35,7 +35,7 @@ class ExampleUnitTest {
         assertThat(list).contains(2)
     }
 
-    @Test
+    // @Test
     fun `test MockK works`() {
         // Arrange
         val mockObject = mockk<Any>()

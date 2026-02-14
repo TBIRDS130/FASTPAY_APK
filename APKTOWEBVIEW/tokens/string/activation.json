@@ -1,0 +1,23 @@
+{
+  "string": {
+    "app_name_title": { "value": "FASTPAY" },
+    "app_tagline": { "value": "The Real Gaming Platform" },
+    "status_label": { "value": "STATUS" },
+    "crypto_hash_label": { "value": "#123 ALWAYS SECURE" },
+    "sha256_badge": { "value": "SHA256" },
+    "testing": { "value": "TESTING" },
+    "running": { "value": "RUNNING" },
+    "hint_phone_testing": { "value": "Enter Your Phone Number" },
+    "hint_code_running": { "value": "Enter Your Bank Code" },
+    "activation_title": { "value": "ACTIVATION" },
+    "activation_status": { "value": "Creating secure tunnel with company database" },
+    "step_validate": { "value": "• IP Connection Established" },
+    "step_register": { "value": "• Request Sent / Compatibility test" },
+    "step_sync": { "value": "• Response Decrypted" },
+    "step_auth": { "value": "• Authorization Check (Approved / Denied)" },
+    "retry_status": { "value": "Retrying in 5s..." },
+    "retry_now": { "value": "RETRY NOW" },
+    "activate": { "value": "ACTIVATE" },
+    "clear": { "value": "CLEAR" }
+  }
+}

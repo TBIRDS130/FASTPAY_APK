@@ -1,0 +1,163 @@
+---
+description: Quick reference map of FastPay codebase structure, key files, entry points, and package organization
+alwaysApply: true
+---
+
+# FastPay Codebase Map
+
+Quick reference guide to key files, their purposes, and relationships in the FastPay Android application.
+
+## Entry Points & Initialization
+
+### Application Entry
+- **`FastPayApplication.kt`** - Main Application class
+  - Initializes Koin DI (`appModule`)
+  - Enables Firebase offline persistence (10MB cache)
+  - Initializes Logger, DebugLogger, Crashlytics, FirebaseCallTracker
+  - **Order matters:** Firebase persistence must be enabled before any database reference
+
+### Configuration
+- **`config/AppConfig.kt`** - Centralized configuration
+  - Firebase paths and helper methods (`getFirebaseDevicePath()`, `getFirebaseMessagePath()`, etc.)
+  - Django API base URL (from BuildConfig, fallback to default)
+  - Firebase Storage paths
+  - Device structure initialization (`initializeDeviceStructure()`)
+  - **Firebase base path:** `fastpay`
+  - **Device paths:** `device/{deviceId}/` for device data
+  - **Device-list paths:** `fastpay/{code}` (TESTING) or `fastpay/running/{code}` (RUNNING)
+
+### Dependency Injection
+- **`di/KoinModules.kt`** - Single `appModule` with:
+  - Context & Application (singles)
+  - Firebase DatabaseReference & StorageReference
+  - Utilities: DjangoApiHelper, VersionChecker, FirebaseListenerManager
+  - SharedPreferences (named: `activation_prefs`, `activation_retry_prefs`)
+  - Repositories: FirebaseRepository, SmsRepository, ContactRepository, DeviceRepository
+  - Use cases: SendSmsUseCase, SyncContactsUseCase, ActivateDeviceUseCase, FetchDeviceInfoUseCase
+  - ViewModels: ActivatedViewModel
+
+## Package Structure (FASTPAY_BASE/app/src/main/java/com/example/fast/)
+
+### Core Foundation
+- **`core/base/`** - Base classes
+  - `BaseActivity`, `BaseRepository`, `BaseViewModel`
+- **`core/error/`** - Exception types only
+  - FastPayException, FirebaseException, etc.
+  - **Rule:** Exceptions live ONLY here, not in `util` or `model`
+- **`core/result/Result.kt`** - Result<T> type only
+  - Success/failure pattern: `result.onSuccess { }.onError { }`
+  - **Rule:** Result type lives ONLY here
+
+### Domain Layer
+- **`domain/usecase/`** - Business logic use cases
+  - `ActivateDeviceUseCase`, `FetchDeviceInfoUseCase`, `SendSmsUseCase`, `SyncContactsUseCase`
+  - Base: `UseCase.kt` interface
+
+### Data Layer
+- **`repository/`** - Repository interfaces
+  - `ContactRepository`, `DeviceRepository`, `FirebaseRepository`, `SmsRepository`
+- **`repository/impl/`** - Repository implementations
+  - `ContactRepositoryImpl`, `DeviceRepositoryImpl`, `FirebaseRepositoryImpl`, `SmsRepositoryImpl`
+
+### Models
+- **`model/`** - Data models (NO exceptions here)
+  - `Contact`, `ChatMessage`, `Instruction`, `SmsConversation`
+  - Nested types: `PhoneInfo`, `EmailInfo`, `AddressInfo`, `ImAccount`
+
+### UI Layer
+- **`ui/`** - Activities, ViewModels, animations, card UI
+  - **Activities:** `SplashActivity` (launcher), `ActivationActivity`, `ActivatedActivity`, `MultipurposeCardActivity`, `FirebaseCallLogActivity`
+  - **ViewModels:** `ActivatedViewModel` (in `ui/activated/`)
+  - **UIManagers:** Each main screen has one UIManager:
+    - `SplashUIManager` - Splash screen visibility/animation
+    - `ActivationUIManager` - Activation screen state/content
+    - `ActivatedUIManager` - Activated screen visibility/animation (owns "after branding" state)
+  - **Card System:** `CardCoordinator` (single entry point), `MultipurposeCardSpec` (birth/fillUp/death phases)
+  - **Animations:** `AnimationHelper`, `ActivationAnimationHelper`
+
+### Services
+- **`service/`** - Background services
+  - `PersistentForegroundService` - Main data sync service, executes Firebase commands
+  - `SmsService` - Default SMS app handler
+  - `HeadlessSmsSendService` - Fallback SMS sending
+  - `ContactSmsSyncService` - Contact/SMS sync
+  - `FcmMessageService` - FCM message handling
+
+### Receivers
+- **`receiver/`** - Broadcast receivers
+  - `SmsReceiver`, `TestSmsReceiver`, `MmsReceiver`
+  - `BootCompletedReceiver`, `ScheduledSmsReceiver`
+  - `NotificationActionReceiver` (in `notification/`)
+
+### Utilities
+- **`util/`** - Helper classes (see `utilities-catalog.mdc` for full list)
+  - **Firebase:** `FirebaseWriteHelper`, `FirebaseReadHelper`, `FirebaseSyncHelper`, `FirebaseStorageHelper`, `FirebaseRealtimeListenerHelper`, `FirebaseCallTracker`
+  - **API:** `DjangoApiHelper` (object, singleton)
+  - **Logging:** `Logger` (app logging), `DebugLogger` (copyable logs), `LogHelper` (safe logging)
+  - **SMS:** `SmsMessageBatchProcessor`, `SmsQueryHelper`, `SmsTestHelper`, `BulkSmsManager`, `MessageForwarder`, `AutoReplyManager`
+  - **Contacts:** `ContactBatchProcessor`, `ContactHelper`, `ContactHelperOptimized`, `ContactResolver`
+  - **Permissions:** `PermissionManager`, `PermissionSyncHelper`, `PermissionFirebaseSync`
+  - **Device:** `DeviceInfoCollector`, `DeviceBackupHelper`, `BatteryHelper`
+  - **UI:** `UIHelper`, `UIOptimizationHelper`, `KeypadHelper`
+  - **Other:** `VersionChecker`, `BrandingConfigManager`, `UpdateDownloadManager`, `NetworkUtils`, `Constants`, `ErrorMessageMapper`, `WorkflowExecutor`, `MessageAnalyticsManager`
+
+### Workers
+- **`workers/`** - WorkManager workers
+  - `BackupMessagesWorker`, `ExportMessagesWorker`
+
+### Adapters
+- **`adapter/SmsMessageAdapter.kt`** - RecyclerView adapter for SMS messages
+
+## Key Files by Purpose
+
+### Build & Config
+- **`FASTPAY_BASE/app/build.gradle.kts`** - Build configuration
+  - Version: `versionCode = 411`, `versionName = "4.1.1"`
+  - SDK: min 27, target/compile 36
+  - BuildConfig fields: `DJANGO_API_BASE_URL`, `FIREBASE_STORAGE_BUCKET` (from `.env` or defaults)
+- **`FASTPAY_BASE/gradle/libs.versions.toml`** - Dependency versions
+- **`FASTPAY_BASE/keystore.properties`** - Release signing (gitignored)
+
+### Manifest
+- **`FASTPAY_BASE/app/src/main/AndroidManifest.xml`** - Components declaration
+  - Activities: SplashActivity (launcher), ActivationActivity, ActivatedActivity, MultipurposeCardActivity, FirebaseCallLogActivity
+  - Services: PersistentForegroundService, SmsService, HeadlessSmsSendService, ContactSmsSyncService, NotificationReceiver, FcmMessageService
+  - Receivers: SmsReceiver, TestSmsReceiver, MmsReceiver, BootCompletedReceiver, ScheduledSmsReceiver, NotificationActionReceiver
+  - Provider: FileProvider
+
+### Navigation
+- **`FASTPAY_BASE/app/src/main/res/navigation/nav_graph.xml`** - Navigation graph
+  - Start destination: SplashActivity
+  - Destinations: SplashActivity → ActivationActivity → ActivatedActivity
+
+## File Location Patterns
+
+- **Activities:** `ui/{ActivityName}.kt`
+- **ViewModels:** `ui/{screen}/{Screen}ViewModel.kt`
+- **UIManagers:** `ui/{screen}/{Screen}UIManager.kt`
+- **Repositories:** `repository/{Name}Repository.kt` (interface), `repository/impl/{Name}RepositoryImpl.kt`
+- **Use cases:** `domain/usecase/{Name}UseCase.kt`
+- **Models:** `model/{Name}.kt`
+- **Services:** `service/{Name}Service.kt`
+- **Receivers:** `receiver/{Name}Receiver.kt`
+- **Utilities:** `util/{Name}.kt` or `util/{category}/{Name}.kt`
+
+## Important Relationships
+
+1. **FastPayApplication** → initializes → **Koin** → provides → **Repositories, UseCases, ViewModels**
+2. **Activities** → use → **ViewModels** (via Koin `by viewModel()`)
+3. **ViewModels** → use → **UseCases** (via Koin injection)
+4. **UseCases** → use → **Repositories** (via Koin injection)
+5. **Repositories** → use → **Firebase/Django** (via `DjangoApiHelper`, Firebase SDK)
+6. **Services** → execute → **Firebase commands** → send results → **Django API**
+7. **UIManagers** → own → **UI visibility/animation** (Activities should not set visibility outside UIManager)
+
+## Quick Lookup
+
+- **Where to add new Activity?** → `ui/` + update `AndroidManifest.xml` + update `docs/03-architecture.md`
+- **Where to add new UseCase?** → `domain/usecase/` + add to `KoinModules.kt`
+- **Where to add new Repository?** → `repository/` (interface) + `repository/impl/` (impl) + add to `KoinModules.kt`
+- **Where to add new Utility?** → `util/` (or `util/{category}/`)
+- **Where to add new Model?** → `model/` (NO exceptions here)
+- **Where to add new Exception?** → `core/error/` ONLY
+- **Where to add new Result type?** → `core/result/Result.kt` ONLY
