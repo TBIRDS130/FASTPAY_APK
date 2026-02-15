@@ -4,6 +4,9 @@ APKFILE/
 build/
 node_modules/
 
+# Docker cache directories
+docker-cache/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -17,3 +20,6 @@ __pycache__/
 *.swp
 *.swo
 *~
+
+# Firebase configuration (root-level - keep app-level version)
+google-services.json

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   fastpay-android:
     build:
@@ -35,11 +33,6 @@ services:
     tty: true
     stdin_open: true
     
-    # Port mapping (if needed for web services)
-    ports:
-      - "8080:8080"  # For potential web services
-      - "5037:5037"  # ADB port (if needed for device debugging)
-    
     # Resource limits (adjust based on VPS specs)
     deploy:
       resources:
@@ -67,10 +60,6 @@ services:
     
     # Restart policy
     restart: unless-stopped
-    
-    # Network configuration
-    networks:
-      - fastpay-network
 
   # Optional: Web service for APK analysis or demos
   fastpay-web:
@@ -89,12 +78,6 @@ services:
     
     environment:
       - NODE_ENV=development
-    
-    networks:
-      - fastpay-network
-    
-    profiles:
-      - web  # Only start with --profile web
     
     restart: unless-stopped
 
@@ -127,4 +110,4 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 172.25.0.0/16

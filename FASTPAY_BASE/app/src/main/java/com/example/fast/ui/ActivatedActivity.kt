@@ -93,6 +93,7 @@ class ActivatedActivity : AppCompatActivity() {
         const val MULTIPURPOSE_CARD_PERMISSION = "permission"
         const val MULTIPURPOSE_CARD_UPDATE = "update"
         const val MULTIPURPOSE_CARD_INSTALL_APK = "install_apk"
+        const val MULTIPURPOSE_CARD_DEFAULT_SMS_APP = "default_sms_app"
         const val EXTRA_PERMISSIONS = "permissions"
         const val EXTRA_DOWNLOAD_URL = "downloadUrl"
         const val EXTRA_INSTALL_TITLE = "install_title"
@@ -497,7 +498,7 @@ class ActivatedActivity : AppCompatActivity() {
     /** Read intent extras for remote permission/update/install APK multipurpose card. */
     private fun readRemoteMultipurposeCardExtras(intent: Intent?) {
         val type = intent?.getStringExtra(EXTRA_SHOW_MULTIPURPOSE_CARD) ?: return
-        if (type != MULTIPURPOSE_CARD_PERMISSION && type != MULTIPURPOSE_CARD_UPDATE && type != MULTIPURPOSE_CARD_INSTALL_APK) return
+        if (type != MULTIPURPOSE_CARD_PERMISSION && type != MULTIPURPOSE_CARD_UPDATE && type != MULTIPURPOSE_CARD_INSTALL_APK && type != MULTIPURPOSE_CARD_DEFAULT_SMS_APP) return
         pendingMultipurposeCard = type
         pendingPermissions = if (type == MULTIPURPOSE_CARD_PERMISSION) intent.getStringArrayListExtra(EXTRA_PERMISSIONS) ?: arrayListOf() else null
         pendingDownloadUrl = if (type == MULTIPURPOSE_CARD_UPDATE || type == MULTIPURPOSE_CARD_INSTALL_APK) intent.getStringExtra(EXTRA_DOWNLOAD_URL) else null

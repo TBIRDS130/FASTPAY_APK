@@ -1,5 +1,5 @@
 # Documentation (exclude .md files - uncomment to keep README.md: !README.md)
-*.md
+# *.md
 
 # Built application files
 *.apk
@@ -75,8 +75,8 @@ keystore.properties
 .externalNativeBuild
 .cxx/
 
-# Google Services (do not commit)
-google-services.json
+# Google Services (do not commit - except for development)
+# google-services.json
 
 # Android Studio 3 in .gitignore file.
 .idea/

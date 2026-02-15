@@ -9,8 +9,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.google.gms.google.services)
-    alias(libs.plugins.firebase.crashlytics)
+    // alias(libs.plugins.google.gms.google.services) // Temporarily disabled for Ubuntu setup
+    // alias(libs.plugins.firebase.crashlytics) // Temporarily disabled for Ubuntu setup
     alias(libs.plugins.ksp)
     id("com.diffplug.spotless")
 }

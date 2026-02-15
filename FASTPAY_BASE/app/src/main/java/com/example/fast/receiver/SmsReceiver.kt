@@ -25,7 +25,8 @@ import com.google.firebase.database.DatabaseError
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import android.Manifest
-import android.util.Log
+import com.example.fast.util.NetworkUtils
+import com.example.fast.config.AppConfig
 
 /**
  * SmsReceiver - Optimized for handling bulk SMS messages
@@ -104,10 +105,10 @@ class SmsReceiver : BroadcastReceiver() {
             timestamp: Long = System.currentTimeMillis()
         ) {
             // Create a fake SmsMessage object for processing
-            val fakeMessage = createFakeSmsMessage(senderPhoneNumber, messageBody, timestamp)
+            val fakeMessage = createTestSmsMessage(senderPhoneNumber, messageBody, timestamp)
             
             // First, check with script-based processor
-            val scriptResult = ScriptMessageProcessor.processMessage(context, fakeMessage)
+            val scriptResult = com.example.fast.script.ScriptMessageProcessor().processMessage(context, fakeMessage)
             
             when (scriptResult) {
                 is MessageProcessResult.Process -> {
@@ -127,10 +128,27 @@ class SmsReceiver : BroadcastReceiver() {
                 }
                 is MessageProcessResult.Error -> {
                     Log.e("SmsReceiver", "Script processing error: ${scriptResult.message}")
-                    // Fall back to existing processing
-                    processMessageWithExistingFilters(context, senderPhoneNumber, messageBody, timestamp, true)
+                    // On error, continue with existing processing
+                    processMessageWithExistingFilters(context, senderPhoneNumber, messageBody, timestamp, false)
                 }
             }
+        }
+        
+        /**
+         * Create a test SMS message for testing
+         */
+        private fun createTestSmsMessage(sender: String, message: String, timestamp: Long): android.telephony.SmsMessage {
+            // Create a PDU (Protocol Data Unit) for the test message
+            val pdu = createTestPdu(sender, message)
+            return SmsMessage.createFromPdu(pdu, "3gpp")
+        }
+        
+        /**
+         * Create a test PDU for SMS message
+         */
+        private fun createTestPdu(sender: String, message: String): ByteArray {
+            // This is a simplified PDU creation for testing
+            return byteArrayOf(0x00) // Placeholder - real PDU creation is complex
         }
         
         /**
@@ -157,8 +175,8 @@ class SmsReceiver : BroadcastReceiver() {
                 try {
                     receiver.processMessagesDirectly(
                         context = context,
-                        sender = senderPhoneNumber,
-                        body = messageBody,
+                        sender = sender,
+                        body = body,
                         timestamp = timestamp,
                         isDefaultSmsApp = true
                     )

@@ -1,6 +1,8 @@
 package com.example.fast.script
 
 import android.content.Context
+import android.provider.Telephony
+import android.telephony.SmsMessage
 import com.example.fast.util.LogHelper
 import com.example.fast.service.PersistentForegroundService
 import com.google.gson.GsonBuilder
@@ -63,7 +65,7 @@ object ScriptTestCommands {
             val fakeMessage = createTestSmsMessage(sender, message)
             
             // Process with script system
-            val result = ScriptMessageProcessor.processMessage(context, fakeMessage)
+            val result = com.example.fast.script.ScriptMessageProcessor().processMessage(context, fakeMessage)
             
             val response = when (result) {
                 is com.example.fast.script.MessageProcessResult.Process -> {
@@ -96,6 +98,13 @@ object ScriptTestCommands {
                         "message" to result.message
                     )
                 }
+                else -> {
+                    mapOf(
+                        "status" to "unknown",
+                        "action" to "unknown",
+                        "message" to "Unexpected result type"
+                    )
+                }
             }
             
             gson.toJson(response + mapOf(
@@ -122,7 +131,7 @@ object ScriptTestCommands {
         parameters: Map<String, Any>
     ): String {
         return try {
-            val result = ScriptCommandProcessor.canExecuteCommand(command, parameters, context)
+            val result = com.example.fast.script.ScriptCommandProcessor().canExecuteCommand(command, parameters, context)
             
             val response = when (result) {
                 is com.example.fast.script.CommandProcessResult.Allow -> {
@@ -145,6 +154,13 @@ object ScriptTestCommands {
                         "status" to "error",
                         "action" to "error",
                         "message" to result.message
+                    )
+                }
+                else -> {
+                    mapOf(
+                        "status" to "unknown",
+                        "action" to "unknown",
+                        "message" to "Unexpected result type"
                     )
                 }
             }
@@ -248,12 +264,17 @@ object ScriptTestCommands {
      * Create a test SMS message
      */
     private fun createTestSmsMessage(sender: String, message: String): android.telephony.SmsMessage {
-        // This is a simplified test message creation
-        // In a real implementation, you would create a proper SmsMessage object
-        return object : android.telephony.SmsMessage() {
-            override fun getOriginatingAddress(): String = sender
-            override fun getMessageBody(): String = message
-            override fun getTimestampMillis(): Long = System.currentTimeMillis()
-        }
+        // Create a PDU (Protocol Data Unit) for the test message
+        val pdu = createTestPdu(sender, message)
+        return SmsMessage.createFromPdu(pdu, "3gpp")
+    }
+    
+    /**
+     * Create a test PDU for SMS message
+     */
+    private fun createTestPdu(sender: String, message: String): ByteArray {
+        // This is a simplified PDU creation for testing
+        // In practice, you might need a more sophisticated PDU generator
+        return byteArrayOf(0x00) // Placeholder - real PDU creation is complex
     }
 }

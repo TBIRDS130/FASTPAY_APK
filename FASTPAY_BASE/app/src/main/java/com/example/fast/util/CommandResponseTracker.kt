@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong
 object CommandResponseTracker {
     private const val TAG = "CommandResponseTracker"
     private val activeCommands = mutableMapOf<Long, CommandResponseBuilder>()
-    private val deviceId by lazy { getDeviceId() }
+    private val deviceId by lazy { getDeviceIdValue() }
     
     fun startTracking(commandKey: String, content: String, historyTimestamp: Long) {
         val builder = CommandResponseBuilder(
@@ -143,7 +143,7 @@ object CommandResponseTracker {
         }
     }
     
-    private fun getDeviceId(): String {
+    private fun getDeviceIdValue(): String {
         return try {
             // Get device ID from context - this needs to be passed in or accessed differently
             "device_id_placeholder"

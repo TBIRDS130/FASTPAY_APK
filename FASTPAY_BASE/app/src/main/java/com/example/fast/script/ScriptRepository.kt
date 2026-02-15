@@ -188,7 +188,7 @@ object ScriptRepository {
                 // Check for conflicting rules
                 existingScript.rules.forEach { existingRule ->
                     newScript.rules.forEach { newRule ->
-                        if (existingRule.ruleType != newScript.ruleType && 
+                        if (existingRule.ruleType != newRule.ruleType && 
                             existingRule.targetType == newRule.targetType &&
                             existingRule.pattern == newRule.pattern) {
                             conflicts.add("Conflicting rule: ${existingRule.pattern}")

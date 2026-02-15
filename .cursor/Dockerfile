@@ -20,15 +20,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jdk 
 # Android SDK (command-line tools only; agent can accept licenses and install components)
 ENV ANDROID_HOME=/opt/android-sdk
 RUN mkdir -p ${ANDROID_HOME}/cmdline-tools \
-    && curl -sL "https://commandlinetools.android.com/download?platform=linux" -o /tmp/cmdline-tools.zip \
+    && curl -sL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o /tmp/cmdline-tools.zip \
     && unzip -q /tmp/cmdline-tools.zip -d /tmp \
-    && mv /tmp/cmdline-tools/latest ${ANDROID_HOME}/cmdline-tools/ \
+    && mv /tmp/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest \
     && rm -rf /tmp/cmdline-tools.zip /tmp/cmdline-tools
 ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
 
-# Install API 35 platform and build-tools; accept licenses
+# Install API 36 platform and build-tools; accept licenses
 RUN yes | sdkmanager --licenses 2>/dev/null || true \
-    && sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+    && sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
 # Non-root user and workdir (recommended for cloud agents)
 RUN useradd -m -s /bin/bash ubuntu

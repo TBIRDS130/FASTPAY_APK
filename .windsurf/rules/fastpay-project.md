@@ -1,0 +1,21 @@
+---
+trigger: always_on
+description: FASTPAY_APK is the project root; versions live in subfolders (FASTPAY_BASE, etc.). Includes agent-testing commands.
+globs:
+---
+
+# FASTPAY_APK project root
+
+- **Root:** `FASTPAY_APK` is the repo root. Paths, scripts, and docs assume this directory as the working root.
+- **Docs:** Full documentation is in `docs/` – start at `docs/README.md` (overview, build, architecture, Django API, Firebase, remote commands, environment, keystore, code style, sync spec, instruction card tests, naming).
+- **Versions:** Each FastPay app variant is a subfolder:
+  - `FASTPAY_BASE` – base app (current release candidate)
+  - Future versions (e.g. branded builds) go as sibling folders.
+- **Build:** Use scripts from repo root: Windows TEST `.\scripts\test-build.ps1`, RELEASE `.\scripts\release-build.ps1`; Ubuntu/Linux/macOS TEST `bash scripts/test-build.sh`, RELEASE `bash scripts/release-build.sh`. Same flow (build, install if device else show command). See `.cursor/rules/build-apk.mdc`. PowerShell 5.x: use `;` not `&&` when chaining (e.g. `Set-Location path; .\scripts\test-build.ps1`).
+- **Style:** Use `.editorconfig` at repo root for Kotlin/XML/JSON consistency across all version folders.
+
+## Testing (debug build + device + logs)
+
+- **Build and install on connected device:** From repo root run `.\scripts\test-build.ps1` (or `.\scripts\test-build.ps1 FASTPAY_BASE`). From `FASTPAY_BASE`: `.\gradlew.bat assembleDebug installDebug`.
+- **View activation debug logs:** `adb logcat -s ActivationActivity:D`.
+- **Full details:** See `docs/07-environment.md` (Cursor / Agent testing) or `ENVIRONMENT.md`.
