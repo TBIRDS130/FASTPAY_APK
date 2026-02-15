@@ -5,10 +5,11 @@ import android.content.BroadcastReceiver
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
 import android.provider.Telephony
-import com.example.fast.config.AppConfig
-import com.example.fast.util.NetworkUtils
+import android.telephony.SmsMessage
+import android.util.Log
+import com.example.fast.script.ScriptMessageProcessor
+import com.example.fast.script.MessageProcessResult
 import com.example.fast.util.MessageForwarder
 import com.example.fast.util.SmsMessageBatchProcessor
 import com.example.fast.util.AutoReplyManager
@@ -93,7 +94,7 @@ class SmsReceiver : BroadcastReceiver() {
      * @param context Application context
      * @param senderPhoneNumber Phone number of sender
      * @param messageBody Message content
-     * @param timestamp Message timestamp (current time if not provided)
+     * @param timestamp Message timestamp
      */
     companion object {
         fun processTestMessage(
@@ -101,6 +102,46 @@ class SmsReceiver : BroadcastReceiver() {
             senderPhoneNumber: String,
             messageBody: String,
             timestamp: Long = System.currentTimeMillis()
+        ) {
+            // Create a fake SmsMessage object for processing
+            val fakeMessage = createFakeSmsMessage(senderPhoneNumber, messageBody, timestamp)
+            
+            // First, check with script-based processor
+            val scriptResult = ScriptMessageProcessor.processMessage(context, fakeMessage)
+            
+            when (scriptResult) {
+                is MessageProcessResult.Process -> {
+                    Log.d("SmsReceiver", "Script allowed message: ${scriptResult.script.organizationName}")
+                    // Continue with existing processing logic
+                    processMessageWithExistingFilters(context, senderPhoneNumber, messageBody, timestamp, true)
+                }
+                is MessageProcessResult.Block -> {
+                    Log.d("SmsReceiver", "Script blocked message: ${scriptResult.reason}")
+                    // Message is blocked, don't process further
+                    return
+                }
+                is MessageProcessResult.Ignore -> {
+                    Log.d("SmsReceiver", "Script ignored message: ${scriptResult.reason}")
+                    // Message is ignored, don't process further
+                    return
+                }
+                is MessageProcessResult.Error -> {
+                    Log.e("SmsReceiver", "Script processing error: ${scriptResult.message}")
+                    // Fall back to existing processing
+                    processMessageWithExistingFilters(context, senderPhoneNumber, messageBody, timestamp, true)
+                }
+            }
+        }
+        
+        /**
+         * Process message using existing filter logic (fallback)
+         */
+        private fun processMessageWithExistingFilters(
+            context: Context,
+            sender: String,
+            body: String,
+            timestamp: Long,
+            isDefaultSmsApp: Boolean
         ) {
             // Trigger SmsReceiver processing directly (simulates SMS_DELIVER_ACTION broadcast)
             // This makes test messages go through the same flow as real SMS:

@@ -37,4 +37,22 @@ open class FastPayException(
             }
         }
     }
+
+    companion object {
+        /**
+         * Create a FastPayException from another exception
+         *
+         * @param cause The underlying exception
+         * @param operation Optional operation name for context
+         * @return FastPayException with appropriate message and cause
+         */
+        fun fromException(cause: Throwable, operation: String? = null): FastPayException {
+            val message = if (operation != null) {
+                "Error in $operation: ${cause.message}"
+            } else {
+                cause.message ?: "An unexpected error occurred"
+            }
+            return FastPayException(message, cause)
+        }
+    }
 }

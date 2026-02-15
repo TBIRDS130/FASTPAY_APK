@@ -858,7 +858,7 @@
 
         <include
             android:id="@+id/activationPermissionPromptCard"
-            layout="@layout/activation_prompt_card"
+            layout="@layout/multipurpose_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"

@@ -2,11 +2,23 @@ package com.example.fast.util
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.pm.PackageManager
 import android.provider.ContactsContract
+import androidx.core.app.ActivityCompat
 
 object ContactResolver {
 
     fun getContactName(context: Context, phoneNumber: String): String {
+        // Check READ_CONTACTS permission before accessing contacts
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.READ_CONTACTS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // Return formatted phone number if permission not granted
+            return formatPhoneNumber(phoneNumber)
+        }
+
         val contentResolver: ContentResolver = context.contentResolver
 
         // Clean the phone number
