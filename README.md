@@ -35,6 +35,31 @@ FASTPAY_APK/
 
 ---
 
+## 🐳 VPS/Cloud Development
+
+For fresh Linux VPS deployment (zero setup required):
+
+```bash
+# One-command complete setup
+curl -sSL https://raw.githubusercontent.com/your-repo/FASTPAY_APK/main/scripts/deploy-vps.sh | bash
+
+# Or clone and run
+git clone https://github.com/your-repo/FASTPAY_APK.git
+cd FASTPAY_APK
+bash scripts/deploy-vps.sh
+```
+
+**VPS Features:**
+- ✅ Works on fresh VPS (no prior installations)
+- ✅ Supports Ubuntu, Debian, CentOS, Amazon Linux
+- ✅ Headless operation (no GUI required)
+- ✅ Complete Android development environment
+- ✅ Automated validation and test build
+
+**See [docs/vps-setup.md](docs/vps-setup.md) for complete VPS guide.**
+
+---
+
 ## Documentation
 
 All documentation lives under **docs/**:
@@ -44,6 +69,7 @@ All documentation lives under **docs/**:
 | [docs/README.md](docs/README.md) | Documentation index (overview, build, architecture, API, Firebase, commands, environment, keystore, code style, sync spec, tests, naming) |
 | [docs/01-overview.md](docs/01-overview.md) | Repo and app overview, quick start |
 | [docs/02-build-and-run.md](docs/02-build-and-run.md) | Build, install, signing, output paths |
+| [docs/vps-setup.md](docs/vps-setup.md) | **VPS/cloud deployment guide** - fresh server setup |
 | [ENVIRONMENT.md](ENVIRONMENT.md) | Dev environment shortcut → [docs/07-environment.md](docs/07-environment.md) |
 
 ---

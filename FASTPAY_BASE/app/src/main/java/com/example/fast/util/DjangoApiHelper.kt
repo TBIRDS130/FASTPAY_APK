@@ -809,4 +809,99 @@ object DjangoApiHelper {
             return false
         }
     }
+
+    /**
+     * Track command event to Django for comprehensive monitoring
+     *
+     * @param deviceId Device identifier
+     * @param historyTimestamp Command history timestamp
+     * @param eventType Type of event (e.g., "command_received", "validation_rate_limit")
+     * @param data Event data payload
+     */
+    suspend fun trackCommandEvent(
+        deviceId: String,
+        historyTimestamp: Long,
+        eventType: String,
+        data: Map<String, Any>
+    ) {
+        try {
+            val requestBody = mapOf(
+                "device_id" to deviceId,
+                "history_timestamp" to historyTimestamp,
+                "event_type" to eventType,
+                "event_data" to data,
+                "timestamp" to System.currentTimeMillis()
+            )
+
+            val jsonBody = gson.toJson(requestBody)
+            LogHelper.d(TAG, "Tracking command event: $eventType for device: $deviceId")
+
+            val response = executePost("/command-events/", jsonBody)
+            if (response.isSuccessful) {
+                LogHelper.d(TAG, "Command event tracked successfully: $eventType")
+            } else {
+                LogHelper.w(TAG, "Failed to track command event (Code: ${response.code}): $eventType")
+            }
+        } catch (e: Exception) {
+            LogHelper.e(TAG, "Error tracking command event: $eventType", e)
+        }
+    }
+
+    /**
+     * Save comprehensive command response to Django
+     *
+     * @param response Complete command response data
+     */
+    suspend fun saveCommandResponse(response: CommandResponse) {
+        try {
+            val requestBody = mapOf(
+                "command_key" to response.commandKey,
+                "history_timestamp" to response.historyTimestamp,
+                "device_id" to response.deviceId,
+                "final_status" to response.finalStatus,
+                "error_classification" to response.errorClassification,
+                "impact_level" to response.impactLevel,
+                "recovery_options" to response.recoveryOptions,
+                "timing" to mapOf(
+                    "received_at" to response.receivedAt,
+                    "validation_started_at" to response.validationStartedAt,
+                    "execution_started_at" to response.executionStartedAt,
+                    "completed_at" to response.completedAt,
+                    "total_duration" to (response.completedAt - response.receivedAt),
+                    "execution_duration" to response.executionResult.duration
+                ),
+                "validation_results" to mapOf(
+                    "rate_limit" to response.rateLimitResult.toMap(),
+                    "permissions" to response.permissionCheckResult.toMap(),
+                    "content" to response.contentValidationResult.toMap(),
+                    "resources" to response.resourceCheckResult.toMap()
+                ),
+                "execution_results" to mapOf(
+                    "started" to response.executionResult.started,
+                    "completed" to response.executionResult.completed,
+                    "duration" to response.executionResult.duration,
+                    "error" to (response.executionResult.error?.message ?: "")
+                ),
+                "sub_operations" to response.subOperations.map { it.toMap() },
+                "post_execution" to response.postExecutionResult.toMap(),
+                "metadata" to mapOf(
+                    "app_version" to response.appVersion,
+                    "network_state" to response.networkState,
+                    "battery_level" to response.batteryLevel
+                )
+            )
+
+            val jsonBody = gson.toJson(requestBody)
+            LogHelper.d(TAG, "Saving command response: ${response.commandKey} -> ${response.finalStatus}")
+
+            val apiResponse = executePost("/command-responses/", jsonBody)
+            if (apiResponse.isSuccessful) {
+                LogHelper.d(TAG, "Command response saved successfully: ${response.commandKey}")
+            } else {
+                LogHelper.w(TAG, "Failed to save command response (Code: ${apiResponse.code}): ${response.commandKey}")
+            }
+        } catch (e: Exception) {
+            LogHelper.e(TAG, "Error saving command response: ${response.commandKey}", e)
+        }
+    }
 }

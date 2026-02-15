@@ -6,4 +6,5 @@ plugins {
     alias(libs.plugins.google.gms.google.services) apply false
     alias(libs.plugins.firebase.crashlytics) apply false
     alias(libs.plugins.ksp) apply false
+    id("com.diffplug.spotless") version "6.25.0" apply false
 }

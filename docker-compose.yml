@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  fastpay-android:
+    build:
+      context: .
+      dockerfile: .cursor/Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: fastpay-android-dev
+    hostname: fastpay-vps
+    
+    # Environment variables
+    environment:
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      - ANDROID_HOME=/opt/android-sdk
+      - PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/36.0.0:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - GRADLE_USER_HOME=/home/ubuntu/.gradle
+      - DEBIAN_FRONTEND=noninteractive
+    
+    # Volume mounts
+    volumes:
+      - ./FASTPAY_BASE:/workspace/FASTPAY_BASE:rw
+      - ./scripts:/workspace/scripts:ro
+      - ./docs:/workspace/docs:ro
+      - ./APKTOWEBVIEW:/workspace/APKTOWEBVIEW:rw
+      - gradle-cache:/home/ubuntu/.gradle
+      - android-sdk-cache:/opt/android-sdk
+      - build-outputs:/workspace/FASTPAY_BASE/app/build/outputs
+    
+    # Working directory
+    working_dir: /workspace
+    
+    # Keep container running
+    tty: true
+    stdin_open: true
+    
+    # Port mapping (if needed for web services)
+    ports:
+      - "8080:8080"  # For potential web services
+      - "5037:5037"  # ADB port (if needed for device debugging)
+    
+    # Resource limits (adjust based on VPS specs)
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+          cpus: '2.0'
+        reservations:
+          memory: 1g
+          cpus: '0.5'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "java", "-version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+    
+    # User configuration (non-root)
+    user: "1000:1000"
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Network configuration
+    networks:
+      - fastpay-network
+
+  # Optional: Web service for APK analysis or demos
+  fastpay-web:
+    build:
+      context: ./APKTOWEBVIEW
+      dockerfile: Dockerfile.web
+    container_name: fastpay-web-demo
+    hostname: fastpay-web
+    
+    volumes:
+      - ./APKTOWEBVIEW:/app:rw
+      - ./APKTOWEBVIEW/apk-config.js:/app/apk-config.js:ro
+    
+    ports:
+      - "3000:3000"
+    
+    environment:
+      - NODE_ENV=development
+    
+    networks:
+      - fastpay-network
+    
+    profiles:
+      - web  # Only start with --profile web
+    
+    restart: unless-stopped
+
+# Named volumes for caching
+volumes:
+  gradle-cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-cache/gradle
+  
+  android-sdk-cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-cache/android-sdk
+  
+  build-outputs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./APKFILE
+
+# Network configuration
+networks:
+  fastpay-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

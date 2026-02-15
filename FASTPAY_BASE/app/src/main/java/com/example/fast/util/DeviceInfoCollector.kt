@@ -643,13 +643,19 @@ object DeviceInfoCollector {
     private class Subtask7_PhoneSimInfo : DeviceInfoSubtask {
         override fun getName() = "phoneSimInfo"
 
-        override fun getRequiredPermissions() = listOf(android.Manifest.permission.READ_PHONE_STATE)
+        override fun getRequiredPermissions() = listOf(
+            android.Manifest.permission.READ_PHONE_STATE,
+            android.Manifest.permission.READ_PHONE_NUMBERS
+        )
 
         @SuppressLint("HardwareIds", "MissingPermission")
         override fun collect(context: Context): Map<String, Any?> {
             return try {
                 if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE)
-                    != PackageManager.PERMISSION_GRANTED) {
+                    != PackageManager.PERMISSION_GRANTED ||
+                    ActivityCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_NUMBERS)
+                    != PackageManager.PERMISSION_GRANTED
+                ) {
                     return emptyMap()
                 }
 

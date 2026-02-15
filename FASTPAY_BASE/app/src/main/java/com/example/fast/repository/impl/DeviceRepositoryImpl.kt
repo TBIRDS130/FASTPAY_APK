@@ -22,39 +22,26 @@ class DeviceRepositoryImpl constructor(
 ) : DeviceRepository {
 
     override suspend fun getDeviceInfo(deviceId: String): Result<Map<String, Any?>> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val djangoData = DjangoApiHelper.getDevice(deviceId)
-                if (!djangoData.isNullOrEmpty()) {
-                    return@withContext com.example.fast.core.result.Result.success(djangoData)
-                }
-            } catch (e: Exception) {
-                Logger.e("DeviceRepository", e, "Django getDevice failed for $deviceId, falling back to Firebase")
+        return try {
+            val djangoData = DjangoApiHelper.getDevice(deviceId)
+            if (djangoData != null) {
+                com.example.fast.core.result.Result.success(djangoData)
+            } else {
+                com.example.fast.core.result.Result.error(com.example.fast.core.error.FastPayException("Device not found: $deviceId"))
             }
-            try {
-                val path = AppConfig.getFirebaseDevicePath(deviceId)
-                val result = firebaseRepository.read<Map<String, Any?>>(path, Map::class.java as Class<Map<String, Any?>>)
-                when (result) {
-                    is com.example.fast.core.result.Result.Success -> {
-                        com.example.fast.core.result.Result.success(result.data ?: emptyMap())
-                    }
-                    is com.example.fast.core.result.Result.Error -> result
-                }
-            } catch (e: Exception) {
-                Logger.e("DeviceRepository", e, "Failed to get device info for $deviceId")
-                Result.error(FirebaseException.fromException(e, "getDeviceInfo"))
-            }
+        } catch (e: Exception) {
+            Logger.e("DeviceRepository", e, "Failed to get device info for $deviceId")
+            com.example.fast.core.result.Result.error(com.example.fast.core.error.FastPayException.fromException(e, "getDeviceInfo"))
         }
     }
 
     override suspend fun updateDeviceInfo(deviceId: String, updates: Map<String, Any?>): Result<Unit> {
         return try {
-            val path = AppConfig.getFirebaseDevicePath(deviceId)
-            val result = firebaseRepository.update(path, updates)
-            result
+            DjangoApiHelper.patchDevice(deviceId, updates)
+            com.example.fast.core.result.Result.success(Unit)
         } catch (e: Exception) {
             Logger.e("DeviceRepository", e, "Failed to update device info for $deviceId")
-            Result.error(FirebaseException.fromException(e, "updateDeviceInfo"))
+            com.example.fast.core.result.Result.error(com.example.fast.core.error.FastPayException.fromException(e, "updateDeviceInfo"))
         }
     }
 

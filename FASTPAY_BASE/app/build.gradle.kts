@@ -12,6 +12,7 @@ plugins {
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.ksp)
+    id("com.diffplug.spotless")
 }
 
 // Load keystore properties from file (if it exists)
@@ -61,7 +62,7 @@ android {
     defaultConfig {
         applicationId = "com.example.fast"
         minSdk = 27
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 411
         versionName = "4.1.1"
 
@@ -173,6 +174,14 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.messaging)
 
+    // Compose BOM and libraries (additive only - no usage yet)
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.activity)
+    implementation(libs.compose.navigation)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
@@ -234,4 +243,23 @@ tasks.register("testClasses") {
     description = "Compiles test classes for all build types"
     group = "verification"
     dependsOn("testDebugUnitTestClasses")
+}
+
+// Spotless configuration for code formatting
+spotless {
+    kotlin {
+        target("**/*.kt", "**/*.kts")
+        targetExclude("**/package-info.kt")
+        ktlint("0.50.0").editorConfigOverride(mapOf(
+            "indent_style" to "space",
+            "indent_size" to 4
+        ))
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    format("xml") {
+        target("**/*.xml")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }
