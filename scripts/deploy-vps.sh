@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-DEFAULT_REPO="https://github.com/your-repo/FASTPAY_APK.git"
+DEFAULT_REPO="https://github.com/your-username/FASTPAY_APK.git"
 DEFAULT_BRANCH="main"
 WORK_DIR="$HOME/fastpay-development"
 
@@ -70,23 +70,23 @@ ensure_git() {
 # Clone repository
 clone_repository() {
     log "Cloning FASTPAY repository..."
-    
+
     # Create work directory
     mkdir -p "$WORK_DIR"
     cd "$WORK_DIR"
-    
+
     # Remove existing directory if present
     if [ -d "FASTPAY_APK" ]; then
         log_warning "Removing existing FASTPAY_APK directory..."
         rm -rf FASTPAY_APK
     fi
-    
+
     # Clone repository
     if ! git clone -b "$BRANCH" "$REPO_URL"; then
         log_error "Failed to clone repository from $REPO_URL"
         exit 1
     fi
-    
+
     cd FASTPAY_APK
     log_success "Repository cloned successfully"
 }
@@ -94,15 +94,15 @@ clone_repository() {
 # Run setup script
 run_setup() {
     log "Running VPS setup script..."
-    
+
     if [ ! -f "scripts/setup-vps.sh" ]; then
         log_error "Setup script not found. Please check the repository structure."
         exit 1
     fi
-    
+
     # Make setup script executable
     chmod +x scripts/setup-vps.sh
-    
+
     # Run setup
     if bash scripts/setup-vps.sh; then
         log_success "VPS setup completed"
@@ -115,76 +115,76 @@ run_setup() {
 # Configure environment
 configure_environment() {
     log "Configuring development environment..."
-    
+
     # Setup environment file if template exists
     if [ -f "FASTPAY_BASE/.env.example" ] && [ ! -f "FASTPAY_BASE/.env" ]; then
         cp FASTPAY_BASE/.env.example FASTPAY_BASE/.env
         log_success "Environment file created from template"
         log_warning "Review and update FASTPAY_BASE/.env with your configuration"
     fi
-    
+
     # Setup keystore template if exists
     if [ -f "FASTPAY_BASE/keystore.properties.template" ] && [ ! -f "FASTPAY_BASE/keystore.properties" ]; then
         log_warning "Keystore properties template found. Create keystore.properties for release builds."
     fi
-    
+
     # Set correct permissions
     chmod +x scripts/*.sh
     chmod +x FASTPAY_BASE/gradlew
-    
+
     log_success "Environment configuration completed"
 }
 
 # Validate installation
 validate_installation() {
     log "Validating installation..."
-    
+
     # Check if we're in the right directory
     if [ ! -f "scripts/release-build.sh" ]; then
         log_error "Not in FASTPAY_APK directory or scripts missing"
         exit 1
     fi
-    
+
     # Check Android SDK
     if [ -z "$ANDROID_HOME" ]; then
         log_warning "ANDROID_HOME not set. Sourcing bash profile..."
         source ~/.bashrc
     fi
-    
+
     if [ -z "$ANDROID_HOME" ]; then
         log_error "ANDROID_HOME still not set after sourcing profile"
         exit 1
     fi
-    
+
     # Check Java
     if ! command -v java &> /dev/null; then
         log_error "Java not found"
         exit 1
     fi
-    
+
     # Check Gradle wrapper
     if [ ! -x "FASTPAY_BASE/gradlew" ]; then
         log_error "Gradle wrapper not executable"
         exit 1
     fi
-    
+
     log_success "Installation validation passed"
 }
 
 # Test build
 test_build() {
     log "Running test build to validate setup..."
-    
+
     cd FASTPAY_BASE
-    
+
     # Stop any existing Gradle daemon
     ./gradlew --stop > /dev/null 2>&1 || true
-    
+
     # Try debug build
     log "Building debug APK..."
     if ./gradlew assembleDebug --no-daemon --stacktrace; then
         log_success "Test build successful!"
-        
+
         # Show build output
         APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
         if [ -n "$APK_PATH" ]; then
@@ -196,21 +196,21 @@ test_build() {
         log_warning "Test build failed, but environment setup may still be successful"
         log "Check the error messages above for specific issues"
     fi
-    
+
     cd ..
 }
 
 # Create development shortcuts
 create_shortcuts() {
     log "Creating development shortcuts..."
-    
+
     # Create alias for quick access
     echo "" >> ~/.bashrc
     echo "# FASTPAY Development Shortcuts" >> ~/.bashrc
     echo "alias fastpay='cd $WORK_DIR/FASTPAY_APK'" >> ~/.bashrc
     echo "alias fastpay-build='cd $WORK_DIR/FASTPAY_APK && bash scripts/release-build.sh'" >> ~/.bashrc
     echo "alias fastpay-test='cd $WORK_DIR/FASTPAY_APK && bash scripts/test-build.sh'" >> ~/.bashrc
-    
+
     log_success "Development shortcuts created"
     log "Use 'fastpay' to go to project directory"
     log "Use 'fastpay-build' to build release APK"
@@ -253,7 +253,7 @@ main() {
     log "Branch: $BRANCH"
     log "Work Directory: $WORK_DIR"
     echo ""
-    
+
     check_user
     ensure_git
     clone_repository

@@ -41,10 +41,10 @@ For fresh Linux VPS deployment (zero setup required):
 
 ```bash
 # One-command complete setup
-curl -sSL https://raw.githubusercontent.com/your-repo/FASTPAY_APK/main/scripts/deploy-vps.sh | bash
+curl -sSL https://raw.githubusercontent.com/your-username/FASTPAY_APK/main/scripts/deploy-vps.sh | bash
 
 # Or clone and run
-git clone https://github.com/your-repo/FASTPAY_APK.git
+git clone https://github.com/your-username/FASTPAY_APK.git
 cd FASTPAY_APK
 bash scripts/deploy-vps.sh
 ```
